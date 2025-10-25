@@ -1,0 +1,674 @@
+{% extends "base.html" %}
+{% block title %}Network Topology Builder{% endblock %}
+{% block head_extra %}
+<style>
+  .page-header{
+    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:24px;
+  }
+  .page-header h2{margin:0 0 8px 0; font-size:28px;}
+  .page-header p{margin:0; font-size:15px; line-height:1.5; color:var(--muted);}
+
+  .topology-controls{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:20px;
+  }
+
+  .control-tabs{
+    display:flex;
+    gap:8px;
+    margin-bottom:20px;
+    border-bottom:1px solid var(--border);
+  }
+  .control-tab{
+    padding:12px 20px;
+    background:transparent;
+    border:none;
+    border-bottom:2px solid transparent;
+    color:var(--muted);
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    transition: all 0.2s ease;
+  }
+  .control-tab:hover{
+    color:var(--text);
+    background: color-mix(in oklab, var(--accent) 5%, transparent);
+  }
+  .control-tab.active{
+    color:var(--accent);
+    border-bottom-color:var(--accent);
+  }
+
+  .tab-content{
+    display:none;
+  }
+  .tab-content.active{
+    display:block;
+  }
+
+  .field-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(250px, 1fr));
+    gap:16px;
+  }
+
+  .topology-results{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+  }
+
+  .results-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+
+  .filter-bar{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+    background: color-mix(in oklab, var(--card) 94%, transparent);
+    padding:12px;
+    border-radius:8px;
+    margin-bottom:16px;
+  }
+
+  .filter-bar input{
+    flex:1;
+    min-width:200px;
+    padding:8px 12px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    background:var(--card);
+    font-size:14px;
+  }
+
+  .filter-bar input:focus{
+    outline:none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 10%, transparent);
+  }
+
+  .stats-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:16px;
+    margin-bottom:20px;
+  }
+
+  .stat-card{
+    background: color-mix(in oklab, var(--card) 94%, transparent);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px;
+    text-align:center;
+  }
+
+  .stat-value{
+    font-size:32px;
+    font-weight:700;
+    line-height:1;
+    margin-bottom:6px;
+  }
+
+  .stat-label{
+    font-size:12px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    font-weight:600;
+  }
+
+  .device-card{
+    background: color-mix(in oklab, var(--card) 94%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:16px;
+    transition: all 0.2s ease;
+  }
+
+  .device-card:hover{
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+  }
+
+  .device-card.hidden{
+    display:none;
+  }
+
+  .device-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:16px;
+    gap:16px;
+  }
+
+  .device-info h3{
+    margin:0 0 6px 0;
+    font-size:18px;
+    color:var(--text);
+  }
+
+  .device-meta{
+    display:flex;
+    gap:16px;
+    font-size:13px;
+    color:var(--muted);
+    flex-wrap:wrap;
+  }
+
+  .neighbors-table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:12px;
+    overflow-x:auto;
+  }
+
+  .neighbors-table th{
+    text-align:left;
+    padding:10px 12px;
+    background: color-mix(in oklab, var(--card) 90%, transparent);
+    border-bottom:2px solid var(--border);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--muted);
+    font-weight:600;
+  }
+
+  .neighbors-table td{
+    padding:12px;
+    border-bottom:1px solid var(--border);
+    font-size:14px;
+  }
+
+  .neighbors-table tr:hover{
+    background: color-mix(in oklab, var(--accent) 4%, transparent);
+  }
+
+  .neighbors-table tr.neighbor-ap{
+    background: color-mix(in oklab, var(--warning) 3%, transparent);
+  }
+
+  .neighbors-table tr.neighbor-ap.hidden{
+    display:none;
+  }
+
+  .toggle-switch{
+    position:relative;
+    display:inline-block;
+    width:48px;
+    height:24px;
+  }
+
+  .toggle-switch input{
+    opacity:0;
+    width:0;
+    height:0;
+  }
+
+  .toggle-slider{
+    position:absolute;
+    cursor:pointer;
+    top:0;
+    left:0;
+    right:0;
+    bottom:0;
+    background-color:var(--border);
+    transition: 0.3s;
+    border-radius:24px;
+  }
+
+  .toggle-slider:before{
+    position:absolute;
+    content:"";
+    height:18px;
+    width:18px;
+    left:3px;
+    bottom:3px;
+    background-color:white;
+    transition: 0.3s;
+    border-radius:50%;
+  }
+
+  input:checked + .toggle-slider{
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+
+  input:checked + .toggle-slider:before{
+    transform: translateX(24px);
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:60px 20px;
+    color:var(--muted);
+  }
+
+  .empty-state svg{
+    margin:0 auto 16px;
+    opacity:0.4;
+  }
+
+  .progress-indicator{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:16px;
+    background: color-mix(in oklab, var(--info) 10%, transparent);
+    border:1px solid var(--info);
+    border-radius:10px;
+    margin-bottom:20px;
+  }
+
+  .spinner{
+    width:20px;
+    height:20px;
+    border:3px solid color-mix(in oklab, var(--info) 30%, transparent);
+    border-top-color:var(--info);
+    border-radius:50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin{
+    to{transform:rotate(360deg);}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Network Topology Builder</span>
+  </nav>
+
+  <div class="page-header">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h2>Network Topology Builder</h2>
+        <p>Discover and map network topology using CDP/LLDP. Visualize device connections, export diagrams, and analyze neighbor relationships across single devices or entire organizations.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="topology-controls">
+    <div class="control-tabs">
+      <button class="control-tab active" data-tab="single">Single Device</button>
+      <button class="control-tab" data-tab="organization">Organization</button>
+      <button class="control-tab" data-tab="bulk">Bulk Discovery</button>
+    </div>
+
+    <!-- Single Device Tab -->
+    <div class="tab-content active" data-tab-content="single">
+      <form method="post" action="{{ url_for('topology_report') }}">
+        <input type="hidden" name="scope" value="node">
+        <div class="field-grid">
+          <div class="field">
+            <label for="target">Device (Hostname or IP)</label>
+            <input type="text" id="target" name="target" list="swNodes" placeholder="Search or type device name/IP" autocomplete="off">
+            <datalist id="swNodes">
+              {% for opt in node_options %}
+                <option value="{{ opt.label }}"></option>
+              {% endfor %}
+            </datalist>
+            <div class="field-help">Select from SolarWinds inventory or enter manually</div>
+          </div>
+
+          <div class="field">
+            <label for="username">SSH Username</label>
+            <input type="text" id="username" name="username" required autocomplete="username">
+          </div>
+
+          <div class="field">
+            <label for="password">SSH Password</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password">
+          </div>
+
+          <div class="field">
+            <label for="secret">Enable Secret (optional)</label>
+            <input type="password" id="secret" name="secret" autocomplete="off">
+          </div>
+
+          <div class="field">
+            <label for="vendor_mode">Device Type</label>
+            <select id="vendor_mode" name="vendor_mode">
+              <option value="auto">Auto-detect from SolarWinds</option>
+              <option value="cisco">Cisco IOS/XE</option>
+              <option value="dell">Dell (OS10/Force10)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button type="submit" class="btn btn-gradient">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:6px;">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+            </svg>
+            Discover Topology
+          </button>
+          <button type="submit" formaction="{{ url_for('topology_graph') }}" class="btn">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:6px;">
+              <circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="10" cy="15" r="2"/>
+              <path d="M7 6l6 0M6 7l3 6M14 7l-3 6" stroke="currentColor" stroke-width="2" fill="none"/>
+            </svg>
+            View as Graph
+          </button>
+          <a href="{{ url_for('topology_tool') }}" class="btn">Reset</a>
+        </div>
+      </form>
+    </div>
+
+    <!-- Organization Tab -->
+    <div class="tab-content" data-tab-content="organization">
+      <form method="post" action="{{ url_for('topology_report') }}">
+        <input type="hidden" name="scope" value="organization">
+        <div class="field-grid">
+          <div class="field">
+            <label for="organization">Organization Name</label>
+            <input type="text" id="organization" name="organization" list="orgOptions" placeholder="Select from SolarWinds" autocomplete="off">
+            <datalist id="orgOptions">
+              {% for opt in org_options %}
+                <option value="{{ opt.name }}">{{ opt.count }} devices</option>
+              {% endfor %}
+            </datalist>
+            <div class="field-help">Will scan all devices with this organization tag</div>
+          </div>
+
+          <div class="field">
+            <label for="username2">SSH Username</label>
+            <input type="text" id="username2" name="username" required autocomplete="username">
+          </div>
+
+          <div class="field">
+            <label for="password2">SSH Password</label>
+            <input type="password" id="password2" name="password" required autocomplete="current-password">
+          </div>
+
+          <div class="field">
+            <label for="secret2">Enable Secret (optional)</label>
+            <input type="password" id="secret2" name="secret" autocomplete="off">
+          </div>
+
+          <div class="field">
+            <label for="vendor_mode2">Device Type</label>
+            <select id="vendor_mode2" name="vendor_mode">
+              <option value="auto">Auto-detect from SolarWinds</option>
+              <option value="cisco">Cisco IOS/XE</option>
+              <option value="dell">Dell (OS10/Force10)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button type="submit" class="btn btn-gradient">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:6px;">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+            </svg>
+            Discover Organization Topology
+          </button>
+          <a href="{{ url_for('topology_tool') }}" class="btn">Reset</a>
+        </div>
+      </form>
+    </div>
+
+    <!-- Bulk Discovery Tab -->
+    <div class="tab-content" data-tab-content="bulk">
+      <form method="post" action="{{ url_for('topology_report') }}">
+        <input type="hidden" name="scope" value="bulk">
+        <div class="field">
+          <label for="device_list">Device List (one per line)</label>
+          <textarea id="device_list" name="device_list" rows="8" placeholder="10.1.1.1&#10;10.1.1.2&#10;router1.example.com&#10;switch2.example.com" style="font-family:monospace; width:100%; padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--card);"></textarea>
+          <div class="field-help">Enter hostnames or IP addresses, one per line</div>
+        </div>
+
+        <div class="field-grid" style="margin-top:16px;">
+          <div class="field">
+            <label for="username3">SSH Username</label>
+            <input type="text" id="username3" name="username" required autocomplete="username">
+          </div>
+
+          <div class="field">
+            <label for="password3">SSH Password</label>
+            <input type="password" id="password3" name="password" required autocomplete="current-password">
+          </div>
+
+          <div class="field">
+            <label for="secret3">Enable Secret (optional)</label>
+            <input type="password" id="secret3" name="secret" autocomplete="off">
+          </div>
+
+          <div class="field">
+            <label for="vendor_mode3">Device Type</label>
+            <select id="vendor_mode3" name="vendor_mode">
+              <option value="cisco">Cisco IOS/XE</option>
+              <option value="dell">Dell (OS10/Force10)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button type="submit" class="btn btn-gradient">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:6px;">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+            </svg>
+            Discover Bulk Topology
+          </button>
+          <a href="{{ url_for('topology_tool') }}" class="btn">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if results %}
+  <div class="topology-results">
+    <div class="results-header">
+      <div>
+        <h3 style="margin:0 0 6px 0; font-size:20px;">Topology Results</h3>
+        <p class="muted" style="margin:0;">{{ result_counts.success }} successful / {{ result_counts.total }} total devices</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <form method="post" action="{{ url_for('topology_export') }}">
+          <input type="hidden" name="report_json" value="{{ report_json }}">
+          <button type="submit" class="btn">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:6px;">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+            Export CSV
+          </button>
+        </form>
+        {% if scope == 'node' and results|length == 1 %}
+        <a href="{{ url_for('topology_graph') }}" class="btn btn-gradient">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:6px;">
+            <circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="10" cy="15" r="2"/>
+            <path d="M7 6l6 0M6 7l3 6M14 7l-3 6" stroke="currentColor" stroke-width="2" fill="none"/>
+          </svg>
+          Interactive Graph
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--accent);">{{ result_counts.total }}</div>
+        <div class="stat-label">Total Devices</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--success);">{{ result_counts.success }}</div>
+        <div class="stat-label">Successful</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--error);">{{ result_counts.errors }}</div>
+        <div class="stat-label">Errors</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--info);" id="totalNeighbors">0</div>
+        <div class="stat-label">Total Neighbors</div>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <input type="text" id="searchFilter" placeholder="Search devices, neighbors, IPs..." autocomplete="off">
+      <label style="display:flex; align-items:center; gap:8px; font-size:14px; color:var(--text); cursor:pointer; white-space:nowrap;">
+        <label class="toggle-switch">
+          <input type="checkbox" id="hideAPToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+        Hide Access Points
+      </label>
+    </div>
+
+    <div id="deviceResults">
+      {% for item in results %}
+        {% set root = item.root %}
+        {% set report = item.report %}
+        {% set error = item.error %}
+        <div class="device-card" data-device="{{ root.caption|lower }} {{ root.ip_address|lower }}">
+          <div class="device-header">
+            <div class="device-info">
+              <h3>{{ root.caption or root.ip_address }}</h3>
+              <div class="device-meta">
+                <span>IP: {{ root.ip_address or '—' }}</span>
+                <span>Vendor: {{ root.vendor or '—' }}</span>
+                <span>Model: {{ root.model or '—' }}</span>
+                {% if root.organization %}
+                  <span>Org: {{ root.organization }}</span>
+                {% endif %}
+              </div>
+            </div>
+            {% if report and report.neighbors %}
+              <span class="badge info">{{ report.neighbors|length }} neighbors</span>
+            {% endif %}
+          </div>
+
+          {% if error %}
+            <div style="padding:12px; background:color-mix(in oklab, var(--error) 10%, transparent); border:1px solid var(--error); border-radius:8px; color:var(--error); font-size:14px;">
+              <strong>Error:</strong> {{ error }}
+            </div>
+          {% endif %}
+
+          {% if report and report.neighbors %}
+            <table class="neighbors-table">
+              <thead>
+                <tr>
+                  <th>Local Port</th>
+                  <th>Neighbor Device</th>
+                  <th>Neighbor IP</th>
+                  <th>Neighbor Port</th>
+                  <th>Protocol</th>
+                  <th>Platform</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for neighbor in report.neighbors %}
+                  {% set remote_name = neighbor.remote_name or '' %}
+                  {% set is_ap = remote_name[:2].upper() == 'AP' %}
+                  <tr class="neighbor-row{% if is_ap %} neighbor-ap{% endif %}" data-neighbor="{{ remote_name|lower }} {{ neighbor.remote_ip|lower }}">
+                    <td>{{ neighbor.local_interface or '—' }}</td>
+                    <td>{{ neighbor.remote_name or '—' }}</td>
+                    <td>{{ neighbor.remote_ip or '—' }}</td>
+                    <td>{{ neighbor.remote_port or '—' }}</td>
+                    <td>{{ neighbor.protocols|join('/') if neighbor.protocols else '—' }}</td>
+                    <td>{{ neighbor.remote_platform or '—' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="empty-state" style="padding:30px;">
+              <p style="margin:0; font-size:14px;">No neighbors discovered</p>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <script>
+  (function(){
+    // Tab switching
+    const tabs = document.querySelectorAll('.control-tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab;
+
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(tc => tc.classList.remove('active'));
+
+        tab.classList.add('active');
+        document.querySelector(`[data-tab-content="${tabName}"]`).classList.add('active');
+      });
+    });
+
+    // Search filter
+    const searchFilter = document.getElementById('searchFilter');
+    if (searchFilter) {
+      searchFilter.addEventListener('input', () => {
+        const query = searchFilter.value.toLowerCase();
+        const cards = document.querySelectorAll('.device-card');
+
+        cards.forEach(card => {
+          const deviceText = card.dataset.device || '';
+          const neighbors = Array.from(card.querySelectorAll('.neighbor-row'));
+          let hasMatch = deviceText.includes(query);
+
+          neighbors.forEach(row => {
+            const neighborText = row.dataset.neighbor || '';
+            if (neighborText.includes(query)) {
+              hasMatch = true;
+            }
+          });
+
+          card.classList.toggle('hidden', !hasMatch && query.length > 0);
+        });
+      });
+    }
+
+    // AP toggle
+    const hideAPToggle = document.getElementById('hideAPToggle');
+    if (hideAPToggle) {
+      hideAPToggle.addEventListener('change', () => {
+        const apRows = document.querySelectorAll('.neighbor-ap');
+        apRows.forEach(row => {
+          row.classList.toggle('hidden', hideAPToggle.checked);
+        });
+        updateNeighborCount();
+      });
+
+      // Initial state
+      const apRows = document.querySelectorAll('.neighbor-ap');
+      apRows.forEach(row => row.classList.add('hidden'));
+    }
+
+    // Count total neighbors
+    function updateNeighborCount() {
+      const visibleRows = document.querySelectorAll('.neighbor-row:not(.hidden)');
+      const totalNeighbors = document.getElementById('totalNeighbors');
+      if (totalNeighbors) {
+        totalNeighbors.textContent = visibleRows.length;
+      }
+    }
+
+    updateNeighborCount();
+  })();
+  </script>
+{% endblock %}

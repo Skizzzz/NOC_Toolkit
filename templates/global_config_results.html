@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Global Config – Results{% endblock %}
+{% block content %}
+  <section class="card">
+    <h2 class="section-title">Global Config – Matches</h2>
+    <div class="muted">Hosts searched: {{ hosts_str }} · Phrase: <code>{{ phrase }}</code></div>
+
+    {% if matches and matches|length %}
+      <form method="post" action="{{ url_for('global_config_actions_prepare') }}">
+        <div class="field" style="margin-top:12px">
+          <label>Global config to push</label>
+          <textarea name="custom_config" placeholder="service timestamps debug datetime msec"></textarea>
+          <div class="muted">One CLI per line. This is global (not inside interface).</div>
+        </div>
+
+        <h3 class="section-title" style="margin-top:14px">Credentials for Apply</h3>
+        <div class="row">
+          <div class="field"><label>Username</label><input name="apply_username" type="text" required /></div>
+          <div class="field"><label>Password</label><input name="apply_password" type="password" required /></div>
+          <div class="field"><label>Enable Secret (optional)</label><input name="apply_secret" type="password" /></div>
+        </div>
+
+        <h3 class="section-title" style="margin-top:14px">Devices Containing Phrase</h3>
+        <table>
+          <thead><tr><th style="width:48px"><input type="checkbox" onclick="toggleAll(this)"></th><th>Switch IP</th></tr></thead>
+          <tbody>
+            {% for row in matches %}
+              <tr>
+                <td><input type="checkbox" name="selected_hosts[]" value="{{ row.host }}" /></td>
+                <td>{{ row.host }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="row" style="justify-content:flex-end; margin-top:12px">
+          <button class="btn primary" type="submit">Preview & Apply…</button>
+        </div>
+      </form>
+
+      <form method="post" action="{{ url_for('global_config_download_csv') }}" style="margin-top:10px">
+        <input type="hidden" name="matches_json" value='{{ matches | tojson | safe }}' />
+        <button class="btn" type="submit">Download Matches CSV</button>
+      </form>
+    {% else %}
+      <p class="muted" style="margin-top:10px">No devices matched.</p>
+    {% endif %}
+  </section>
+
+  <script>
+    function toggleAll(src){
+      document.querySelectorAll('input[name="selected_hosts[]"]').forEach(cb => cb.checked = src.checked);
+    }
+  </script>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}WLC RF Utilization – Results{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="section-title">RF Utilization Summary</h2>
+
+  {% if meta %}
+    <div class="flash" style="background:#dbeafe; border-color:#93c5fd; color:#1e3a8a;">
+      Queried {{ meta.hosts_count }} WLC(s) with {{ meta.workers }} worker(s).
+      Rows: <strong>{{ meta.rows }}</strong>. Failures: {{ meta.failures }}.
+    </div>
+  {% endif %}
+
+  {% if errors and errors|length %}
+    <div class="flash" style="background:#fef3c7; border-color:#facc15; color:#78350f;">
+      <strong>Some controllers failed:</strong>
+      <ul style="margin:6px 0 0 16px;">
+        {% for e in errors %}
+          <li>{{ e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <div style="margin: 8px 0 12px;">
+    <a class="btn-gradient" href="{{ url_for('wlc_rf_download', token=token) }}">Download Full CSV</a>
+    <a class="btn" href="{{ url_for('wlc_rf') }}" style="margin-left:8px;">Back</a>
+  </div>
+
+  <div class="table-wrap" style="margin-top:16px; max-height:50vh; overflow:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>WLC</th>
+          <th>Band</th>
+          <th style="text-align:right;">AP/Radios</th>
+          <th style="text-align:right;">Avg Util %</th>
+          <th style="text-align:right;">Peak Util %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if summary and summary|length %}
+          {% for row in summary %}
+            <tr>
+              <td>{{ row.wlc }}</td>
+              <td>{{ row.band }}</td>
+              <td style="text-align:right;">{{ row.count }}</td>
+              <td style="text-align:right;">{{ row.avg_util }}</td>
+              <td style="text-align:right;">{{ row.peak_util }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5">
+              <div class="flash">No radios matched the given filters, or utilization not available.</div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if samples %}
+  <div style="margin-top:16px;">
+    <h3 style="margin:0 0 6px 0;">Debug samples (first WLC)</h3>
+    {% if samples.error %}
+      <div class="flash">Debug error: {{ samples.error }}</div>
+    {% else %}
+      <details class="card" style="margin-bottom:10px;">
+        <summary><strong>5 GHz</strong> — Command tried: <code>{{ samples["5ghz"]["cmd"] or "n/a" }}</code></summary>
+        <pre style="white-space:pre; overflow:auto; max-height:40vh; border:1px solid var(--border); padding:10px; border-radius:10px; background: color-mix(in oklab, var(--card) 94%, transparent);">{{ samples["5ghz"]["sample"] or "(no sample captured)" }}</pre>
+      </details>
+      <details class="card">
+        <summary><strong>2.4 GHz</strong> — Command tried: <code>{{ samples["24ghz"]["cmd"] or "n/a" }}</code></summary>
+        <pre style="white-space:pre; overflow:auto; max-height:40vh; border:1px solid var(--border); padding:10px; border-radius:10px; background: color-mix(in oklab, var(--card) 94%, transparent);">{{ samples["24ghz"]["sample"] or "(no sample captured)" }}</pre>
+      </details>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

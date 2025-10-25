@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}WLC AP Inventory – Summary{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="section-title">AP Inventory Summary</h2>
+
+  {% if meta %}
+    <div class="alert alert-info" style="margin:10px 0;">
+      <strong>Summary:</strong>
+      Queried {{ meta.hosts_count }} WLC(s) with {{ meta.workers }} worker(s).
+      Found <strong>{{ meta.aps }}</strong> AP(s).
+    </div>
+  {% endif %}
+
+  {% if errors and errors|length %}
+    <div class="alert alert-warn" style="margin:10px 0;">
+      <strong>Some controllers failed:</strong>
+      <ul style="margin:6px 0 0 16px;">
+        {% for e in errors %}
+          <li>{{ e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('wlc_inventory_download') }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button class="btn btn-primary">Download Full CSV</button>
+    <a class="btn" href="{{ url_for('wlc_inventory') }}" style="margin-left:8px;">Back</a>
+  </form>
+
+  <div class="table-wrap" style="margin-top:16px; max-height:60vh; overflow:auto;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>WLC</th>
+          <th style="text-align:right;">AP Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if per_wlc and per_wlc|length %}
+          {% for item in per_wlc %}
+            <tr>
+              <td>{{ item.wlc }}</td>
+              <td style="text-align:right;">{{ item.count }}</td>
+            </tr>
+          {% endfor %}
+          <tr>
+            <td style="font-weight:600;">Total</td>
+            <td style="text-align:right; font-weight:600;">{{ meta.aps if meta else 0 }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="2">
+              <div class="alert alert-info" style="margin:0;">
+                No APs found matching the given criteria.
+              </div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}Scheduled Jobs{% endblock %}
+{% block head_extra %}
+<style>
+  .page-header{
+    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:24px;
+  }
+  .page-header h2{margin:0 0 8px 0; font-size:28px;}
+  .page-header p{margin:0; font-size:15px; line-height:1.5; color:var(--muted);}
+
+  .schedules-list{
+    display:grid;
+    gap:16px;
+  }
+  .schedule-card{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    transition: all 0.15s ease;
+  }
+  .schedule-card:hover{
+    border-color:var(--accent);
+  }
+  .schedule-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:12px;
+  }
+  .schedule-name{
+    font-size:18px;
+    font-weight:700;
+    color:var(--text);
+    margin:0 0 4px 0;
+  }
+  .schedule-status{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:4px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:600;
+  }
+  .status-enabled{
+    background: color-mix(in oklab, var(--success) 15%, transparent);
+    color:var(--success);
+  }
+  .status-disabled{
+    background: color-mix(in oklab, var(--muted) 15%, transparent);
+    color:var(--muted);
+  }
+  .schedule-description{
+    color:var(--muted);
+    font-size:14px;
+    margin-bottom:12px;
+  }
+  .schedule-meta{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap:12px;
+    margin-bottom:12px;
+    font-size:13px;
+  }
+  .schedule-meta-item{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .schedule-meta-label{
+    color:var(--muted);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    font-weight:600;
+  }
+  .schedule-meta-value{
+    color:var(--text);
+    font-weight:500;
+  }
+  .schedule-actions{
+    display:flex;
+    gap:8px;
+    padding-top:12px;
+    border-top:1px solid var(--border);
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 14px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    transition: all 0.15s ease;
+    text-decoration:none;
+    background:transparent;
+    color:var(--text);
+  }
+  .btn:hover{
+    background: color-mix(in oklab, var(--accent) 10%, transparent);
+    border-color:var(--accent);
+  }
+  .btn-primary{
+    background:var(--accent);
+    color:white;
+    border-color:var(--accent);
+  }
+  .btn-primary:hover{
+    background:var(--accent-2);
+  }
+  .btn-danger{
+    color:var(--error);
+    border-color:var(--error);
+  }
+  .btn-danger:hover{
+    background:var(--error);
+    color:white;
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:60px 20px;
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+  }
+  .empty-state svg{
+    width:64px;
+    height:64px;
+    margin:0 auto 20px;
+    color:var(--muted);
+    opacity:0.4;
+  }
+  .empty-state h3{
+    margin:0 0 8px 0;
+    font-size:18px;
+    color:var(--muted);
+  }
+  .empty-state p{
+    margin:0 0 20px 0;
+    font-size:14px;
+    color:var(--muted);
+    opacity:0.8;
+  }
+
+  code{
+    background: color-mix(in oklab, var(--card) 90%, transparent);
+    padding:2px 6px;
+    border-radius:4px;
+    font-size:13px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  }
+</style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <a href="{{ url_for('bulk_ssh') }}">Bulk SSH Terminal</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Schedules</span>
+  </nav>
+
+  <div class="page-header">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h2>Scheduled Jobs</h2>
+        <p>Automated bulk SSH jobs that run on a schedule. Background worker checks every 60 seconds.</p>
+      </div>
+      <div>
+        <a href="{{ url_for('bulk_ssh') }}" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
+          </svg>
+          Back to Bulk SSH
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {% if schedules %}
+    <div class="schedules-list">
+      {% for schedule in schedules %}
+        <div class="schedule-card">
+          <div class="schedule-header">
+            <div>
+              <h3 class="schedule-name">{{ schedule.name }}</h3>
+              <span class="schedule-status status-{{ 'enabled' if schedule.enabled else 'disabled' }}">
+                {% if schedule.enabled %}
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                  </svg>
+                  Enabled
+                {% else %}
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                  </svg>
+                  Disabled
+                {% endif %}
+              </span>
+            </div>
+          </div>
+
+          {% if schedule.description %}
+            <div class="schedule-description">{{ schedule.description }}</div>
+          {% endif %}
+
+          <div class="schedule-meta">
+            <div class="schedule-meta-item">
+              <div class="schedule-meta-label">Schedule Type</div>
+              <div class="schedule-meta-value">{{ schedule.schedule_type }}</div>
+            </div>
+            <div class="schedule-meta-item">
+              <div class="schedule-meta-label">Next Run</div>
+              <div class="schedule-meta-value">{{ schedule.next_run or 'Not scheduled' }}</div>
+            </div>
+            <div class="schedule-meta-item">
+              <div class="schedule-meta-label">Last Run</div>
+              <div class="schedule-meta-value">{{ schedule.last_run or 'Never' }}</div>
+            </div>
+            <div class="schedule-meta-item">
+              <div class="schedule-meta-label">Command</div>
+              <div class="schedule-meta-value"><code>{{ schedule.command[:50] }}{{ '...' if schedule.command|length > 50 else '' }}</code></div>
+            </div>
+          </div>
+
+          <div class="schedule-actions">
+            {% if schedule.last_job_id %}
+              <a href="{{ url_for('bulk_ssh_results', job_id=schedule.last_job_id) }}" class="btn">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                  <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+                </svg>
+                View Last Results
+              </a>
+            {% endif %}
+
+            <form method="post" action="{{ url_for('bulk_ssh_schedule_toggle', schedule_id=schedule.id) }}" style="display:inline;">
+              <input type="hidden" name="enabled" value="{{ 'false' if schedule.enabled else 'true' }}">
+              <button type="submit" class="btn">
+                {% if schedule.enabled %}
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"/>
+                  </svg>
+                  Disable
+                {% else %}
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                  </svg>
+                  Enable
+                {% endif %}
+              </button>
+            </form>
+
+            <form method="post" action="{{ url_for('bulk_ssh_schedule_delete', schedule_id=schedule.id) }}" style="display:inline;" onsubmit="return confirm('Delete this schedule?');">
+              <button type="submit" class="btn btn-danger">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                Delete
+              </button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <svg viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+      </svg>
+      <h3>No Scheduled Jobs</h3>
+      <p>Scheduled jobs will run automatically in the background. Create jobs from the main Bulk SSH page.</p>
+      <a href="{{ url_for('bulk_ssh') }}" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+        </svg>
+        Create Schedule
+      </a>
+    </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}WLC Clients – Jobs{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; align-items:center;">
+    <div>
+      <h2 class="section-title" style="margin:0;">WLC Clients – Jobs</h2>
+      <p class="muted" style="margin:6px 0 0 0;">View active and completed polling jobs.</p>
+    </div>
+    <div>
+      <a class="btn" href="{{ url_for('wlc_clients_troubleshoot') }}">New Job</a>
+      <a class="btn" href="{{ url_for('wlc_jobs_overview') }}">Jobs</a>
+    </div>
+  </div>
+</section>
+
+<section class="card" style="margin-top:16px;">
+  {% if not jobs %}
+    <p class="muted">No jobs yet.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>Job ID</th>
+          <th>Created</th>
+          <th>Hosts</th>
+          <th>Interval</th>
+          <th>Rounds</th>
+          <th>Status</th>
+          <th>Last Sample</th>
+          <th>Errors</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr>
+          <td><code>{{ j.job_id }}</code></td>
+          <td>{{ j.created }}</td>
+          <td title="{{ j.hosts | join(', ') }}">
+            {{ (j.hosts | join(', ')) | truncate(60, True, '…') }}
+          </td>
+          <td>{{ (j.interval_sec // 60) }} min</td>
+          <td>{{ j.rounds_done }}/{{ j.polls }}</td>
+          <td>
+            {% if j.cancelled %}
+              Cancelled
+            {% elif j.done %}
+              Done
+            {% else %}
+              Running
+            {% endif %}
+          </td>
+          <td>{{ j.last_ts or "-" }}</td>
+          <td>{{ j.errors }}</td>
+          <td>
+            <a class="btn" href="{{ url_for('wlc_clients_troubleshoot_job', job_id=j.job_id) }}">Open</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

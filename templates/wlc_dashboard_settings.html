@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}WLC Dashboard Settings{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; align-items:center;">
+    <div>
+      <h2 class="section-title" style="margin:0;">Dashboard Settings</h2>
+      <p class="muted" style="margin:6px 0 0 0;">Configure target controllers, credentials, and polling state for the wireless dashboard.</p>
+    </div>
+    <div class="row" style="gap:10px;">
+      <a class="btn" href="{{ url_for('wlc_dashboard') }}">View Dashboard</a>
+      <a class="btn" href="{{ url_for('wlc_tools') }}">WLC Tools</a>
+    </div>
+  </div>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h3 class="section-title" style="margin:0 0 6px 0;">Discovered WLC Targets</h3>
+  <p class="muted" style="margin:0 0 10px 0;">Derived from SolarWinds nodes where hostname contains <code>wc01</code>, vendor contains <code>Cisco</code>, and model contains <code>9800</code>.</p>
+  {% set host_labels = auto_host_labels or auto_hosts %}
+  {% if host_labels %}
+    <ul style="margin:0; padding-left:20px; display:grid; gap:4px; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
+      {% for label in host_labels %}
+        <li style="list-style:disc; font-weight:600;">{{ label }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted" style="margin:0;">No matching nodes were found in the latest SolarWinds poll.</p>
+  {% endif %}
+</section>
+
+<form method="post" class="card" style="margin-top:18px; display:grid; gap:18px;">
+  <div class="row" style="gap:16px; flex-wrap:wrap;">
+    <div class="field" style="flex:1 1 240px;">
+      <label for="username">Username</label>
+      <input id="username" type="text" name="username" value="{{ settings.username or '' }}" autocomplete="off" />
+      <span class="muted">Account needs API/CLI access for client summary and AP inventory.</span>
+    </div>
+  </div>
+
+  <div class="row" style="gap:16px; flex-wrap:wrap;">
+    <div class="field" style="flex:1 1 240px;">
+      <label for="password">Password</label>
+      <input id="password" type="password" name="password" value="{{ settings.password or '' }}" autocomplete="new-password" />
+    </div>
+    <div class="field" style="flex:1 1 240px;">
+      <label for="secret">Enable Secret (optional)</label>
+      <input id="secret" type="password" name="secret" value="{{ settings.secret or '' }}" autocomplete="new-password" />
+      <span class="muted">Leave blank if enable secret not required.</span>
+    </div>
+    <div class="field" style="flex:0 0 220px;">
+      <label for="interval">Polling interval (minutes)</label>
+      <input id="interval" type="number" name="interval" min="5" step="1" value="{{ (settings.interval_sec or 300) // 60 }}" />
+      <span class="muted">Minimum 5 minutes. Applies to next cycle.</span>
+    </div>
+  </div>
+
+  <div class="card" style="background:color-mix(in hsl, var(--card) 96%, transparent); border:1px dashed var(--border);">
+    <div class="row" style="align-items:center; justify-content:space-between;">
+      <div>
+        <label style="font-weight:600;">Continuous Polling</label>
+        <p class="muted" style="margin:4px 0 0 0;">Runs every {{ (settings.interval_sec or 300) // 60 }} minute{{ 's' if ((settings.interval_sec or 300) // 60) != 1 else '' }} when enabled. Old samples auto-prune after 31 days.</p>
+        <p class="muted" style="margin:4px 0 0 0; font-size:12px;">Last poll: {{ settings.last_poll_ts or 'never' }} ({{ settings.last_poll_status or 'never' }})</p>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+          <input type="checkbox" name="enabled" value="1" {% if settings.enabled %}checked{% endif %} />
+          <span>Enable polling</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="justify-content:flex-end; gap:10px;">
+    <a class="btn" href="{{ url_for('wlc_dashboard') }}">Back to Dashboard</a>
+    <button class="btn" name="action" value="validate" type="submit" {% if not auto_hosts %}disabled{% endif %}>Validate Hosts</button>
+    <button class="btn btn-gradient" name="action" value="save" type="submit">Save Settings</button>
+  </div>
+</form>
+
+{% if settings.validation %}
+<section class="card" style="margin-top:18px;">
+  <h3 class="section-title" style="margin:0 0 10px 0;">Last Validation Results</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Host</th>
+        <th>Status</th>
+        <th>Message</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in settings.validation %}
+      <tr>
+        <td>{{ item.host }}</td>
+        <td>
+          {% if item.clients %}
+            <span style="color:#16a34a; font-weight:600;">OK</span>
+          {% else %}
+            <span style="color:#dc2626; font-weight:600;">Failed</span>
+          {% endif %}
+        </td>
+        <td style="max-width:480px; white-space:pre-wrap;">{{ item.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

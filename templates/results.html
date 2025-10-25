@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}Search Results{% endblock %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<style>
+  .results-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .results-info{flex:1; min-width:300px;}
+  .results-actions{display:flex; gap:10px; flex-wrap:wrap;}
+
+  .search-summary{
+    background: color-mix(in oklab, var(--info) 10%, transparent);
+    border:1px solid color-mix(in oklab, var(--info) 30%, transparent);
+    border-radius:10px;
+    padding:12px 16px;
+    margin-bottom:16px;
+  }
+  .search-summary-item{display:inline-block; margin-right:16px;}
+  .search-summary-label{color:var(--muted); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;}
+  .search-summary-value{color:var(--text); font-size:14px; font-weight:600;}
+
+  .selection-info{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px 16px;
+    margin:16px 0;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .selection-count{font-weight:600; color:var(--accent);}
+
+  .action-panel{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-top:24px;
+  }
+
+  /* DataTables styling consistency */
+  .dataTables_wrapper{color:var(--text);}
+  .dataTables_wrapper .dataTables_length select,
+  .dataTables_wrapper .dataTables_filter input{
+    background:var(--card);
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:6px 10px;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button{
+    color:var(--text) !important;
+    border:1px solid var(--border);
+    background:var(--card);
+    border-radius:6px;
+    padding:6px 12px;
+    margin:0 2px;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button.current{
+    background:linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+    color:#fff !important;
+    border-color:transparent !important;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button:hover{
+    background:var(--accent) !important;
+    color:#fff !important;
+    border-color:var(--accent) !important;
+  }
+  .dataTables_wrapper .dataTables_info,
+  .dataTables_wrapper .dataTables_length label,
+  .dataTables_wrapper .dataTables_filter label{color:var(--muted);}
+</style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <a href="{{ url_for('tool_phrase_search') }}">Interface Search</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Results</span>
+  </nav>
+
+  <section class="card">
+    <div class="results-header">
+      <div class="results-info">
+        <h2 class="section-title" style="margin:0 0 8px 0;">Search Results</h2>
+        <p class="muted">
+          {% if results %}
+            Found <strong>{{ results|length }}</strong> matching interface{{ 's' if results|length != 1 else '' }}
+          {% else %}
+            No interfaces matched your search criteria
+          {% endif %}
+        </p>
+      </div>
+      <div class="results-actions">
+        <a href="{{ url_for('tool_phrase_search') }}" class="btn">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+          New Search
+        </a>
+        <form method="post" action="{{ url_for('download_csv') }}" style="display:inline;">
+          <input type="hidden" name="hosts" value="{{ hosts_str }}" />
+          <input type="hidden" name="phrase" value="{{ phrase }}" />
+          <input type="hidden" name="raw_map_json" value='{{ raw_map_json | tojson | safe }}' />
+          <input type="hidden" name="case_sensitive" value="{{ 1 if case_sensitive else 0 }}" />
+          <input type="hidden" name="exact" value="{{ 1 if exact else 0 }}" />
+          <input type="hidden" name="full_block" value="{{ 1 if full_block else 0 }}" />
+          <button class="btn" type="submit">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Export CSV
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Search Summary -->
+    <div class="search-summary">
+      <div class="search-summary-item">
+        <div class="search-summary-label">Search Phrase</div>
+        <div class="search-summary-value"><code>{{ phrase }}</code></div>
+      </div>
+      <div class="search-summary-item">
+        <div class="search-summary-label">Hosts Searched</div>
+        <div class="search-summary-value">{{ hosts_str.split(',')|length }}</div>
+      </div>
+      <div class="search-summary-item">
+        <div class="search-summary-label">Mode</div>
+        <div class="search-summary-value">
+          {% if full_block %}Full Block{% else %}Description Only{% endif %}
+          {% if case_sensitive %} · Case Sensitive{% endif %}
+          {% if exact %} · Exact Match{% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if results %}
+      <form method="post" action="{{ url_for('actions_prepare') }}" id="actionForm">
+        <!-- Selection Info -->
+        <div class="selection-info">
+          <div>
+            <span class="selection-count" id="selectedCount">0</span> interface(s) selected
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="btn" onclick="selectAll()">Select All</button>
+            <button type="button" class="btn" onclick="selectNone()">Clear Selection</button>
+          </div>
+        </div>
+
+        <!-- Matched Interfaces Table -->
+        <table id="resultsTable" class="display" style="width:100%; margin-top:16px;">
+          <thead>
+            <tr>
+              <th style="width:48px">
+                <input type="checkbox" id="selectAllCheckbox" aria-label="Select all visible" />
+              </th>
+              <th>Switch IP</th>
+              <th>Interface</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in results %}
+              <tr>
+                <td><input type="checkbox" class="row-select" name="selected[]" value="{{ r.switch_ip }}||{{ r.interface }}" /></td>
+                <td>{{ r.switch_ip }}</td>
+                <td><code>{{ r.interface }}</code></td>
+                <td>{{ r.description or '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <!-- Action Panel -->
+        <div class="action-panel">
+          <h3 class="section-title" style="margin:0 0 16px 0;">Configure Action</h3>
+
+          <div class="row">
+            <div class="field">
+              <label>Action Type</label>
+              <select name="action" id="actionType" required>
+                <option value="">Choose an action…</option>
+                <option value="set-description">Set Description</option>
+                <option value="custom-config">Custom Configuration</option>
+              </select>
+            </div>
+            <div class="field" id="descriptionField" style="display:none;">
+              <label>New Description</label>
+              <input name="new_description" type="text" placeholder="e.g., MC - Printer" />
+              <div class="muted">This description will be applied to all selected interfaces</div>
+            </div>
+          </div>
+
+          <div class="field" id="customConfigField" style="display:none; margin-top:12px;">
+            <label>Custom Configuration</label>
+            <textarea name="custom_config" placeholder="description {INTERFACE} - Access&#10;authentication order dot1x mab" rows="6"></textarea>
+            <div class="muted">Use <code>{INTERFACE}</code> as a placeholder for the interface name. Commands are wrapped in interface context automatically.</div>
+          </div>
+
+          <h3 class="section-title" style="margin:24px 0 16px 0;">Authentication</h3>
+          <div class="row">
+            <div class="field">
+              <label>Username</label>
+              <input name="apply_username" type="text" required placeholder="Your network username" />
+            </div>
+            <div class="field">
+              <label>Password</label>
+              <input name="apply_password" type="password" required placeholder="Your network password" />
+            </div>
+            <div class="field">
+              <label>Enable Secret (optional)</label>
+              <input name="apply_secret" type="password" placeholder="Leave empty if not required" />
+            </div>
+          </div>
+
+          <div class="row" style="justify-content:flex-end; margin-top:20px; gap:10px;">
+            <button type="button" class="btn" onclick="window.history.back()">Cancel</button>
+            <button type="submit" class="btn primary" id="submitBtn" disabled>
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+              </svg>
+              Preview & Apply Changes
+            </button>
+          </div>
+        </div>
+      </form>
+    {% else %}
+      <div style="text-align:center; padding:40px; background: color-mix(in oklab, var(--card) 98%, transparent); border-radius:12px; margin-top:16px;">
+        <svg width="48" height="48" viewBox="0 0 20 20" fill="none" stroke="var(--muted)" stroke-width="1.5" style="margin-bottom:12px;">
+          <circle cx="9" cy="9" r="7"/><path d="M14 14l5 5"/>
+        </svg>
+        <h3 style="margin:0 0 8px 0; color:var(--text);">No Results Found</h3>
+        <p class="muted" style="margin:0;">No interfaces matched your search criteria. Try adjusting your search phrase or options.</p>
+        <a href="{{ url_for('tool_phrase_search') }}" class="btn primary" style="margin-top:20px;">Try Another Search</a>
+      </div>
+    {% endif %}
+
+    <!-- Config Snippet -->
+    {% if snippet %}
+    <details style="margin-top:24px;">
+      <summary style="cursor:pointer; font-weight:600; padding:10px; background: color-mix(in oklab, var(--card) 96%, transparent); border-radius:8px;">
+        View Configuration Snippet (First Device)
+      </summary>
+      <pre class="muted" style="white-space:pre-wrap; margin-top:12px; padding:16px; background:var(--bg); border-radius:8px; overflow-x:auto; line-height:1.5;">{{ snippet }}</pre>
+    </details>
+    {% endif %}
+  </section>
+
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script>
+    let table;
+
+    $(document).ready(function(){
+      // Initialize DataTable
+      table = $('#resultsTable').DataTable({
+        pageLength: 25,
+        order: [[1, 'asc']], // Sort by Switch IP
+        columnDefs: [
+          { orderable: false, targets: 0 } // Disable sorting on checkbox column
+        ],
+        language: {
+          search: "Filter results:",
+          lengthMenu: "Show _MENU_ entries per page",
+          info: "Showing _START_ to _END_ of _TOTAL_ interfaces",
+          infoEmpty: "No interfaces found",
+          infoFiltered: "(filtered from _MAX_ total)"
+        }
+      });
+
+      // Update selection count
+      updateSelectionCount();
+
+      // Listen for checkbox changes
+      $(document).on('change', '.row-select, #selectAllCheckbox', function(){
+        updateSelectionCount();
+      });
+
+      // Select all checkbox behavior
+      $('#selectAllCheckbox').on('change', function(){
+        const checked = $(this).is(':checked');
+        table.rows({search: 'applied'}).nodes().to$().find('.row-select').prop('checked', checked);
+        updateSelectionCount();
+      });
+
+      // Action type change handler
+      $('#actionType').on('change', function(){
+        const action = $(this).val();
+        $('#descriptionField').toggle(action === 'set-description');
+        $('#customConfigField').toggle(action === 'custom-config');
+      });
+    });
+
+    function updateSelectionCount(){
+      const count = $('.row-select:checked').length;
+      $('#selectedCount').text(count);
+      $('#submitBtn').prop('disabled', count === 0);
+    }
+
+    function selectAll(){
+      table.rows({search: 'applied'}).nodes().to$().find('.row-select').prop('checked', true);
+      $('#selectAllCheckbox').prop('checked', true);
+      updateSelectionCount();
+    }
+
+    function selectNone(){
+      $('.row-select').prop('checked', false);
+      $('#selectAllCheckbox').prop('checked', false);
+      updateSelectionCount();
+    }
+  </script>
+{% endblock %}

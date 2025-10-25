@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}WLC Tools{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; align-items:center;">
+    <div>
+      <h2 class="section-title" style="margin:0;">WLC Tools</h2>
+      <p class="muted" style="margin:6px 0 0 0;">Utilities for Cisco 9800 controllers — inventory, RF snapshots, and time-bounded polling.</p>
+    </div>
+    <div class="row" style="gap:10px;">
+      <a class="btn" href="{{ url_for('wlc_jobs_overview') }}">Jobs</a>
+    </div>
+  </div>
+
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; margin-top:12px;">
+    <!-- WLC Dashboard -->
+    <div class="card">
+      <h3 style="margin:0 0 6px 0;">Wireless Dashboard</h3>
+      <p class="muted" style="margin:0 0 10px 0;">Continuous polling (5 min) with 24h–30d trend lines for clients and access points. Toggle targets and credentials.</p>
+      <div class="row" style="gap:10px;">
+        <a class="btn btn-gradient" href="{{ url_for('wlc_dashboard') }}">Open</a>
+        <a class="btn" href="{{ url_for('wlc_dashboard_settings') }}">Settings</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 6px 0;">Summer Guest Monitor</h3>
+      <p class="muted" style="margin:0 0 10px 0;">Daily 7am poll (configurable) that auto-matches WLAN profiles starting with “Summer” and shows color-coded enablement per controller.</p>
+      <div class="row" style="gap:10px;">
+        <a class="btn btn-gradient" href="{{ url_for('wlc_summer_guest') }}">Open</a>
+        <a class="btn" href="{{ url_for('wlc_summer_guest_settings') }}">Settings</a>
+      </div>
+    </div>
+
+    <!-- AP Inventory -->
+    <div class="card">
+      <h3 style="margin:0 0 6px 0;">AP Inventory</h3>
+      <p class="muted" style="margin:0 0 10px 0;">Query one or many WLCs for all joined APs; filter and export CSV (token download for large sets).</p>
+      <a class="btn btn-gradient" href="{{ url_for('wlc_inventory') }}">Open</a>
+    </div>
+
+    <!-- RF Utilization Summary (adjust endpoint name if needed) -->
+    <div class="card">
+      <h3 style="margin:0 0 6px 0;">RF Utilization Summary</h3>
+      <p class="muted" style="margin:0 0 10px 0;">Snapshot per WLC: Avg/Peak utilization by band (2.4/5 GHz) with per-AP parsing.</p>
+      <!-- If your endpoint isn't 'wlc_rf', change it here to whatever you used (e.g., 'wlc_rf_page'). -->
+      <a class="btn btn-gradient" href="{{ url_for('wlc_rf') }}">Open</a>
+    </div>
+
+    <!-- RF Troubleshooter (Periodic Polls) -->
+    <div class="card">
+      <h3 style="margin:0 0 6px 0;">RF Troubleshooter (Polls)</h3>
+      <p class="muted" style="margin:0 0 10px 0;">Single WLC, configurable interval (≥2 min), N polls, live chart, jobs list & cancel.</p>
+      <a class="btn btn-gradient" href="{{ url_for('wlc_rf_troubleshoot') }}">Open</a>
+    </div>
+    <!-- Clients Troubleshooter (Periodic Polls) -->
+    <div class="card">
+      <h3 style="margin:0 0 6px 0;">Clients Troubleshooter (Polls)</h3>
+      <p class="muted" style="margin:0 0 10px 0;">Total connected clients over time on a single WLC, with per-WLAN breakdown on latest round.</p>
+      <a class="btn btn-gradient" href="{{ url_for('wlc_clients_troubleshoot') }}">Open</a>
+    </div>
+
+  </div>
+</section>
+{% endblock %}

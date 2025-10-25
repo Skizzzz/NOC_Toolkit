@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Flask
+instance/
+.webassets-cache
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Encryption key (sensitive!)
+.encryption_key
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# CSV exports (optional - uncomment if you don't want to track exports)
+# *.csv
+
+# Job results (optional - these can get large)
+# results/

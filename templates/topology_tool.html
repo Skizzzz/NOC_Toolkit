@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}Topology Explorer{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h2 class="section-title" style="margin:0;">Topology Explorer</h2>
+      <p class="muted" style="margin:6px 0 0 0;">Collect CDP/LLDP neighbors for a single switch or every device in an organization and export the results.</p>
+    </div>
+    <div class="row" style="gap:10px; flex-wrap:wrap;">
+      <a class="btn" href="{{ url_for('solarwinds_nodes') }}">SolarWinds Nodes</a>
+      <a class="btn" href="{{ url_for('index') }}">ToolBox</a>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('topology_report') }}" class="card" style="margin-top:16px; padding:18px; display:flex; flex-direction:column; gap:16px;">
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;">
+      <div class="field">
+        <label for="scope">Report Scope</label>
+        <select id="scope" name="scope" style="padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 96%, transparent);">
+          <option value="node" {{ 'selected' if form_data.scope == 'node' else '' }}>Single SolarWinds Node</option>
+          <option value="organization" {{ 'selected' if form_data.scope == 'organization' else '' }}>Entire Organization</option>
+        </select>
+        <small class="muted">Choose one switch or every node that shares an Organization value in SolarWinds.</small>
+      </div>
+
+      <div class="field" id="nodeField" style="grid-column:span 2;">
+        <label for="target">SolarWinds Node</label>
+        <input id="target" name="target" type="text" list="swNodes" placeholder="Hostname or IP" value="{{ form_data.target }}" style="padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 96%, transparent);" autocomplete="off" />
+        <small class="muted">Search by hostname, IP, or pick from the list. Selections like <code>hostname (ip)</code> resolve automatically.</small>
+        <datalist id="swNodes">
+          {% for opt in node_options %}
+            <option value="{{ opt.label }}"></option>
+            {% if opt.caption and opt.caption != opt.label %}
+              <option value="{{ opt.caption }}"></option>
+            {% endif %}
+            {% if opt.value and opt.value != opt.label %}
+              <option value="{{ opt.value }}"></option>
+            {% endif %}
+          {% endfor %}
+        </datalist>
+      </div>
+
+      <div class="field" id="orgField" style="grid-column:span 2;">
+        <label for="organization">Organization</label>
+        <input id="organization" name="organization" type="text" list="orgOptions" placeholder="Org name from SolarWinds" value="{{ form_data.organization }}" style="padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 96%, transparent);" autocomplete="off" />
+        <small class="muted">Matches SolarWinds <code>Organization</code> exactly (case insensitive). Use the list for existing values.</small>
+        <datalist id="orgOptions">
+          {% for opt in org_options %}
+            <option value="{{ opt.name }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" value="{{ form_data.username }}" required autocomplete="username" />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password" />
+      </div>
+      <div class="field">
+        <label for="secret">Enable Secret (optional)</label>
+        <input id="secret" name="secret" type="password" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="vendor_mode">Vendor Hint</label>
+        <select id="vendor_mode" name="vendor_mode" style="padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 96%, transparent);">
+          <option value="auto" {{ 'selected' if form_data.vendor_mode == 'auto' else '' }}>Auto (use SolarWinds vendor)</option>
+          <option value="cisco" {{ 'selected' if form_data.vendor_mode == 'cisco' else '' }}>Cisco IOS/XE</option>
+          <option value="dell" {{ 'selected' if form_data.vendor_mode == 'dell' else '' }}>Dell (OS10/Force10/PowerConnect)</option>
+        </select>
+        <small class="muted">Override when SolarWinds mislabels a switch type.</small>
+      </div>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-start;">
+      <button class="btn btn-gradient" type="submit">Run Topology Report</button>
+      <a class="btn" href="{{ url_for('topology_tool') }}">Reset</a>
+      <div id="selectionDetails" class="muted" style="font-size:12px;"></div>
+    </div>
+  </form>
+</section>
+
+{% if results %}
+  {% set first = results[0] if results else None %}
+  <section class="card" style="margin-top:18px;">
+    <div class="row" style="justify-content:space-between; align-items:flex-end; gap:10px; flex-wrap:wrap;">
+      <div>
+        {% if scope == 'organization' %}
+          <h3 style="margin:0 0 6px 0;">Organization Report — {{ form_data.organization or 'Selected Organization' }}</h3>
+          <p class="muted" style="margin:0;">Switches: {{ result_counts.success }} successful / {{ result_counts.total }} total{% if result_counts.errors %} · {{ result_counts.errors }} error{{ 's' if result_counts.errors != 1 else '' }}{% endif %}</p>
+        {% elif first %}
+          <h3 style="margin:0 0 6px 0;">Report for {{ first.root.caption or first.root.ip_address }}</h3>
+          <p class="muted" style="margin:0;">IP: {{ first.root.ip_address or '—' }} · Vendor: {{ first.root.vendor or '—' }} · Model: {{ first.root.model or '—' }}{% if first.root.organization %} · Org: {{ first.root.organization }}{% endif %}</p>
+          {% if first.report %}
+            <p class="muted" style="margin:6px 0 0 0; font-size:12px;">Netmiko session type: {{ first.report.device_type or 'unknown' }}</p>
+          {% endif %}
+        {% endif %}
+      </div>
+      <form method="post" action="{{ url_for('topology_export') }}">
+        <input type="hidden" name="report_json" value="{{ report_json }}" />
+        <button class="btn" type="submit" {% if result_counts.total == 0 %}disabled{% endif %}>Download CSV</button>
+      </form>
+    </div>
+
+    {% if scope == 'organization' and result_counts.errors %}
+      <div class="card muted" style="margin-top:12px; padding:12px;">
+        <strong>Summary:</strong> {{ result_counts.errors }} device{{ 's' if result_counts.errors != 1 else '' }} failed collection. Review the cards below for details.
+      </div>
+    {% endif %}
+
+    {% for item in results %}
+      {% set idx = loop.index %}
+      {% set root = item.root %}
+      {% set report = item.report %}
+      {% set error = item.error %}
+      <div class="card" style="margin-top:16px; padding:18px;">
+        <div class="row" style="justify-content:space-between; align-items:flex-end; gap:10px; flex-wrap:wrap;">
+          <div>
+            <h4 style="margin:0 0 4px 0;">{{ root.caption or root.ip_address or ('Device ' ~ idx) }}</h4>
+            <p class="muted" style="margin:0;">IP: {{ root.ip_address or '—' }} · Vendor: {{ root.vendor or '—' }} · Model: {{ root.model or '—' }}{% if root.organization %} · Org: {{ root.organization }}{% endif %}</p>
+            {% if report %}
+              <p class="muted" style="margin:6px 0 0 0; font-size:12px;">Netmiko session type: {{ report.device_type or 'unknown' }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if error %}
+          <div class="card muted" style="margin-top:12px; padding:12px;">
+            <strong>Collection failed:</strong> {{ error }}
+          </div>
+        {% endif %}
+
+        {% if report %}
+          {% if report.attempt_warnings %}
+            <div class="card muted" style="margin-top:12px; padding:12px;">
+              <strong>Connection attempts:</strong>
+              <ul style="margin:8px 0 0 16px; padding:0;">
+                {% for msg in report.attempt_warnings %}
+                  <li>{{ msg }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          {% if report.command_notes %}
+            <div class="card muted" style="margin-top:12px; padding:12px;">
+              <strong>Command notes:</strong>
+              <ul style="margin:8px 0 0 16px; padding:0;">
+                {% for msg in report.command_notes %}
+                  <li>{{ msg }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          {% set neighbors = report.neighbors or [] %}
+          {% set ap_check = namespace(has_ap=false) %}
+          {% for neighbor in neighbors %}
+            {% set remote_name = neighbor.remote_name or '' %}
+            {% if remote_name and remote_name[:2].upper() == 'AP' %}
+              {% set ap_check.has_ap = true %}
+            {% endif %}
+          {% endfor %}
+
+          <div class="card" style="margin-top:16px; overflow:auto;">
+            {% if neighbors %}
+              <div class="row" style="justify-content:flex-end; margin-bottom:10px; gap:8px; flex-wrap:wrap;">
+                {% if ap_check.has_ap %}
+                  <button class="btn" type="button" data-ap-toggle="neighborsBody-{{ idx }}">Hide AP Neighbors</button>
+                {% endif %}
+              </div>
+              <table class="simple-table" style="min-width:860px;">
+                <thead>
+                  <tr>
+                    <th>Local Interface</th>
+                    <th>Neighbor</th>
+                    <th>Neighbor IP</th>
+                    <th>Neighbor Port</th>
+                    <th>Protocols</th>
+                    <th>Platform / Capabilities</th>
+                    <th>Inventory Match</th>
+                  </tr>
+                </thead>
+                <tbody id="neighborsBody-{{ idx }}">
+                  {% for neighbor in neighbors %}
+                    {% set inventory = neighbor.inventory or {} %}
+                    {% set remote_name = neighbor.remote_name or '' %}
+                    {% set is_ap = remote_name and remote_name[:2].upper() == 'AP' %}
+                    <tr class="neighbor-row{% if is_ap %} neighbor-ap{% endif %}">
+                      <td>{{ neighbor.local_interface or '—' }}</td>
+                      <td>
+                        {{ neighbor.remote_name or '—' }}
+                        {% if neighbor.remote_vendor %}
+                          <div class="muted" style="font-size:11px;">Vendor: {{ neighbor.remote_vendor }}</div>
+                        {% endif %}
+                      </td>
+                      <td>{{ neighbor.remote_ip or '—' }}</td>
+                      <td>{{ neighbor.remote_port or '—' }}</td>
+                      <td>{{ neighbor.protocols|join('/') }}</td>
+                      <td>
+                        {{ neighbor.remote_platform or '—' }}
+                        {% if neighbor.remote_capabilities %}
+                          <div class="muted" style="font-size:11px;">{{ neighbor.remote_capabilities }}</div>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if inventory %}
+                          {{ inventory.caption or '—' }}
+                          <div class="muted" style="font-size:11px;">
+                            {{ inventory.vendor or '—' }} · {{ inventory.model or '—' }}{% if inventory.organization %} · {{ inventory.organization }}{% endif %}
+                          </div>
+                        {% else %}
+                          <span class="muted">Not matched</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% else %}
+              <p class="muted" style="margin:8px 0 0 0;">No downstream neighbors found via CDP/LLDP.</p>
+            {% endif %}
+          </div>
+
+          {% set raw_outputs = report.raw_outputs or {} %}
+          {% if raw_outputs.cdp_detail or raw_outputs.lldp_detail %}
+            <div class="card" style="margin-top:14px;">
+              {% if raw_outputs.cdp_detail %}
+                <details>
+                  <summary>Raw CDP output</summary>
+                  <pre style="white-space:pre-wrap; margin-top:8px;">{{ raw_outputs.cdp_detail }}</pre>
+                </details>
+              {% endif %}
+              {% if raw_outputs.lldp_detail %}
+                <details style="margin-top:12px;">
+                  <summary>Raw LLDP output</summary>
+                  <pre style="white-space:pre-wrap; margin-top:8px;">{{ raw_outputs.lldp_detail }}</pre>
+                </details>
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    {% endfor %}
+  </section>
+{% endif %}
+
+<script>
+(function(){
+  const nodeOptions = {{ node_options|tojson|safe }};
+  const orgOptions = {{ org_options|tojson|safe }};
+  const scopeSelect = document.getElementById('scope');
+  const targetInput = document.getElementById('target');
+  const nodeField = document.getElementById('nodeField');
+  const orgField = document.getElementById('orgField');
+  const orgInput = document.getElementById('organization');
+  const details = document.getElementById('selectionDetails');
+
+  const nodeIndex = {};
+  nodeOptions.forEach(opt => {
+    const label = (opt.label || '').toLowerCase();
+    const caption = (opt.caption || '').toLowerCase();
+    const value = (opt.value || '').toLowerCase();
+    if (label) nodeIndex[label] = opt;
+    if (caption) nodeIndex[caption] = opt;
+    if (value) nodeIndex[value] = opt;
+  });
+
+  const orgIndex = {};
+  orgOptions.forEach(opt => {
+    const name = (opt.name || '').toLowerCase();
+    if (name) orgIndex[name] = opt;
+  });
+
+  function updateDetails(value, isOrg) {
+    if (!details) return;
+    const key = (value || '').trim().toLowerCase();
+    if (!key) {
+      details.textContent = '';
+      return;
+    }
+    if (isOrg) {
+      const opt = orgIndex[key];
+      if (opt) {
+        const count = opt.count || 0;
+        details.textContent = `${opt.name} — ${count} node${count === 1 ? '' : 's'}`;
+      } else {
+        details.textContent = '';
+      }
+      return;
+    }
+    let opt = nodeIndex[key];
+    if (!opt && key.includes('(')) {
+      const simple = key.split('(')[0].trim();
+      opt = nodeIndex[simple];
+    }
+    if (opt) {
+      const parts = [];
+      if (opt.caption) parts.push(opt.caption);
+      if (opt.organization) parts.push(`Org: ${opt.organization}`);
+      if (opt.vendor) parts.push(`Vendor: ${opt.vendor}`);
+      if (opt.model) parts.push(`Model: ${opt.model}`);
+      details.textContent = parts.join(' · ');
+    } else {
+      details.textContent = '';
+    }
+  }
+
+  function syncScope() {
+    const isOrg = scopeSelect && scopeSelect.value === 'organization';
+    if (nodeField) nodeField.style.display = isOrg ? 'none' : '';
+    if (targetInput) targetInput.required = !isOrg;
+    if (orgField) orgField.style.display = isOrg ? '' : 'none';
+    if (orgInput) orgInput.required = isOrg;
+    if (isOrg) {
+      updateDetails(orgInput ? orgInput.value : '', true);
+    } else {
+      updateDetails(targetInput ? targetInput.value : '', false);
+    }
+  }
+
+  if (scopeSelect) {
+    scopeSelect.addEventListener('change', syncScope);
+  }
+  if (targetInput) {
+    targetInput.addEventListener('change', (event) => updateDetails(event.target.value, false));
+    targetInput.addEventListener('input', (event) => updateDetails(event.target.value, false));
+  }
+  if (orgInput) {
+    orgInput.addEventListener('change', (event) => updateDetails(event.target.value, true));
+    orgInput.addEventListener('input', (event) => updateDetails(event.target.value, true));
+  }
+
+  syncScope();
+
+  document.querySelectorAll('[data-ap-toggle]').forEach(btn => {
+    const targetId = btn.getAttribute('data-ap-toggle');
+    const body = document.getElementById(targetId);
+    if (!body) return;
+    let hide = false;
+    const apply = () => {
+      body.querySelectorAll('tr.neighbor-ap').forEach(row => {
+        row.style.display = hide ? 'none' : '';
+      });
+      btn.textContent = hide ? 'Show AP Neighbors' : 'Hide AP Neighbors';
+    };
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      hide = !hide;
+      apply();
+    });
+    apply();
+  });
+})();
+</script>
+{% endblock %}

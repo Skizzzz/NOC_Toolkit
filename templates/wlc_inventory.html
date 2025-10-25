@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}WLC AP Inventory{% endblock %}
+{% block head_extra %}
+<style>
+  .tool-header{
+    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:24px;
+  }
+  .tool-header h2{margin:0 0 8px 0; font-size:28px;}
+  .tool-header p{margin:0; font-size:15px; line-height:1.5;}
+  .tool-icon{
+    width:48px;
+    height:48px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-radius:12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+    margin-bottom:16px;
+  }
+
+  .form-section{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:16px;
+  }
+  .form-section-header{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:16px;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--border);
+  }
+  .form-section-icon{
+    width:32px;
+    height:32px;
+    border-radius:8px;
+    background: color-mix(in oklab, var(--accent) 15%, transparent);
+    color:var(--accent);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+  }
+  .form-section-title{
+    margin:0;
+    font-size:16px;
+    font-weight:600;
+  }
+  .form-section-subtitle{
+    margin:0;
+    font-size:13px;
+    color:var(--muted);
+  }
+
+  .field-with-icon{position:relative;}
+  .field-with-icon .field-icon{
+    position:absolute;
+    left:12px;
+    top:38px;
+    color:var(--muted);
+    pointer-events:none;
+  }
+  .field-with-icon input{padding-left:38px;}
+
+  .wlc-count{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:4px 10px;
+    background: color-mix(in oklab, var(--info) 15%, transparent);
+    color:var(--info);
+    border-radius:6px;
+    font-size:12px;
+    font-weight:600;
+  }
+
+  .action-buttons{
+    display:flex;
+    gap:12px;
+    justify-content:flex-end;
+    padding-top:20px;
+    margin-top:20px;
+    border-top:1px solid var(--border);
+  }
+</style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <a href="{{ url_for('wlc_tools') }}">WLC Tools</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">AP Inventory</span>
+  </nav>
+
+  <div class="tool-header">
+    <div class="tool-icon">
+      <svg width="28" height="28" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+      </svg>
+    </div>
+    <h2>Cisco 9800 Access Point Inventory</h2>
+    <p>Query one or many wireless controllers in parallel to discover all joined access points. Filter by name or state, then export results to CSV for reporting and analysis.</p>
+  </div>
+
+  <form method="post" action="{{ url_for('wlc_inventory_run') }}">
+    <!-- Target Controllers Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
+          </svg>
+        </div>
+        <div style="flex:1;">
+          <h3 class="form-section-title">Target Controllers</h3>
+          <p class="form-section-subtitle">Specify which WLCs to query</p>
+        </div>
+        <span class="wlc-count" id="wlcCount">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/>
+          </svg>
+          <span id="wlcCountNumber">0</span> controllers
+        </span>
+      </div>
+
+      <div class="field">
+        <label>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+            <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
+          </svg>
+          WLC IPs / Hostnames
+        </label>
+        <textarea id="wlc-hosts" name="hosts" placeholder="Enter IP addresses or hostnames (comma or newline separated)&#10;&#10;Examples:&#10;10.20.30.40, 10.20.30.41&#10;wlc-building-a.domain.com" rows="5">{{ request.form.get('hosts','') }}</textarea>
+        <div class="muted">💡 Tip: Paste from Excel or enter multiple addresses separated by commas or new lines</div>
+      </div>
+    </div>
+
+    <!-- Authentication Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="form-section-title">Authentication</h3>
+          <p class="form-section-subtitle">Your network credentials for SSH access</p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field field-with-icon">
+          <label>Username</label>
+          <svg class="field-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
+          </svg>
+          <input name="username" type="text" required placeholder="Enter your network username" value="{{ request.form.get('username','') }}" />
+        </div>
+        <div class="field field-with-icon">
+          <label>Password</label>
+          <svg class="field-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z"/>
+          </svg>
+          <input name="password" type="password" required placeholder="Enter your network password" value="{{ request.form.get('password','') }}" />
+        </div>
+        <div class="field">
+          <label>Enable Secret <span class="muted">(optional)</span></label>
+          <input name="secret" type="password" placeholder="Leave blank if not required" value="{{ request.form.get('secret','') }}" />
+          <div class="muted">Only needed if devices require enable mode</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters & Options Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="form-section-title">Filters & Options</h3>
+          <p class="form-section-subtitle">Narrow down results and configure parallel processing</p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
+            </svg>
+            Filter by AP Name
+          </label>
+          <input name="f_ap" type="text" placeholder="Leave blank for all APs (supports partial matches)" value="{{ request.form.get('f_ap','') }}" />
+          <div class="muted">Example: <code style="margin:0 4px;">Building-A</code> will match all APs containing that text</div>
+        </div>
+        <div class="field">
+          <label>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l4-4z"/>
+            </svg>
+            Filter by State
+          </label>
+          <input name="f_state" type="text" placeholder="Leave blank for all states" value="{{ request.form.get('f_state','') }}" />
+          <div class="muted">Common values: <code style="margin:0 4px;">Registered</code> • <code style="margin:0 4px;">Enabled</code></div>
+        </div>
+        <div class="field">
+          <label>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/>
+            </svg>
+            Max Workers
+          </label>
+          <input name="max_workers" type="number" min="1" max="50" placeholder="10 (default)" value="{{ request.form.get('max_workers','') }}" />
+          <div class="muted">Parallel SSH sessions (1-50). Higher = faster, but more resource intensive</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; padding:12px; background: color-mix(in oklab, var(--info) 8%, transparent); border-radius:8px; border:1px solid color-mix(in oklab, var(--info) 20%, transparent);">
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="var(--info)" style="flex-shrink:0; margin-top:2px;">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
+          </svg>
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:13px; margin-bottom:4px; color:var(--info);">How it works</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.5;">
+              We'll SSH to each controller, run <code>show ap summary</code>, parse the output, apply your filters, and combine results. You can then export to CSV for further analysis in Excel.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button class="btn" type="reset">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+          <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/>
+        </svg>
+        Reset Form
+      </button>
+      <button class="btn primary" type="submit">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+          <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+          <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"/>
+        </svg>
+        Run Inventory
+      </button>
+    </div>
+  </form>
+
+  <script>
+    // Update WLC count dynamically
+    const hostsTextarea = document.getElementById('wlc-hosts');
+    const wlcCountNumber = document.getElementById('wlcCountNumber');
+
+    function updateWlcCount(){
+      const text = hostsTextarea.value.trim();
+      if(!text){
+        wlcCountNumber.textContent = '0';
+        return;
+      }
+      const hosts = text.split(/[,\n]/).map(h => h.trim()).filter(h => h.length > 0);
+      wlcCountNumber.textContent = hosts.length;
+    }
+
+    hostsTextarea.addEventListener('input', updateWlcCount);
+    updateWlcCount();
+  </script>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}User Management{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">User Management</span>
+  </nav>
+
+  <div class="card">
+    <h2 class="section-title">User Management</h2>
+    <p class="muted" style="margin-bottom:24px;">Create and manage user accounts (Superadmin only)</p>
+
+    <details open style="margin-bottom:24px;">
+      <summary style="cursor:pointer; font-weight:600; margin-bottom:16px;">Create New User</summary>
+      <form method="post" class="card" style="padding:20px; background:color-mix(in oklab, var(--card) 96%, transparent);">
+        <input type="hidden" name="action" value="create">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+          <div class="field">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required minlength="8">
+            <small class="muted">At least 8 characters</small>
+          </div>
+          <div class="field">
+            <label for="role">Role</label>
+            <select id="role" name="role">
+              <option value="user">User</option>
+              <option value="superadmin">Superadmin</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-gradient" style="margin-top:16px;">Create User</button>
+      </form>
+    </details>
+
+    <table class="simple-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Created</th>
+          <th>Last Login</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td>{{ user.id }}</td>
+          <td>{{ user.username }}</td>
+          <td><span class="badge {% if user.role == 'superadmin' %}error{% else %}neutral{% endif %}">{{ user.role }}</span></td>
+          <td>{{ user.created_at }}</td>
+          <td>{{ user.last_login or 'Never' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

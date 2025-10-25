@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+{% block title %}NOC Toolkit — Dashboard{% endblock %}
+{% block head_extra %}
+<style>
+  .dashboard-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:24px;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+  .dashboard-title h2{margin:0; font-size:28px;}
+  .dashboard-title .muted{margin-top:4px;}
+
+  .quick-stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:16px;
+    margin-bottom:24px;
+  }
+  .stat-card{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+    position:relative;
+    overflow:hidden;
+    display:block;
+    text-decoration:none;
+    color:inherit;
+  }
+  .stat-card::before{
+    content:'';
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+    height:3px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+  .stat-card.success::before{background:var(--success);}
+  .stat-card.warning::before{background:var(--warning);}
+  .stat-card.error::before{background:var(--error);}
+  .stat-card-link{
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .stat-card-link:hover{
+    transform: translateY(-4px);
+    box-shadow: var(--shadow);
+    border-color: var(--accent);
+  }
+  .stat-label{
+    font-size:12px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .stat-value{
+    font-size:32px;
+    font-weight:700;
+    line-height:1;
+    margin-bottom:4px;
+  }
+  .stat-subtitle{
+    font-size:13px;
+    color:var(--muted);
+  }
+  .stat-icon{
+    position:absolute;
+    top:18px;
+    right:18px;
+    width:32px;
+    height:32px;
+    opacity:0.2;
+  }
+
+  .recent-activity{
+    margin-top:24px;
+  }
+  .activity-list{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .activity-item{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 16px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    transition:all 0.15s ease;
+  }
+  .activity-item:hover{
+    border-color:var(--accent);
+    transform:translateX(4px);
+  }
+  .activity-icon{
+    width:36px;
+    height:36px;
+    border-radius:8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+  }
+  .activity-icon.success{background:color-mix(in oklab, var(--success) 15%, transparent); color:var(--success);}
+  .activity-icon.info{background:color-mix(in oklab, var(--info) 15%, transparent); color:var(--info);}
+  .activity-icon.warning{background:color-mix(in oklab, var(--warning) 15%, transparent); color:var(--warning);}
+  .activity-content{flex:1; min-width:0;}
+  .activity-title{font-weight:600; font-size:14px; margin-bottom:2px;}
+  .activity-meta{font-size:12px; color:var(--muted);}
+  .activity-time{font-size:12px; color:var(--muted); white-space:nowrap;}
+
+  .service-status-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+    gap:16px;
+    margin-top:16px;
+  }
+  .service-card{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px;
+    display:block;
+    text-decoration:none;
+    color:inherit;
+  }
+  .service-card-link{
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .service-card-link:hover{
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: var(--accent);
+  }
+  .service-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:12px;
+  }
+  .service-name{font-weight:600; font-size:14px;}
+  .service-details{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .service-detail-row{
+    display:flex;
+    justify-content:space-between;
+  }
+
+  .tool-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+    gap:16px;
+    margin-top:16px;
+  }
+  .tool-card{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    transition:all 0.2s ease;
+    position:relative;
+    overflow:hidden;
+  }
+  .tool-card:hover{
+    border-color:var(--accent);
+    transform:translateY(-2px);
+    box-shadow:var(--shadow);
+  }
+  .tool-card-icon{
+    width:42px;
+    height:42px;
+    border-radius:10px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+    margin-bottom:14px;
+  }
+  .tool-card h3{margin:0 0 8px 0; font-size:16px;}
+  .tool-card p{margin:0 0 14px 0; font-size:13px; color:var(--muted); line-height:1.5;}
+  .tool-card .btn-gradient{width:100%; justify-content:center; display:flex;}
+
+  @media (max-width: 768px){
+    .quick-stats{grid-template-columns:1fr;}
+    .tool-grid{grid-template-columns:1fr;}
+    .service-status-grid{grid-template-columns:1fr;}
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <div class="dashboard-title">
+    <h2>Dashboard</h2>
+    <p class="muted">Network Operations Center Toolkit — Monitor, manage, and maintain your infrastructure</p>
+  </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="quick-stats">
+  <a href="{{ url_for('wlc_dashboard') }}" class="stat-card stat-card-link" id="wlcClientsCard">
+    <svg class="stat-icon" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+    </svg>
+    <div class="stat-label">WLC Clients</div>
+    <div class="stat-value" id="totalWlcClients">—</div>
+    <div class="stat-subtitle">Across all controllers</div>
+  </a>
+
+  <a href="{{ url_for('wlc_inventory') }}" class="stat-card stat-card-link success" id="wlcApsCard">
+    <svg class="stat-icon" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+    </svg>
+    <div class="stat-label">Access Points</div>
+    <div class="stat-value" id="totalWlcAps">—</div>
+    <div class="stat-subtitle">Active APs joined</div>
+  </a>
+
+  <a href="{{ url_for('jobs_center') }}" class="stat-card stat-card-link" id="jobsCard">
+    <svg class="stat-icon" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"/>
+    </svg>
+    <div class="stat-label">Background Jobs</div>
+    <div class="stat-value" id="totalJobs">—</div>
+    <div class="stat-subtitle">Running tasks</div>
+  </a>
+
+  <a href="{{ url_for('solarwinds_nodes') }}" class="stat-card stat-card-link" id="nodesCard">
+    <svg class="stat-icon" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/>
+    </svg>
+    <div class="stat-label">Network Nodes</div>
+    <div class="stat-value" id="totalNodes">{{ total_nodes or '—' }}</div>
+    <div class="stat-subtitle">In SolarWinds</div>
+  </a>
+</div>
+
+<!-- Service Status Section -->
+<section class="card">
+  <h3 class="section-title">Service Status</h3>
+  <p class="muted" style="margin:0 0 16px 0;">Monitoring services and background polling tasks</p>
+
+  <div class="service-status-grid">
+    <a href="{{ url_for('wlc_dashboard') }}" class="service-card service-card-link">
+      <div class="service-header">
+        <span class="service-name">WLC Dashboard</span>
+        <span class="badge" id="wlcDashStatus">—</span>
+      </div>
+      <div class="service-details">
+        <div class="service-detail-row">
+          <span>Interval:</span>
+          <span id="wlcDashInterval">—</span>
+        </div>
+        <div class="service-detail-row">
+          <span>Last Poll:</span>
+          <span id="wlcDashLastPoll">—</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="{{ url_for('wlc_summer_guest') }}" class="service-card service-card-link">
+      <div class="service-header">
+        <span class="service-name">Summer Guest Monitor</span>
+        <span class="badge" id="summerGuestStatus">—</span>
+      </div>
+      <div class="service-details">
+        <div class="service-detail-row">
+          <span>Schedule:</span>
+          <span id="summerGuestSchedule">—</span>
+        </div>
+        <div class="service-detail-row">
+          <span>Last Run:</span>
+          <span id="summerGuestLastRun">—</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="{{ url_for('changes_list') }}" class="service-card service-card-link">
+      <div class="service-header">
+        <span class="service-name">Change Windows</span>
+        <span class="badge" id="changeWindowsStatus">—</span>
+      </div>
+      <div class="service-details">
+        <div class="service-detail-row">
+          <span>Upcoming:</span>
+          <span id="upcomingChanges">{{ upcoming_changes or 0 }}</span>
+        </div>
+        <div class="service-detail-row">
+          <span>Total Scheduled:</span>
+          <span id="totalChanges">{{ total_changes or 0 }}</span>
+        </div>
+      </div>
+    </a>
+  </div>
+</section>
+
+<!-- Quick Access Tools -->
+<section class="card" style="margin-top:24px;">
+  <h3 class="section-title">Quick Access Tools</h3>
+  <p class="muted" style="margin:0 0 16px 0;">Jump directly to your most-used network operations tools</p>
+
+  <div class="tool-grid">
+    <div class="tool-card">
+      <div class="tool-card-icon">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor">
+          <circle cx="9" cy="9" r="6" stroke="currentColor" fill="none" stroke-width="2"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3>Interface Config Search</h3>
+      <p>Find interfaces by phrase and take bulk actions across switches</p>
+      <a class="btn-gradient" href="{{ url_for('tool_phrase_search') }}">Open Tool</a>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-card-icon">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM2 10h16" stroke="currentColor" fill="none" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3>Global Config Push</h3>
+      <p>Search and safely push global configuration changes</p>
+      <a class="btn-gradient" href="{{ url_for('tool_global_config') }}">Open Tool</a>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-card-icon">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M7 16V4m6 0v12" stroke="currentColor" fill="none" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3>WLC Dashboard</h3>
+      <p>Monitor wireless clients and access points with live charts</p>
+      <a class="btn-gradient" href="{{ url_for('wlc_dashboard') }}">Open Tool</a>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-card-icon">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M4 6h12M4 10h12M4 14h12" stroke="currentColor" fill="none" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3>AP Inventory</h3>
+      <p>Query and export access point inventory from WLCs</p>
+      <a class="btn-gradient" href="{{ url_for('wlc_inventory') }}">Open Tool</a>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-card-icon">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor">
+          <circle cx="5" cy="5" r="2" fill="currentColor"/><circle cx="15" cy="5" r="2" fill="currentColor"/><circle cx="10" cy="15" r="2" fill="currentColor"/>
+          <path d="M7 6l6 0M6 7l3 6M14 7l-3 6" stroke="currentColor" fill="none" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3>Topology Explorer</h3>
+      <p>Build CDP/LLDP neighbor tables and export paths</p>
+      <a class="btn-gradient" href="{{ url_for('topology_tool') }}">Open Tool</a>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-card-icon">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" fill="none" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3>Audit Logs</h3>
+      <p>Review all configuration changes and actions taken</p>
+      <a class="btn-gradient" href="{{ url_for('audit_logs') }}">Open Tool</a>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-card-icon">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+        </svg>
+      </div>
+      <h3>Bulk SSH Terminal</h3>
+      <p>Execute commands on multiple devices in parallel</p>
+      <a class="btn-gradient" href="{{ url_for('bulk_ssh') }}">Open Tool</a>
+    </div>
+  </div>
+</section>
+
+<script>
+(async function(){
+  // Fetch dashboard data
+  try {
+    const res = await fetch('/api/dashboard-stats');
+    if(!res.ok) throw new Error('Failed to load');
+    const data = await res.json();
+
+    // Update WLC stats
+    if(data.wlc){
+      document.getElementById('totalWlcClients').textContent = (data.wlc.clients || 0).toLocaleString();
+      document.getElementById('totalWlcAps').textContent = (data.wlc.aps || 0).toLocaleString();
+
+      const wlcStatus = document.getElementById('wlcDashStatus');
+      if(data.wlc.enabled){
+        wlcStatus.textContent = 'Running';
+        wlcStatus.className = 'badge success';
+      } else {
+        wlcStatus.textContent = 'Paused';
+        wlcStatus.className = 'badge neutral';
+      }
+
+      document.getElementById('wlcDashInterval').textContent = `${data.wlc.interval || 5} min`;
+      document.getElementById('wlcDashLastPoll').textContent = data.wlc.last_poll || 'Never';
+    }
+
+    // Update Summer Guest status
+    if(data.summer_guest){
+      const summerStatus = document.getElementById('summerGuestStatus');
+      if(data.summer_guest.enabled){
+        summerStatus.textContent = 'Enabled';
+        summerStatus.className = 'badge success';
+      } else {
+        summerStatus.textContent = 'Disabled';
+        summerStatus.className = 'badge neutral';
+      }
+      document.getElementById('summerGuestSchedule').textContent = data.summer_guest.schedule || '—';
+      document.getElementById('summerGuestLastRun').textContent = data.summer_guest.last_run || 'Never';
+    }
+
+    // Update Jobs count
+    if(data.jobs !== undefined){
+      document.getElementById('totalJobs').textContent = data.jobs;
+      const jobsCard = document.getElementById('jobsCard');
+      if(data.jobs > 0){
+        jobsCard.classList.add('warning');
+      }
+    }
+
+    // Update change windows
+    const changeStatus = document.getElementById('changeWindowsStatus');
+    if(data.upcoming_changes > 0){
+      changeStatus.textContent = `${data.upcoming_changes} upcoming`;
+      changeStatus.className = 'badge info';
+    } else {
+      changeStatus.textContent = 'None scheduled';
+      changeStatus.className = 'badge neutral';
+    }
+
+  } catch(err){
+    console.error('Failed to load dashboard stats:', err);
+  }
+})();
+</script>
+{% endblock %}

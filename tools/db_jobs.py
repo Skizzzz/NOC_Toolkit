@@ -1,0 +1,2069 @@
+# tools/db_jobs.py
+import csv
+import sqlite3
+import json
+import threading
+import os
+import base64
+import hashlib
+from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Iterable, List, Dict, Union
+
+try:
+    from cryptography.fernet import Fernet
+    _HAS_FERNET = True
+except ImportError:
+    Fernet = None  # type: ignore
+    _HAS_FERNET = False
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_DATA_ROOT = Path(os.environ.get("NOC_TOOLKIT_DATA_DIR", Path.home() / ".noc_toolkit")).expanduser()
+_DATA_ROOT.mkdir(parents=True, exist_ok=True)
+
+_env_db = os.environ.get("NOC_TOOLKIT_DB_PATH")
+if _env_db:
+    DB_PATH = str(Path(_env_db).expanduser())
+else:
+    new_path = _DATA_ROOT / "noc_toolkit.db"
+    legacy_path = _PROJECT_ROOT / "noc_toolkit.db"
+    if new_path.exists():
+        DB_PATH = str(new_path)
+    else:
+        if legacy_path.exists():
+            try:
+                import shutil
+                shutil.copy2(legacy_path, new_path)
+                key_src = _PROJECT_ROOT / "wlc_dashboard.key"
+                key_dst = _DATA_ROOT / "wlc_dashboard.key"
+                if key_src.exists() and not key_dst.exists():
+                    shutil.copy2(key_src, key_dst)
+            except Exception:
+                pass
+        DB_PATH = str(new_path)
+
+Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+_DB_LOCK = threading.Lock()
+
+_DEFAULT_WLC_DASHBOARD_SETTINGS = {
+    "enabled": False,
+    "hosts": [],
+    "username": "",
+    "password": "",
+    "secret": "",
+    "interval_sec": 300,
+    "last_poll_ts": None,
+    "last_poll_status": "never",
+    "last_poll_message": "",
+    "validation": [],
+    "poll_summary": None,
+}
+
+_DEFAULT_WLC_SUMMER_SETTINGS = {
+    "enabled": False,
+    "hosts": [],
+    "username": "",
+    "password": "",
+    "secret": "",
+    "profile_names": ["SummerGuest"],
+    "wlan_ids": [10],
+    "daily_time": "07:00",
+    "timezone": "America/Chicago",
+    "last_poll_ts": None,
+    "last_poll_status": "never",
+    "last_poll_message": "",
+    "validation": [],
+    "summary": None,
+    "auto_prefix": "Summer",
+}
+
+_ENC_KEY_CACHE: Optional[bytes] = None
+
+
+def _get_dashboard_key() -> bytes:
+    global _ENC_KEY_CACHE
+    if _ENC_KEY_CACHE is not None:
+        return _ENC_KEY_CACHE
+
+    env_key = os.environ.get("WLC_DASHBOARD_KEY")
+    if env_key:
+        key = env_key.encode()
+        if _HAS_FERNET and len(key) != 44:
+            key = base64.urlsafe_b64encode(hashlib.sha256(key).digest())
+    elif _HAS_FERNET:
+        key_dir = os.path.dirname(DB_PATH)
+        os.makedirs(key_dir, exist_ok=True)
+        key_path = os.path.join(key_dir, "wlc_dashboard.key")
+        if os.path.exists(key_path):
+            with open(key_path, "rb") as f:
+                key = f.read().strip()
+        else:
+            key = Fernet.generate_key()
+            with open(key_path, "wb") as f:
+                f.write(key)
+    else:
+        key = hashlib.sha256((DB_PATH + "-wlc-dash").encode()).digest()
+
+    _ENC_KEY_CACHE = key
+    return key
+
+
+def _encrypt_secret(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    key = _get_dashboard_key()
+    raw = value.encode()
+    if _HAS_FERNET:
+        cipher = Fernet(key)
+        return cipher.encrypt(raw).decode()
+    else:
+        hashed = hashlib.sha256(key).digest()
+        xored = bytes(b ^ hashed[i % len(hashed)] for i, b in enumerate(raw))
+        return base64.urlsafe_b64encode(xored).decode()
+
+
+def _decrypt_secret(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    key = _get_dashboard_key()
+    try:
+        if _HAS_FERNET:
+            cipher = Fernet(key)
+            return cipher.decrypt(value.encode()).decode()
+        else:
+            hashed = hashlib.sha256(key).digest()
+            raw = base64.urlsafe_b64decode(value.encode())
+            plain = bytes(b ^ hashed[i % len(hashed)] for i, b in enumerate(raw))
+            return plain.decode()
+    except Exception:
+        return ""
+
+
+def _normalize_daily_time(value: Optional[str]) -> str:
+    if not value:
+        return "07:00"
+    parts = value.strip().split(":")
+    if len(parts) != 2:
+        return "07:00"
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except Exception:
+        return "07:00"
+    hour = max(0, min(hour, 23))
+    minute = max(0, min(minute, 59))
+    return f"{hour:02d}:{minute:02d}"
+
+
+def _normalize_profile_names(values: Iterable) -> List[str]:
+    seen = set()
+    names: List[str] = []
+    for raw in values or []:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        names.append(text)
+    return names
+
+
+def _normalize_wlan_ids(values: Iterable) -> List[int]:
+    seen = set()
+    ids: List[int] = []
+    for raw in values or []:
+        if raw is None:
+            continue
+        try:
+            number = int(str(raw).strip())
+        except Exception:
+            continue
+        if number < 0 or number in seen:
+            continue
+        seen.add(number)
+        ids.append(number)
+    return ids
+
+
+def _conn():
+    cx = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cx.row_factory = sqlite3.Row
+    return cx
+
+
+def _legacy_log_csv_path() -> str:
+    data_candidate = Path(DB_PATH).resolve().parent / "logs" / "changes.csv"
+    if data_candidate.exists():
+        return str(data_candidate)
+    project_candidate = _PROJECT_ROOT / "logs" / "changes.csv"
+    return str(project_candidate)
+
+
+def _maybe_seed_change_logs(cx: sqlite3.Connection):
+    """Populate change_logs table from legacy CSV if empty."""
+    try:
+        cur = cx.execute("SELECT COUNT(*) FROM change_logs")
+        if (cur.fetchone() or [0])[0]:
+            return
+        csv_path = _legacy_log_csv_path()
+        if not os.path.exists(csv_path):
+            return
+        with open(csv_path, newline="") as f:
+            reader = csv.DictReader(f)
+            rows = []
+            for raw in reader:
+                rows.append(
+                    (
+                        (raw.get("timestamp") or "").strip(),
+                        (raw.get("username") or "").strip(),
+                        (raw.get("tool") or "").strip(),
+                        (raw.get("job_id") or "").strip(),
+                        (raw.get("switch_ip") or "").strip(),
+                        (raw.get("result") or "").strip(),
+                        (raw.get("message") or "").strip(),
+                        (raw.get("config_lines") or "").strip(),
+                    )
+                )
+        if rows:
+            cx.executemany(
+                "INSERT INTO change_logs(ts, username, tool, job_id, switch_ip, result, message, config_lines) VALUES(?,?,?,?,?,?,?,?)",
+                rows,
+            )
+    except Exception:
+        # Legacy import is best-effort; ignore failures to avoid breaking startup.
+        pass
+
+
+def init_db():
+    """
+    Initialize database, tables, indexes, and set pragmatic defaults
+    for durability and concurrency.
+    """
+    with _conn() as cx:
+        # Pragmas: WAL for better concurrency; NORMAL sync for speed with durability
+        try:
+            cx.execute("PRAGMA journal_mode=WAL;")
+            cx.execute("PRAGMA synchronous=NORMAL;")
+        except Exception:
+            # Pragmas are best-effort; ignore if unavailable
+            pass
+
+        # Core tables
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS jobs(
+              job_id TEXT PRIMARY KEY,
+              created TEXT,
+              tool TEXT,
+              params_json TEXT,
+              done INTEGER DEFAULT 0,
+              cancelled INTEGER DEFAULT 0
+            )
+            """
+        )
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS job_events(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              job_id TEXT,
+              ts TEXT,
+              type TEXT,              -- created|sample|error|done|cancelled|note
+              payload_json TEXT
+            )
+            """
+        )
+
+        # Indexes
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_job_events_job ON job_events(job_id)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_job_events_type ON job_events(type)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_job_events_ts ON job_events(ts)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_jobs_tool ON jobs(tool)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created)")
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS wlc_dashboard_settings(
+              id INTEGER PRIMARY KEY CHECK(id=1),
+              enabled INTEGER DEFAULT 0,
+              hosts_json TEXT,
+              username TEXT,
+              password TEXT,
+              secret TEXT,
+              interval_sec INTEGER DEFAULT 300,
+              updated TEXT,
+              last_poll_ts TEXT,
+              last_poll_status TEXT,
+              last_poll_message TEXT
+            )
+            """
+        )
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS wlc_dashboard_samples(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              ts TEXT,
+              host TEXT,
+              total_clients INTEGER,
+              ap_count INTEGER,
+              ap_details_json TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_wlc_dash_ts ON wlc_dashboard_samples(ts)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_wlc_dash_host ON wlc_dashboard_samples(host)")
+        try:
+            cx.execute("ALTER TABLE wlc_dashboard_samples ADD COLUMN ap_details_json TEXT")
+        except Exception:
+            pass
+        try:
+            cx.execute(
+                "DELETE FROM wlc_dashboard_samples WHERE rowid NOT IN (SELECT MIN(rowid) FROM wlc_dashboard_samples GROUP BY ts, host)"
+            )
+        except Exception:
+            pass
+        cx.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_wlc_dash_unique ON wlc_dashboard_samples(ts, host)")
+        try:
+            cx.execute("ALTER TABLE wlc_dashboard_settings ADD COLUMN validation_json TEXT")
+        except Exception:
+            pass
+        try:
+            cx.execute("ALTER TABLE wlc_dashboard_settings ADD COLUMN poll_summary_json TEXT")
+        except Exception:
+            pass
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS wlc_summer_settings(
+              id INTEGER PRIMARY KEY CHECK(id=1),
+              enabled INTEGER DEFAULT 0,
+              hosts_json TEXT,
+              username TEXT,
+              password TEXT,
+              secret TEXT,
+              profile_names_json TEXT,
+              wlan_ids_json TEXT,
+              daily_time TEXT,
+              timezone TEXT,
+              updated TEXT,
+              last_poll_ts TEXT,
+              last_poll_status TEXT,
+              last_poll_message TEXT,
+              validation_json TEXT,
+              summary_json TEXT
+            )
+            """
+        )
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS wlc_summer_samples(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              ts TEXT,
+              host TEXT,
+              profile_name TEXT,
+              wlan_id INTEGER,
+              ssid TEXT,
+              enabled INTEGER,
+              status_text TEXT,
+              raw_json TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_wlc_summer_ts ON wlc_summer_samples(ts)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_wlc_summer_host ON wlc_summer_samples(host)")
+        cx.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_wlc_summer_unique ON wlc_summer_samples(ts, host, COALESCE(wlan_id, -1), COALESCE(profile_name, ''), COALESCE(ssid, ''))"
+        )
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS solarwinds_settings(
+              id INTEGER PRIMARY KEY CHECK(id=1),
+              base_url TEXT,
+              username TEXT,
+              password TEXT,
+              verify_ssl INTEGER DEFAULT 1,
+              updated TEXT,
+              last_poll_ts TEXT,
+              last_poll_status TEXT,
+              last_poll_message TEXT
+            )
+            """
+        )
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS solarwinds_nodes(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              node_id TEXT,
+              caption TEXT,
+              organization TEXT,
+              vendor TEXT,
+              model TEXT,
+              version TEXT,
+              ip_address TEXT,
+              status TEXT,
+              last_seen TEXT,
+              extra_json TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_solarwinds_node_id ON solarwinds_nodes(node_id)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_solarwinds_caption ON solarwinds_nodes(caption)")
+        try:
+            cx.execute("ALTER TABLE solarwinds_nodes ADD COLUMN vendor TEXT")
+        except Exception:
+            pass
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS change_windows(
+              change_id TEXT PRIMARY KEY,
+              created TEXT,
+              scheduled TEXT,
+              tool TEXT,
+              change_number TEXT,
+              payload_json TEXT,
+              rollback_json TEXT,
+              status TEXT,
+              started TEXT,
+              completed TEXT,
+              rollback_started TEXT,
+              rollback_completed TEXT,
+              apply_job_id TEXT,
+              rollback_job_id TEXT,
+              message TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_change_windows_scheduled ON change_windows(scheduled)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_change_windows_status ON change_windows(status)")
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS change_events(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              change_id TEXT,
+              ts TEXT,
+              type TEXT,
+              message TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_change_events_change ON change_events(change_id)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_change_events_ts ON change_events(ts)")
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS change_logs(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              ts TEXT,
+              username TEXT,
+              tool TEXT,
+              job_id TEXT,
+              switch_ip TEXT,
+              result TEXT,
+              message TEXT,
+              config_lines TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_ts ON change_logs(ts)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_tool ON change_logs(tool)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_user ON change_logs(username)")
+
+        # Bulk SSH tables
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bulk_ssh_jobs(
+              job_id TEXT PRIMARY KEY,
+              created TEXT,
+              username TEXT,
+              command TEXT,
+              device_count INTEGER DEFAULT 0,
+              completed_count INTEGER DEFAULT 0,
+              success_count INTEGER DEFAULT 0,
+              failed_count INTEGER DEFAULT 0,
+              status TEXT DEFAULT 'running',
+              done INTEGER DEFAULT 0
+            )
+            """
+        )
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bulk_ssh_results(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              job_id TEXT,
+              device TEXT,
+              status TEXT,
+              output TEXT,
+              error TEXT,
+              duration_ms INTEGER,
+              completed_at TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_jobs_created ON bulk_ssh_jobs(created)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_jobs_username ON bulk_ssh_jobs(username)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_results_job ON bulk_ssh_results(job_id)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_results_device ON bulk_ssh_results(device)")
+
+        # Bulk SSH Templates
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bulk_ssh_templates(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT UNIQUE NOT NULL,
+              description TEXT,
+              command TEXT NOT NULL,
+              variables TEXT,
+              device_type TEXT DEFAULT 'cisco_ios',
+              category TEXT DEFAULT 'general',
+              created TEXT,
+              updated TEXT,
+              created_by TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_templates_category ON bulk_ssh_templates(category)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_templates_name ON bulk_ssh_templates(name)")
+
+        # Scheduled Bulk SSH Jobs
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bulk_ssh_schedules(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT UNIQUE NOT NULL,
+              description TEXT,
+              devices_json TEXT,
+              command TEXT,
+              template_id INTEGER,
+              schedule_type TEXT DEFAULT 'once',
+              schedule_config TEXT,
+              next_run TEXT,
+              last_run TEXT,
+              last_job_id TEXT,
+              enabled INTEGER DEFAULT 1,
+              alert_on_failure INTEGER DEFAULT 0,
+              alert_email TEXT,
+              created TEXT,
+              created_by TEXT,
+              username TEXT,
+              password_encrypted TEXT,
+              secret_encrypted TEXT,
+              device_type TEXT DEFAULT 'cisco_ios'
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_schedules_next_run ON bulk_ssh_schedules(next_run)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_schedules_enabled ON bulk_ssh_schedules(enabled)")
+
+        _maybe_seed_change_logs(cx)
+
+
+def insert_job(job_id: str, tool: str, created: str, params: dict):
+    """
+    Insert (or replace) a job row and emit a 'created' event.
+    """
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "INSERT OR REPLACE INTO jobs(job_id, created, tool, params_json, done, cancelled) VALUES(?,?,?,?,0,0)",
+                (job_id, created, tool, json.dumps(params)),
+            )
+            cx.execute(
+                "INSERT INTO job_events(job_id, ts, type, payload_json) VALUES(?,?,?,?)",
+                (job_id, created, "created", "{}"),
+            )
+    except Exception:
+        # Fail silently to avoid crashing callers; callers can still proceed in-memory
+        pass
+
+
+def append_event(job_id: str, etype: str, payload: Optional[dict] = None, ts: Optional[str] = None):
+    """
+    Append a single event row.
+    """
+    if ts is None:
+        ts = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "INSERT INTO job_events(job_id, ts, type, payload_json) VALUES(?,?,?,?)",
+                (job_id, ts, etype, json.dumps(payload or {})),
+            )
+    except Exception:
+        pass
+
+
+def append_events_bulk(job_id: str, events: Iterable[dict]):
+    """
+    Append multiple events within a single transaction.
+    Each event dict should have keys: type, payload (optional), ts (optional)
+    """
+    rows = []
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    for e in events:
+        etype = e.get("type", "note")
+        ets = e.get("ts") or now_iso
+        payload = json.dumps(e.get("payload") or {})
+        rows.append((job_id, ets, etype, payload))
+    if not rows:
+        return
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.executemany(
+                "INSERT INTO job_events(job_id, ts, type, payload_json) VALUES(?,?,?,?)",
+                rows,
+            )
+    except Exception:
+        pass
+
+
+def mark_done(job_id: str, *, cancelled: bool = False):
+    """
+    Mark job as done (and optionally cancelled) and emit a terminal event.
+    """
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE jobs SET done=1, cancelled=? WHERE job_id=?",
+                (1 if cancelled else 0, job_id),
+            )
+            cx.execute(
+                "INSERT INTO job_events(job_id, ts, type, payload_json) VALUES(?,?,?,?)",
+                (
+                    job_id,
+                    datetime.now().isoformat(timespec="seconds"),
+                    "cancelled" if cancelled else "done",
+                    "{}",
+                ),
+            )
+    except Exception:
+        pass
+
+
+def has_event(job_id: str, etype: str) -> bool:
+    """Return True if at least one event with the given type exists for the job."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                "SELECT 1 FROM job_events WHERE job_id = ? AND type = ? ORDER BY id DESC LIMIT 1",
+                (job_id, etype),
+            )
+            return cur.fetchone() is not None
+    except Exception:
+        return False
+
+
+def list_jobs(limit: int = 200):
+    """
+    Returns newest-first jobs with quick aggregates:
+      - samples_count (number of 'sample' events)
+      - last_ts (timestamp of last event)
+    """
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                SELECT
+                  j.job_id, j.created, j.tool, j.done, j.cancelled, j.params_json,
+                  COALESCE((
+                     SELECT COUNT(*) FROM job_events e
+                     WHERE e.job_id = j.job_id AND e.type='sample'
+                  ), 0) AS samples_count,
+                  (
+                     SELECT e.ts FROM job_events e
+                     WHERE e.job_id = j.job_id
+                     ORDER BY e.id DESC LIMIT 1
+                  ) AS last_ts
+                FROM jobs j
+                ORDER BY j.job_id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        rows = []
+
+    # parse params once here
+    for r in rows:
+        try:
+            r["params"] = json.loads(r.pop("params_json") or "{}")
+        except Exception:
+            r["params"] = {}
+    return rows
+
+
+def load_job(job_id: str):
+    """
+    Return (job_meta_dict, events_list)
+    """
+    try:
+        with _DB_LOCK, _conn() as cx:
+            meta = cx.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+            if not meta:
+                return None, []
+            meta = dict(meta)
+            try:
+                meta["params"] = json.loads(meta.pop("params_json") or "{}")
+            except Exception:
+                meta["params"] = {}
+            ev = cx.execute("SELECT * FROM job_events WHERE job_id=? ORDER BY id", (job_id,)).fetchall()
+            events = [dict(e) for e in ev]
+    except Exception:
+        return None, []
+
+    # parse payloads
+    for e in events:
+        try:
+            e["payload"] = json.loads(e.pop("payload_json") or "{}")
+        except Exception:
+            e["payload"] = {}
+    return meta, events
+
+
+def job_status(job_id: str) -> str:
+    """
+    Convenience helper: 'running' | 'done' | 'cancelled' | 'missing'
+    """
+    meta, _ = load_job(job_id)
+    if not meta:
+        return "missing"
+    if meta.get("cancelled"):
+        return "cancelled"
+    if meta.get("done"):
+        return "done"
+    return "running"
+
+
+def cleanup_old_jobs(days: int = 30) -> int:
+    """
+    Purge jobs and events older than N days.
+    Returns number of jobs removed (best-effort).
+    NOTE: created and ts are ISO strings; ISO lexical order equals chronological order.
+    """
+    cutoff_iso = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+    removed = 0
+    try:
+        with _DB_LOCK, _conn() as cx:
+            # collect old job_ids first
+            cur = cx.execute("SELECT job_id FROM jobs WHERE created < ?", (cutoff_iso,))
+            old_ids = [r["job_id"] for r in cur.fetchall()]
+            if old_ids:
+                # delete events first for FK-safety (even though no FK was declared)
+                cx.executemany("DELETE FROM job_events WHERE job_id = ?", [(jid,) for jid in old_ids])
+                cx.executemany("DELETE FROM jobs WHERE job_id = ?", [(jid,) for jid in old_ids])
+                removed = len(old_ids)
+    except Exception:
+        pass
+    return removed
+
+
+def load_wlc_dashboard_settings():
+    data = dict(_DEFAULT_WLC_DASHBOARD_SETTINGS)
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT * FROM wlc_dashboard_settings WHERE id=1").fetchone()
+            if not row:
+                cx.execute(
+                    "INSERT INTO wlc_dashboard_settings(id, enabled, hosts_json, username, password, secret, interval_sec, updated, last_poll_ts, last_poll_status, last_poll_message, validation_json, poll_summary_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        1,
+                        0,
+                        json.dumps([]),
+                        "",
+                        _encrypt_secret(""),
+                        _encrypt_secret(""),
+                        300,
+                        datetime.now().isoformat(timespec="seconds"),
+                        None,
+                        "never",
+                        "",
+                        json.dumps([]),
+                        json.dumps(None),
+                    ),
+                )
+                return data
+            row = dict(row)
+            data["enabled"] = bool(row.get("enabled"))
+            try:
+                data["hosts"] = json.loads(row.get("hosts_json") or "[]")
+            except Exception:
+                data["hosts"] = []
+            data["username"] = row.get("username", "")
+            data["password"] = _decrypt_secret(row.get("password"))
+            data["secret"] = _decrypt_secret(row.get("secret"))
+            data["interval_sec"] = row.get("interval_sec", 300) or 300
+            data["last_poll_ts"] = row.get("last_poll_ts")
+            data["last_poll_status"] = row.get("last_poll_status", "never")
+            data["last_poll_message"] = row.get("last_poll_message", "")
+            try:
+                data["validation"] = json.loads(row.get("validation_json") or "[]")
+            except Exception:
+                data["validation"] = []
+            try:
+                data["poll_summary"] = json.loads(row.get("poll_summary_json") or "null")
+            except Exception:
+                data["poll_summary"] = None
+            try:
+                data["poll_summary"] = json.loads(row.get("poll_summary_json") or "null")
+            except Exception:
+                data["poll_summary"] = None
+    except Exception:
+        pass
+    return data
+
+
+def save_wlc_dashboard_settings(settings: dict):
+    payload = dict(_DEFAULT_WLC_DASHBOARD_SETTINGS)
+    payload.update(settings or {})
+    hosts_json = json.dumps(payload.get("hosts") or [])
+    validation_json = json.dumps(payload.get("validation") or [])
+    poll_summary_json = json.dumps(payload.get("poll_summary"))
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT INTO wlc_dashboard_settings(id, enabled, hosts_json, username, password, secret, interval_sec, updated, last_poll_ts, last_poll_status, last_poll_message, validation_json, poll_summary_json)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                  enabled=excluded.enabled,
+                  hosts_json=excluded.hosts_json,
+                  username=excluded.username,
+                  password=excluded.password,
+                  secret=excluded.secret,
+                  interval_sec=excluded.interval_sec,
+                  updated=excluded.updated,
+                  last_poll_ts=excluded.last_poll_ts,
+                  last_poll_status=excluded.last_poll_status,
+                  last_poll_message=excluded.last_poll_message,
+                  validation_json=excluded.validation_json,
+                  poll_summary_json=excluded.poll_summary_json
+                """,
+                (
+                    1,
+                    1 if payload.get("enabled") else 0,
+                    hosts_json,
+                    payload.get("username", ""),
+                    _encrypt_secret(payload.get("password")),
+                    _encrypt_secret(payload.get("secret")),
+                    int(payload.get("interval_sec", 300) or 300),
+                    datetime.now().isoformat(timespec="seconds"),
+                    payload.get("last_poll_ts"),
+                    payload.get("last_poll_status", "never"),
+                    payload.get("last_poll_message", ""),
+                    validation_json,
+                    poll_summary_json,
+                ),
+            )
+    except Exception:
+        pass
+
+
+def update_wlc_dashboard_poll_status(*, ts: Optional[str], status: str, message: str = ""):
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE wlc_dashboard_settings SET last_poll_ts=?, last_poll_status=?, last_poll_message=?, updated=? WHERE id=1",
+                (
+                    ts,
+                    status,
+                    message,
+                    datetime.now().isoformat(timespec="seconds"),
+                ),
+            )
+    except Exception:
+        pass
+
+
+def insert_wlc_dashboard_samples(ts_iso: str, metrics: List[Dict]):
+    if not metrics:
+        return
+    rows = []
+    for m in metrics:
+        rows.append(
+            (
+                ts_iso,
+                m.get("host", ""),
+                int(m.get("total_clients") or 0),
+                int(m.get("ap_count") or 0),
+                json.dumps(m.get("ap_details") or []),
+            )
+        )
+    cutoff_iso = (datetime.now() - timedelta(days=31)).isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.executemany(
+                "INSERT INTO wlc_dashboard_samples(ts, host, total_clients, ap_count, ap_details_json) VALUES(?,?,?,?,?)",
+                rows,
+            )
+            cx.execute("DELETE FROM wlc_dashboard_samples WHERE ts < ?", (cutoff_iso,))
+    except Exception:
+        pass
+
+
+def fetch_wlc_dashboard_series(hours: int) -> List[Dict]:
+    cutoff = (datetime.now() - timedelta(hours=hours)).isoformat(timespec="seconds")
+    data: list[dict] = []
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                SELECT ts,
+                       COALESCE(SUM(total_clients), 0) AS total_clients,
+                       COALESCE(SUM(ap_count), 0) AS total_aps
+                FROM wlc_dashboard_samples
+                WHERE ts >= ?
+                GROUP BY ts
+                ORDER BY ts
+                """,
+                (cutoff,),
+            )
+            for row in cur.fetchall():
+                data.append({
+                    "ts": row["ts"],
+                    "clients": row["total_clients"],
+                    "aps": row["total_aps"],
+                })
+    except Exception:
+        pass
+    return data
+
+
+def fetch_wlc_dashboard_latest_totals() -> Dict:
+    info: Dict = {"ts": None, "clients": 0, "aps": 0}
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute(
+                """
+                SELECT ts,
+                       SUM(total_clients) AS total_clients,
+                       SUM(ap_count) AS total_aps
+                FROM wlc_dashboard_samples
+                WHERE ts = (SELECT MAX(ts) FROM wlc_dashboard_samples)
+                """
+            ).fetchone()
+            if row and row["ts"]:
+                info["ts"] = row["ts"]
+                info["clients"] = row["total_clients"] or 0
+                info["aps"] = row["total_aps"] or 0
+    except Exception:
+        pass
+    return info
+
+
+def fetch_wlc_dashboard_latest_details() -> Dict[str, Dict]:
+    data: Dict[str, Dict] = {}
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                SELECT s.host, s.total_clients, s.ap_count, s.ap_details_json
+                FROM wlc_dashboard_samples s
+                INNER JOIN (
+                    SELECT host, MAX(ts) AS max_ts FROM wlc_dashboard_samples GROUP BY host
+                ) latest ON latest.host = s.host AND latest.max_ts = s.ts
+                """
+            )
+            for row in cur.fetchall():
+                details = []
+                try:
+                    details = json.loads(row["ap_details_json"] or "[]")
+                except Exception:
+                    details = []
+                data[row["host"]] = {
+                    "total_clients": row["total_clients"] or 0,
+                    "ap_count": row["ap_count"] or 0,
+                    "ap_details": details,
+                }
+    except Exception:
+        pass
+    return data
+
+
+def load_wlc_summer_settings() -> dict:
+    data = dict(_DEFAULT_WLC_SUMMER_SETTINGS)
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT * FROM wlc_summer_settings WHERE id=1").fetchone()
+            if not row:
+                cx.execute(
+                    """
+                    INSERT INTO wlc_summer_settings(
+                      id, enabled, hosts_json, username, password, secret,
+                      profile_names_json, wlan_ids_json, daily_time, timezone, updated,
+                      last_poll_ts, last_poll_status, last_poll_message, validation_json, summary_json
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        1,
+                        0,
+                        json.dumps([]),
+                        "",
+                        _encrypt_secret(""),
+                        _encrypt_secret(""),
+                        json.dumps(data["profile_names"]),
+                        json.dumps(data["wlan_ids"]),
+                        data["daily_time"],
+                        data["timezone"],
+                        datetime.now().isoformat(timespec="seconds"),
+                        None,
+                        "never",
+                        "",
+                        json.dumps([]),
+                        json.dumps(None),
+                    ),
+                )
+                return data
+
+            row_dict = dict(row)
+            data["enabled"] = bool(row_dict.get("enabled"))
+            try:
+                hosts = json.loads(row_dict.get("hosts_json") or "[]")
+                clean_hosts = []
+                seen_hosts = set()
+                for host in hosts:
+                    text = str(host or "").strip()
+                    if not text:
+                        continue
+                    key = text.lower()
+                    if key in seen_hosts:
+                        continue
+                    seen_hosts.add(key)
+                    clean_hosts.append(text)
+                data["hosts"] = clean_hosts
+            except Exception:
+                data["hosts"] = []
+            data["username"] = row_dict.get("username", "")
+            data["password"] = _decrypt_secret(row_dict.get("password"))
+            data["secret"] = _decrypt_secret(row_dict.get("secret"))
+            try:
+                profiles = json.loads(row_dict.get("profile_names_json") or "[]")
+            except Exception:
+                profiles = []
+            data["profile_names"] = _normalize_profile_names(profiles) or list(_DEFAULT_WLC_SUMMER_SETTINGS["profile_names"])
+            try:
+                wlan_ids_raw = json.loads(row_dict.get("wlan_ids_json") or "[]")
+            except Exception:
+                wlan_ids_raw = []
+            data["wlan_ids"] = _normalize_wlan_ids(wlan_ids_raw) or list(_DEFAULT_WLC_SUMMER_SETTINGS["wlan_ids"])
+            data["daily_time"] = _normalize_daily_time(row_dict.get("daily_time"))
+            tz_value = row_dict.get("timezone") or data["timezone"]
+            data["timezone"] = tz_value
+            data["last_poll_ts"] = row_dict.get("last_poll_ts")
+            data["last_poll_status"] = row_dict.get("last_poll_status", "never")
+            data["last_poll_message"] = row_dict.get("last_poll_message", "")
+            try:
+                data["validation"] = json.loads(row_dict.get("validation_json") or "[]")
+            except Exception:
+                data["validation"] = []
+            try:
+                data["summary"] = json.loads(row_dict.get("summary_json") or "null")
+            except Exception:
+                data["summary"] = None
+            data.setdefault("auto_prefix", "Summer")
+    except Exception:
+        pass
+    return data
+
+
+def save_wlc_summer_settings(settings: dict):
+    payload = dict(_DEFAULT_WLC_SUMMER_SETTINGS)
+    payload.update(settings or {})
+
+    hosts_clean = []
+    seen_hosts = set()
+    for host in payload.get("hosts") or []:
+        text = str(host or "").strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen_hosts:
+            continue
+        seen_hosts.add(key)
+        hosts_clean.append(text)
+
+    profile_names = _normalize_profile_names(payload.get("profile_names") or [])
+    if not profile_names:
+        profile_names = list(_DEFAULT_WLC_SUMMER_SETTINGS["profile_names"])
+
+    wlan_ids = _normalize_wlan_ids(payload.get("wlan_ids") or [])
+    if not wlan_ids:
+        wlan_ids = list(_DEFAULT_WLC_SUMMER_SETTINGS["wlan_ids"])
+
+    daily_time = _normalize_daily_time(payload.get("daily_time"))
+    timezone_value = payload.get("timezone") or _DEFAULT_WLC_SUMMER_SETTINGS["timezone"]
+
+    validation_json = json.dumps(payload.get("validation") or [])
+    summary_json = json.dumps(payload.get("summary"))
+
+    payload.setdefault("auto_prefix", "Summer")
+
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT INTO wlc_summer_settings(
+                  id, enabled, hosts_json, username, password, secret,
+                  profile_names_json, wlan_ids_json, daily_time, timezone, updated,
+                  last_poll_ts, last_poll_status, last_poll_message, validation_json, summary_json
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                  enabled=excluded.enabled,
+                  hosts_json=excluded.hosts_json,
+                  username=excluded.username,
+                  password=excluded.password,
+                  secret=excluded.secret,
+                  profile_names_json=excluded.profile_names_json,
+                  wlan_ids_json=excluded.wlan_ids_json,
+                  daily_time=excluded.daily_time,
+                  timezone=excluded.timezone,
+                  updated=excluded.updated,
+                  last_poll_ts=excluded.last_poll_ts,
+                  last_poll_status=excluded.last_poll_status,
+                  last_poll_message=excluded.last_poll_message,
+                  validation_json=excluded.validation_json,
+                  summary_json=excluded.summary_json
+                """,
+                (
+                    1,
+                    1 if payload.get("enabled") else 0,
+                    json.dumps(hosts_clean),
+                    payload.get("username", ""),
+                    _encrypt_secret(payload.get("password")),
+                    _encrypt_secret(payload.get("secret")),
+                    json.dumps(profile_names),
+                    json.dumps(wlan_ids),
+                    daily_time,
+                    timezone_value,
+                    datetime.now().isoformat(timespec="seconds"),
+                    payload.get("last_poll_ts"),
+                    payload.get("last_poll_status", "never"),
+                    payload.get("last_poll_message", ""),
+                    validation_json,
+                    summary_json,
+                ),
+            )
+    except Exception:
+        pass
+
+
+def update_wlc_summer_poll_status(*, ts: Optional[str], status: str, message: str = ""):
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE wlc_summer_settings SET last_poll_ts=?, last_poll_status=?, last_poll_message=?, updated=? WHERE id=1",
+                (
+                    ts,
+                    status,
+                    message,
+                    datetime.now().isoformat(timespec="seconds"),
+                ),
+            )
+    except Exception:
+        pass
+
+
+def insert_wlc_summer_samples(ts_iso: str, samples: List[Dict]):
+    if not samples:
+        return
+    rows = []
+    for sample in samples:
+        enabled = sample.get("enabled")
+        if enabled is None:
+            enabled_value = None
+        else:
+            enabled_value = 1 if bool(enabled) else 0
+        rows.append(
+            (
+                ts_iso,
+                sample.get("host", ""),
+                sample.get("profile_name", ""),
+                sample.get("wlan_id"),
+                sample.get("ssid", ""),
+                enabled_value,
+                sample.get("status_text", ""),
+                json.dumps(sample.get("raw")),
+            )
+        )
+
+    cutoff_iso = (datetime.now() - timedelta(days=180)).isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.executemany(
+                """
+                INSERT OR REPLACE INTO wlc_summer_samples(
+                  ts, host, profile_name, wlan_id, ssid, enabled, status_text, raw_json
+                ) VALUES(?,?,?,?,?,?,?,?)
+                """,
+                rows,
+            )
+            cx.execute("DELETE FROM wlc_summer_samples WHERE ts < ?", (cutoff_iso,))
+    except Exception:
+        pass
+
+
+def fetch_wlc_summer_latest_details() -> Dict[str, Dict]:
+    data: Dict[str, Dict] = {}
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                SELECT s.host, s.ts, s.profile_name, s.wlan_id, s.ssid, s.enabled, s.status_text, s.raw_json
+                FROM wlc_summer_samples s
+                INNER JOIN (
+                    SELECT host, MAX(ts) AS max_ts FROM wlc_summer_samples GROUP BY host
+                ) latest ON latest.host = s.host AND latest.max_ts = s.ts
+                ORDER BY s.host, COALESCE(s.wlan_id, 0), s.profile_name, s.ssid
+                """
+            )
+            for row in cur.fetchall():
+                host = row["host"]
+                entry = data.setdefault(host, {"ts": row["ts"], "entries": []})
+                entry["ts"] = row["ts"]
+                try:
+                    raw_payload = json.loads(row["raw_json"] or "null")
+                except Exception:
+                    raw_payload = None
+                entry["entries"].append(
+                    {
+                        "profile_name": row["profile_name"],
+                        "wlan_id": row["wlan_id"],
+                        "ssid": row["ssid"],
+                        "enabled": None if row["enabled"] is None else bool(row["enabled"]),
+                        "status_text": row["status_text"],
+                        "raw": raw_payload,
+                    }
+                )
+    except Exception:
+        pass
+    return data
+
+
+def fetch_wlc_summer_recent_runs(limit: int = 30) -> List[Dict]:
+    runs: List[Dict] = []
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                SELECT ts,
+                       COUNT(*) AS total_entries,
+                       SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabled_count,
+                       SUM(CASE WHEN enabled = 0 THEN 1 ELSE 0 END) AS disabled_count
+                FROM wlc_summer_samples
+                GROUP BY ts
+                ORDER BY ts DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            for row in cur.fetchall():
+                runs.append(
+                    {
+                        "ts": row["ts"],
+                        "total": row["total_entries"] or 0,
+                        "enabled": row["enabled_count"] or 0,
+                        "disabled": row["disabled_count"] or 0,
+                    }
+                )
+    except Exception:
+        pass
+    return runs
+
+
+def load_solarwinds_settings() -> dict:
+    defaults = {
+        "base_url": "",
+        "username": "",
+        "password": "",
+        "verify_ssl": True,
+        "last_poll_ts": None,
+        "last_poll_status": "never",
+        "last_poll_message": "",
+    }
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT * FROM solarwinds_settings WHERE id=1").fetchone()
+            if not row:
+                cx.execute(
+                    "INSERT INTO solarwinds_settings(id, base_url, username, password, verify_ssl, updated, last_poll_ts, last_poll_status, last_poll_message) VALUES(1,'','',?,1,?,?,?,?)",
+                    (
+                        _encrypt_secret(""),
+                        datetime.now().isoformat(timespec="seconds"),
+                        None,
+                        "never",
+                        "",
+                    ),
+                )
+                return defaults
+            data = dict(row)
+            defaults["base_url"] = data.get("base_url") or ""
+            defaults["username"] = data.get("username") or ""
+            defaults["password"] = _decrypt_secret(data.get("password"))
+            defaults["verify_ssl"] = bool(data.get("verify_ssl", 1))
+            defaults["last_poll_ts"] = data.get("last_poll_ts")
+            defaults["last_poll_status"] = data.get("last_poll_status", "never")
+            defaults["last_poll_message"] = data.get("last_poll_message", "")
+    except Exception:
+        pass
+    return defaults
+
+
+def save_solarwinds_settings(settings: dict) -> None:
+    payload = load_solarwinds_settings()
+    payload.update(settings or {})
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT INTO solarwinds_settings(id, base_url, username, password, verify_ssl, updated, last_poll_ts, last_poll_status, last_poll_message)
+                VALUES(1,?,?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                  base_url=excluded.base_url,
+                  username=excluded.username,
+                  password=excluded.password,
+                  verify_ssl=excluded.verify_ssl,
+                  updated=excluded.updated,
+                  last_poll_ts=excluded.last_poll_ts,
+                  last_poll_status=excluded.last_poll_status,
+                  last_poll_message=excluded.last_poll_message
+                """,
+                (
+                    payload.get("base_url", ""),
+                    payload.get("username", ""),
+                    _encrypt_secret(payload.get("password")),
+                    1 if payload.get("verify_ssl", True) else 0,
+                    datetime.now().isoformat(timespec="seconds"),
+                    payload.get("last_poll_ts"),
+                    payload.get("last_poll_status", "never"),
+                    payload.get("last_poll_message", ""),
+                ),
+            )
+    except Exception:
+        pass
+
+
+def update_solarwinds_poll_status(*, ts: Optional[str], status: str, message: str = "") -> None:
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE solarwinds_settings SET last_poll_ts=?, last_poll_status=?, last_poll_message=?, updated=? WHERE id=1",
+                (
+                    ts,
+                    status,
+                    message,
+                    datetime.now().isoformat(timespec="seconds"),
+                ),
+            )
+    except Exception:
+        pass
+
+
+def replace_solarwinds_nodes(nodes: List[Dict]) -> None:
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute("DELETE FROM solarwinds_nodes")
+            if not nodes:
+                return
+            rows = []
+            for node in nodes:
+                rows.append(
+                    (
+                        str(node.get("node_id") or ""),
+                        node.get("caption") or "",
+                        node.get("organization") or "",
+                        node.get("vendor") or "",
+                        node.get("model") or "",
+                        node.get("version") or "",
+                        node.get("ip_address") or "",
+                        node.get("status") or "",
+                        node.get("last_seen") or "",
+                        json.dumps(node.get("extra") or {}),
+                    )
+                )
+            cx.executemany(
+                """
+                INSERT INTO solarwinds_nodes(node_id, caption, organization, vendor, model, version, ip_address, status, last_seen, extra_json)
+                VALUES(?,?,?,?,?,?,?,?,?,?)
+                """,
+                rows,
+            )
+    except Exception:
+        pass
+
+
+def fetch_solarwinds_nodes() -> List[Dict]:
+    results: List[Dict] = []
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                "SELECT node_id, caption, organization, vendor, model, version, ip_address, status, last_seen, extra_json FROM solarwinds_nodes ORDER BY caption"
+            )
+            for row in cur.fetchall():
+                extra = {}
+                try:
+                    extra = json.loads(row["extra_json"] or "{}")
+                except Exception:
+                    extra = {}
+                results.append(
+                    {
+                        "node_id": row["node_id"],
+                        "caption": row["caption"],
+                        "organization": row["organization"],
+                        "vendor": row["vendor"],
+                        "model": row["model"],
+                        "version": row["version"],
+                        "ip_address": row["ip_address"],
+                        "status": row["status"],
+                        "last_seen": row["last_seen"],
+                        "extra": extra,
+                    }
+                )
+    except Exception:
+        pass
+    return results
+
+
+def insert_change_log(
+    *,
+    ts: str,
+    username: str,
+    tool: str,
+    job_id: str,
+    switch_ip: str,
+    result: str,
+    message: str,
+    config_lines: str,
+):
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT INTO change_logs(ts, username, tool, job_id, switch_ip, result, message, config_lines)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (ts, username, tool, job_id, switch_ip, result, message, config_lines),
+            )
+    except Exception:
+        pass
+
+
+def fetch_change_logs(
+    *,
+    username: Optional[str] = None,
+    tool: Optional[str] = None,
+    result: Optional[str] = None,
+    ip: Optional[str] = None,
+    q: Optional[str] = None,
+    date_from: Optional[Union[str, datetime]] = None,
+    date_to: Optional[Union[str, datetime]] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    def _normalize_dt(value):
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat(timespec="seconds")
+        return str(value)
+
+    where = []
+    params: list[str] = []
+
+    if username:
+        where.append("LOWER(username) LIKE ?")
+        params.append(f"%{username.lower()}%")
+    if tool:
+        where.append("tool = ?")
+        params.append(tool)
+    if result:
+        where.append("result = ?")
+        params.append(result)
+    if ip:
+        where.append("LOWER(switch_ip) LIKE ?")
+        params.append(f"%{ip.lower()}%")
+    if q:
+        where.append(
+            "LOWER(message || ' ' || config_lines || ' ' || switch_ip || ' ' || job_id) LIKE ?"
+        )
+        params.append(f"%{q.lower()}%")
+
+    start_ts = _normalize_dt(date_from)
+    end_ts = _normalize_dt(date_to)
+    if start_ts:
+        where.append("ts >= ?")
+        params.append(start_ts)
+    if end_ts:
+        where.append("ts <= ?")
+        params.append(end_ts)
+
+    where_clause = " WHERE " + " AND ".join(where) if where else ""
+    order_clause = " ORDER BY ts DESC"
+
+    # Use separate param lists so COUNT(*) doesn't include LIMIT/OFFSET values.
+    count_params = list(params)
+    query = (
+        "SELECT ts AS timestamp, username, tool, job_id, switch_ip, result, message, config_lines FROM change_logs"
+        + where_clause
+        + order_clause
+    )
+
+    query_params = list(params)
+    if limit is not None:
+        query += " LIMIT ? OFFSET ?"
+        query_params.extend([int(limit), int(max(offset, 0))])
+
+    rows: list[dict] = []
+    total = 0
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(query, query_params)
+            rows = [dict(r) for r in cur.fetchall()]
+            total = cx.execute(
+                "SELECT COUNT(*) FROM change_logs" + where_clause,
+                count_params,
+            ).fetchone()[0]
+    except Exception:
+        rows, total = [], 0
+    return rows, total
+
+
+def fetch_change_log_tools() -> list[str]:
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                "SELECT DISTINCT tool FROM change_logs WHERE tool IS NOT NULL AND tool != '' ORDER BY tool"
+            )
+            return [row[0] for row in cur.fetchall()]
+    except Exception:
+        return []
+
+
+# ===================== CHANGE WINDOWS =====================
+
+
+def _encode_change_payload(payload: Optional[dict]) -> dict:
+    data = dict(payload or {})
+    if "password" in data and data["password"]:
+        data["password_enc"] = _encrypt_secret(data.pop("password"))
+    if "secret" in data and data["secret"]:
+        data["secret_enc"] = _encrypt_secret(data.pop("secret"))
+    return data
+
+
+def _decode_change_payload(data: Optional[dict]) -> dict:
+    payload = dict(data or {})
+    if "password_enc" in payload:
+        payload["password"] = _decrypt_secret(payload.pop("password_enc"))
+    if "secret_enc" in payload:
+        payload["secret"] = _decrypt_secret(payload.pop("secret_enc"))
+    return payload
+
+
+def schedule_change_window(
+    *,
+    change_id: str,
+    tool: str,
+    change_number: Optional[str],
+    scheduled: str,
+    payload: dict,
+    rollback_payload: Optional[dict] = None,
+    status: str = "scheduled",
+    message: Optional[str] = None,
+) -> None:
+    stored_payload = json.dumps(_encode_change_payload(payload))
+    stored_rollback = json.dumps(_encode_change_payload(rollback_payload or {}))
+    created = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT OR REPLACE INTO change_windows(
+                  change_id, created, scheduled, tool, change_number,
+                  payload_json, rollback_json, status, message
+                ) VALUES(?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    change_id,
+                    datetime.now().isoformat(timespec="seconds"),
+                    scheduled,
+                    tool,
+                    change_number or "",
+                    stored_payload,
+                    stored_rollback,
+                    status,
+                    message or "",
+                ),
+            )
+            cx.execute(
+                "INSERT INTO change_events(change_id, ts, type, message) VALUES(?,?,?,?)",
+                (change_id, created, "created", message or "change scheduled"),
+            )
+    except Exception:
+        pass
+
+
+def update_change_window(change_id: str, **fields) -> None:
+    if not fields:
+        return
+    if "status" in fields and fields.get("status") in {"completed", "failed"}:
+        fields.setdefault("completed", datetime.now().isoformat(timespec="seconds"))
+    assignments = []
+    params = []
+    for key, value in fields.items():
+        if key == "payload":
+            assignments.append("payload_json = ?")
+            params.append(json.dumps(_encode_change_payload(value)))
+        elif key == "rollback_payload":
+            assignments.append("rollback_json = ?")
+            params.append(json.dumps(_encode_change_payload(value)))
+        else:
+            assignments.append(f"{key} = ?")
+            params.append(value)
+    params.append(change_id)
+    query = f"UPDATE change_windows SET {', '.join(assignments)} WHERE change_id = ?"
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(query, params)
+    except Exception:
+        pass
+
+
+def append_change_event(change_id: str, etype: str, message: str) -> None:
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "INSERT INTO change_events(change_id, ts, type, message) VALUES(?,?,?,?)",
+                (change_id, ts, etype, message),
+            )
+    except Exception:
+        pass
+
+
+def list_change_windows(limit: int = 200) -> list[dict]:
+    rows: list[dict] = []
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                SELECT * FROM change_windows
+                ORDER BY COALESCE(scheduled, created) DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            for row in cur.fetchall():
+                item = dict(row)
+                try:
+                    item["payload"] = _decode_change_payload(json.loads(item.pop("payload_json") or "{}"))
+                except Exception:
+                    item["payload"] = {}
+                try:
+                    item["rollback_payload"] = _decode_change_payload(json.loads(item.pop("rollback_json") or "{}"))
+                except Exception:
+                    item["rollback_payload"] = {}
+                rows.append(item)
+    except Exception:
+        pass
+    return rows
+
+
+def load_change_window(change_id: str) -> tuple[Optional[dict], list[dict]]:
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT * FROM change_windows WHERE change_id=?", (change_id,)).fetchone()
+            if not row:
+                return None, []
+            item = dict(row)
+            try:
+                item["payload"] = _decode_change_payload(json.loads(item.pop("payload_json") or "{}"))
+            except Exception:
+                item["payload"] = {}
+            try:
+                item["rollback_payload"] = _decode_change_payload(json.loads(item.pop("rollback_json") or "{}"))
+            except Exception:
+                item["rollback_payload"] = {}
+            events_cur = cx.execute(
+                "SELECT * FROM change_events WHERE change_id=? ORDER BY ts",
+                (change_id,),
+            )
+            events = [dict(e) for e in events_cur.fetchall()]
+            return item, events
+    except Exception:
+        return None, []
+
+
+def fetch_due_change_windows(now_iso: str) -> list[dict]:
+    rows: list[dict] = []
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                SELECT * FROM change_windows
+                WHERE status = 'scheduled' AND scheduled <= ?
+                ORDER BY scheduled
+                """,
+                (now_iso,),
+            )
+            for row in cur.fetchall():
+                item = dict(row)
+                try:
+                    item["payload"] = _decode_change_payload(json.loads(item.pop("payload_json") or "{}"))
+                except Exception:
+                    item["payload"] = {}
+                try:
+                    item["rollback_payload"] = _decode_change_payload(json.loads(item.pop("rollback_json") or "{}"))
+                except Exception:
+                    item["rollback_payload"] = {}
+                rows.append(item)
+    except Exception:
+        pass
+    return rows
+
+
+def fetch_upcoming_changes_for_hosts(tool: str, hosts: Iterable[str]) -> Dict[str, Dict]:
+    host_set = {str(h) for h in (hosts or []) if h}
+    if not host_set:
+        return {}
+
+    upcoming: Dict[str, Dict] = {}
+    now_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                "SELECT change_id, change_number, scheduled, message, payload_json FROM change_windows WHERE status='scheduled' AND tool=?",
+                (tool,),
+            )
+            for row in cur.fetchall():
+                scheduled = row["scheduled"]
+                if not scheduled or scheduled < now_utc:
+                    continue
+                try:
+                    payload = _decode_change_payload(json.loads(row["payload_json"] or "{}"))
+                except Exception:
+                    payload = {}
+                metadata = payload.get("metadata") or {}
+                host = str(metadata.get("host") or "")
+                if host not in host_set:
+                    continue
+                existing = upcoming.get(host)
+                if existing and existing.get("scheduled_iso") <= scheduled:
+                    continue
+                change_data = {
+                    "change_id": row["change_id"],
+                    "change_number": row["change_number"] or "",
+                    "scheduled_iso": scheduled,
+                    "message": row["message"] or "",
+                    "status": row.get("status") or "scheduled",
+                }
+                upcoming[host] = change_data
+    except Exception:
+        pass
+    return upcoming
+
+
+# ========================================
+# Bulk SSH Functions
+# ========================================
+
+def insert_bulk_ssh_job(job_id: str, created: str, username: str, command: str, device_count: int) -> None:
+    """Insert a new bulk SSH job."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """INSERT INTO bulk_ssh_jobs(job_id, created, username, command, device_count, status, done)
+                   VALUES(?,?,?,?,?,'running',0)""",
+                (job_id, created, username, command, device_count),
+            )
+    except Exception:
+        pass
+
+
+def insert_bulk_ssh_result(
+    job_id: str, device: str, status: str, output: str, error: str, duration_ms: int, completed_at: str
+) -> None:
+    """Insert a result for a single device."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """INSERT INTO bulk_ssh_results(job_id, device, status, output, error, duration_ms, completed_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (job_id, device, status, output, error, duration_ms, completed_at),
+            )
+    except Exception:
+        pass
+
+
+def update_bulk_ssh_job_progress(job_id: str, completed: int, success: int, failed: int) -> None:
+    """Update job progress counters."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """UPDATE bulk_ssh_jobs
+                   SET completed_count=?, success_count=?, failed_count=?
+                   WHERE job_id=?""",
+                (completed, success, failed, job_id),
+            )
+    except Exception:
+        pass
+
+
+def mark_bulk_ssh_job_done(job_id: str, status: str = "completed") -> None:
+    """Mark a bulk SSH job as done."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """UPDATE bulk_ssh_jobs
+                   SET done=1, status=?
+                   WHERE job_id=?""",
+                (status, job_id),
+            )
+    except Exception:
+        pass
+
+
+def load_bulk_ssh_job(job_id: str) -> Optional[dict]:
+    """Load a bulk SSH job by ID."""
+    try:
+        with _conn() as cx:
+            row = cx.execute("SELECT * FROM bulk_ssh_jobs WHERE job_id=?", (job_id,)).fetchone()
+            if not row:
+                return None
+            return dict(row)
+    except Exception:
+        return None
+
+
+def load_bulk_ssh_results(job_id: str) -> List[dict]:
+    """Load all results for a bulk SSH job."""
+    try:
+        with _conn() as cx:
+            rows = cx.execute(
+                "SELECT * FROM bulk_ssh_results WHERE job_id=? ORDER BY completed_at", (job_id,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def list_bulk_ssh_jobs(limit: int = 100) -> List[dict]:
+    """List recent bulk SSH jobs."""
+    try:
+        with _conn() as cx:
+            rows = cx.execute(
+                "SELECT * FROM bulk_ssh_jobs ORDER BY created DESC LIMIT ?", (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+# ========================================
+# Bulk SSH Template Functions
+# ========================================
+
+def create_bulk_ssh_template(
+    name: str, command: str, description: str = "", variables: str = "",
+    device_type: str = "cisco_ios", category: str = "general", created_by: str = ""
+) -> Optional[int]:
+    """Create a new command template."""
+    try:
+        created = datetime.now().isoformat(timespec="seconds")
+        with _DB_LOCK, _conn() as cx:
+            cursor = cx.execute(
+                """INSERT INTO bulk_ssh_templates(name, description, command, variables, device_type, category, created, updated, created_by)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (name, description, command, variables, device_type, category, created, created, created_by),
+            )
+            return cursor.lastrowid
+    except Exception:
+        return None
+
+
+def update_bulk_ssh_template(
+    template_id: int, name: str, command: str, description: str = "",
+    variables: str = "", device_type: str = "cisco_ios", category: str = "general"
+) -> bool:
+    """Update an existing template."""
+    try:
+        updated = datetime.now().isoformat(timespec="seconds")
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """UPDATE bulk_ssh_templates
+                   SET name=?, description=?, command=?, variables=?, device_type=?, category=?, updated=?
+                   WHERE id=?""",
+                (name, description, command, variables, device_type, category, updated, template_id),
+            )
+            return True
+    except Exception:
+        return False
+
+
+def delete_bulk_ssh_template(template_id: int) -> bool:
+    """Delete a template."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute("DELETE FROM bulk_ssh_templates WHERE id=?", (template_id,))
+            return True
+    except Exception:
+        return False
+
+
+def load_bulk_ssh_template(template_id: int) -> Optional[dict]:
+    """Load a template by ID."""
+    try:
+        with _conn() as cx:
+            row = cx.execute("SELECT * FROM bulk_ssh_templates WHERE id=?", (template_id,)).fetchone()
+            if not row:
+                return None
+            return dict(row)
+    except Exception:
+        return None
+
+
+def list_bulk_ssh_templates(category: Optional[str] = None) -> List[dict]:
+    """List all templates, optionally filtered by category."""
+    try:
+        with _conn() as cx:
+            if category:
+                rows = cx.execute(
+                    "SELECT * FROM bulk_ssh_templates WHERE category=? ORDER BY name", (category,)
+                ).fetchall()
+            else:
+                rows = cx.execute("SELECT * FROM bulk_ssh_templates ORDER BY category, name").fetchall()
+            return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+# ========================================
+# Bulk SSH Schedule Functions
+# ========================================
+
+def create_bulk_ssh_schedule(
+    name: str, devices_json: str, command: str, username: str, password: str,
+    schedule_type: str = "once", schedule_config: str = "", next_run: str = "",
+    description: str = "", template_id: Optional[int] = None, secret: str = "",
+    device_type: str = "cisco_ios", alert_on_failure: bool = False,
+    alert_email: str = "", created_by: str = ""
+) -> Optional[int]:
+    """Create a new scheduled job."""
+    try:
+        created = datetime.now().isoformat(timespec="seconds")
+        password_enc = _encrypt_secret(password)
+        secret_enc = _encrypt_secret(secret) if secret else ""
+
+        with _DB_LOCK, _conn() as cx:
+            cursor = cx.execute(
+                """INSERT INTO bulk_ssh_schedules(
+                    name, description, devices_json, command, template_id, schedule_type, schedule_config,
+                    next_run, enabled, alert_on_failure, alert_email, created, created_by,
+                    username, password_encrypted, secret_encrypted, device_type
+                   ) VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?)""",
+                (name, description, devices_json, command, template_id, schedule_type, schedule_config,
+                 next_run, 1 if alert_on_failure else 0, alert_email, created, created_by,
+                 username, password_enc, secret_enc, device_type),
+            )
+            return cursor.lastrowid
+    except Exception:
+        return None
+
+
+def update_bulk_ssh_schedule_run(schedule_id: int, last_run: str, last_job_id: str, next_run: str) -> bool:
+    """Update schedule after a run."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """UPDATE bulk_ssh_schedules
+                   SET last_run=?, last_job_id=?, next_run=?
+                   WHERE id=?""",
+                (last_run, last_job_id, next_run, schedule_id),
+            )
+            return True
+    except Exception:
+        return False
+
+
+def toggle_bulk_ssh_schedule(schedule_id: int, enabled: bool) -> bool:
+    """Enable or disable a schedule."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE bulk_ssh_schedules SET enabled=? WHERE id=?",
+                (1 if enabled else 0, schedule_id),
+            )
+            return True
+    except Exception:
+        return False
+
+
+def delete_bulk_ssh_schedule(schedule_id: int) -> bool:
+    """Delete a schedule."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute("DELETE FROM bulk_ssh_schedules WHERE id=?", (schedule_id,))
+            return True
+    except Exception:
+        return False
+
+
+def load_bulk_ssh_schedule(schedule_id: int) -> Optional[dict]:
+    """Load a schedule by ID with decrypted credentials."""
+    try:
+        with _conn() as cx:
+            row = cx.execute("SELECT * FROM bulk_ssh_schedules WHERE id=?", (schedule_id,)).fetchone()
+            if not row:
+                return None
+            schedule = dict(row)
+            # Decrypt credentials
+            schedule["password"] = _decrypt_secret(schedule.get("password_encrypted", ""))
+            schedule["secret"] = _decrypt_secret(schedule.get("secret_encrypted", ""))
+            return schedule
+    except Exception:
+        return None
+
+
+def list_bulk_ssh_schedules() -> List[dict]:
+    """List all schedules."""
+    try:
+        with _conn() as cx:
+            rows = cx.execute("SELECT * FROM bulk_ssh_schedules ORDER BY name").fetchall()
+            schedules = []
+            for row in rows:
+                schedule = dict(row)
+                # Don't include decrypted passwords in list view
+                schedule["password"] = "***" if schedule.get("password_encrypted") else ""
+                schedule["secret"] = "***" if schedule.get("secret_encrypted") else ""
+                schedules.append(schedule)
+            return schedules
+    except Exception:
+        return []
+
+
+def fetch_due_bulk_ssh_schedules() -> List[dict]:
+    """Fetch schedules that are due to run."""
+    try:
+        now = datetime.now().isoformat(timespec="seconds")
+        with _conn() as cx:
+            rows = cx.execute(
+                """SELECT * FROM bulk_ssh_schedules
+                   WHERE enabled=1 AND next_run IS NOT NULL AND next_run <= ?
+                   ORDER BY next_run""",
+                (now,)
+            ).fetchall()
+            schedules = []
+            for row in rows:
+                schedule = dict(row)
+                # Decrypt credentials for execution
+                schedule["password"] = _decrypt_secret(schedule.get("password_encrypted", ""))
+                schedule["secret"] = _decrypt_secret(schedule.get("secret_encrypted", ""))
+                schedules.append(schedule)
+            return schedules
+    except Exception:
+        return []

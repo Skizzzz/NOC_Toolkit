@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}WLC Clients Troubleshooter – Job {{ job_id }}{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; align-items:center;">
+    <div>
+      <h2 class="section-title" style="margin:0;">WLC Clients Polling Job</h2>
+      <p class="muted" style="margin:6px 0 0 0;">Live polling of client totals across one or more WLCs. If only one WLC is polled, per-SSID breakdown is also shown.</p>
+    </div>
+    <div>
+      <form method="post" action="{{ url_for('wlc_clients_troubleshoot_cancel', job_id=job_id) }}" style="display:inline; margin-right:8px;">
+        <button class="btn" style="background:#dc2626; color:white; border:none;">Cancel Job</button>
+      </form>
+      <a class="btn" href="{{ url_for('wlc_jobs_overview') }}">Back to Jobs</a>
+    </div>
+  </div>
+</section>
+
+<section class="card" style="margin-top:16px;">
+  <h3 class="section-title">Job Status</h3>
+  <div id="job-status" class="muted">Waiting for first sample…</div>
+  <div id="nextPoll" class="muted" style="margin-top:4px; font-size:13px;">Next poll in —</div>
+  <canvas id="clientsChart" style="max-height:400px; margin-top:16px;"></canvas>
+</section>
+
+<section class="card" style="margin-top:16px;">
+  <h3 class="section-title">Per-SSID Clients (latest round)</h3>
+  <div id="wlanTableWrap"><span class="muted">Per-SSID is shown only when a single WLC is polled.</span></div>
+</section>
+
+<section class="card" style="margin-top:16px;">
+  <h3 class="section-title">Errors / Logs</h3>
+  <pre id="errBox" style="white-space:pre-wrap; font-size:13px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; min-height:60px;">None</pre>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const statusUrl = "{{ url_for('wlc_clients_troubleshoot_status', job_id=job_id) }}";
+let nextPollAt = null;
+const intervalFallback = ({{ params.interval_sec or 300 }}) * 1000;
+
+// Incremental, non-flicker chart state
+let labels = [];                 // array of ts strings
+const seriesIndex = {};          // label -> dataset index
+const ctx = document.getElementById('clientsChart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: { labels, datasets: [] },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    interaction: { mode: 'nearest', intersect: false },
+    elements: { line: { tension: 0.25 } },
+    scales: {
+      x: { title: { display: true, text: 'Time' } },
+      y: { beginAtZero: true, title: { display: true, text: 'Clients' } }
+    }
+  }
+});
+
+function colorFor(label) {
+  const seed = [...label].reduce((a,c)=>a+c.charCodeAt(0),0);
+  const hue = seed % 360;
+  return `hsl(${hue} 70% 55%)`;
+}
+function ensureSeries(label, dashed=false) {
+  if (seriesIndex[label] !== undefined) return;
+  const color = colorFor(label);
+  const ds = {
+    label, data: [], borderColor: color, backgroundColor: color,
+    borderWidth: 2, pointRadius: 2, fill: false
+  };
+  if (dashed) ds.borderDash = [6,4];
+  seriesIndex[label] = chart.data.datasets.length;
+  chart.data.datasets.push(ds);
+}
+
+// Append round for multi-WLC: one point per WLC + Total (All)
+function pushRoundMulti(ts, totals_by_wlc, total_all) {
+  labels.push(ts);
+  chart.data.datasets.forEach(ds => ds.data.push(null));
+  Object.entries(totals_by_wlc || {}).forEach(([wlc, val]) => {
+    ensureSeries(wlc);
+    chart.data.datasets[seriesIndex[wlc]].data[labels.length-1] = val || 0;
+  });
+  ensureSeries('Total (All)');
+  chart.data.datasets[seriesIndex['Total (All)']].data[labels.length-1] = total_all || 0;
+  chart.update('none');
+}
+
+// Append round for single-WLC: Total + per-SSID dashed lines
+function pushRoundSingle(ts, total, wlans) {
+  labels.push(ts);
+  chart.data.datasets.forEach(ds => ds.data.push(null));
+  ensureSeries('Total');
+  chart.data.datasets[seriesIndex['Total']].data[labels.length-1] = total || 0;
+  (wlans || []).forEach(w => {
+    const name = w.wlan_name || ('WLAN ' + w.wlan_id);
+    ensureSeries(name, true);
+    chart.data.datasets[seriesIndex[name]].data[labels.length-1] = w.clients || 0;
+  });
+  chart.update('none');
+}
+
+function renderWlanTable(wlans) {
+  const wrap = document.getElementById('wlanTableWrap');
+  if (!wlans || wlans.length === 0) {
+    wrap.innerHTML = '<span class="muted">Per-SSID is shown only when a single WLC is polled.</span>';
+    return;
+  }
+  const top = [...wlans].sort((a,b)=> (b.clients||0) - (a.clients||0)).slice(0, 20);
+  let html = '<table><thead><tr><th>WLAN ID</th><th>Name</th><th>Clients</th></tr></thead><tbody>';
+  for (const w of top) {
+    html += `<tr><td>${w.wlan_id}</td><td>${w.wlan_name || ('WLAN ' + w.wlan_id)}</td><td>${w.clients||0}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+async function tick() {
+  try {
+    const res = await fetch(statusUrl);
+    if (!res.ok) { setTimeout(tick, 7000); return; }
+    const body = await res.json();
+
+    const prog = document.getElementById('job-status');
+    const nextEl = document.getElementById('nextPoll');
+    const eb = document.getElementById('errBox');
+
+    if (body.cancelled) {
+      prog.textContent = 'Job cancelled.';
+      nextPollAt = null;
+      if (nextEl) nextEl.textContent = 'Next poll in —';
+      return;
+    }
+
+    const samples = body.samples || [];
+    const params  = body.params || {};
+    const hosts   = params.hosts || [];
+    const multi   = (hosts.length || 0) > 1;
+    const done    = !!body.done;
+    const intervalMs = (params.interval_sec ? params.interval_sec * 1000 : intervalFallback);
+
+    if (samples.length) {
+      const last = samples[samples.length - 1];
+      prog.textContent = `Job started: ${body.created} | Round ${last.round}/${last.total_rounds} @ ${last.ts}${done ? ' — done.' : ' — running…'}`;
+      if (!done && last.ts) {
+        const base = Date.parse(last.ts);
+        nextPollAt = Number.isNaN(base) ? null : base + intervalMs;
+      }
+    } else {
+      prog.textContent = done ? 'No samples collected.' : 'Waiting for first sample…';
+      if (!done && body.created) {
+        const base = Date.parse(body.created);
+        nextPollAt = Number.isNaN(base) ? null : base + intervalMs;
+      }
+    }
+
+    if (done) {
+      nextPollAt = null;
+      if (nextEl) nextEl.textContent = 'Next poll in —';
+    }
+
+    while (labels.length < samples.length) {
+      const s = samples[labels.length];
+      if (multi) {
+        pushRoundMulti(s.ts, s.totals_by_wlc || {}, s.total_all || 0);
+        if (labels.length === samples.length) renderWlanTable([]);
+      } else {
+        const onlyHost = (hosts && hosts.length) ? hosts[0] : '';
+        const total = (s.totals_by_wlc && onlyHost in s.totals_by_wlc) ? s.totals_by_wlc[onlyHost] : (s.total_all || 0);
+        pushRoundSingle(s.ts, total, s.wlans || []);
+        if (labels.length === samples.length) renderWlanTable(s.wlans || []);
+      }
+      if (s.errors && s.errors.length) {
+        if (eb.textContent === 'None') eb.textContent = '';
+        eb.textContent += s.errors.join('\n') + '\n';
+      }
+    }
+
+    if (!done) setTimeout(tick, 5000);
+    updateCountdown();
+  } catch (e) {
+    setTimeout(tick, 7000);
+  }
+}
+tick();
+
+function updateCountdown() {
+  const el = document.getElementById('nextPoll');
+  if (!el) return;
+  if (!nextPollAt) {
+    el.textContent = 'Next poll in —';
+    return;
+  }
+  const diffMs = nextPollAt - Date.now();
+  if (diffMs <= 0) {
+    el.textContent = 'Next poll in <1s';
+    return;
+  }
+  const diff = Math.round(diffMs / 1000);
+  const hh = Math.floor(diff / 3600);
+  const mm = Math.floor((diff % 3600) / 60);
+  const ss = diff % 60;
+  const parts = [];
+  if (hh) parts.push(`${hh}h`);
+  if (mm || hh) parts.push(`${mm}m`);
+  parts.push(`${ss}s`);
+  el.textContent = `Next poll in ${parts.join(' ')}`;
+}
+setInterval(updateCountdown, 1000);
+</script>
+{% endblock %}
