@@ -1577,6 +1577,23 @@ _ensure_summer_worker()
 _ensure_dashboard_worker()
 _ensure_change_scheduler()
 
+# ====================== ERROR HANDLERS ======================
+@app.errorhandler(404)
+def page_not_found(e):
+    """Handle 404 Page Not Found errors."""
+    return render_template("error.html",
+                          error_code=404,
+                          error_title="Page Not Found",
+                          error_message="The page you're looking for doesn't exist."), 404
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    """Handle 500 Internal Server errors."""
+    return render_template("error.html",
+                          error_code=500,
+                          error_title="Server Error",
+                          error_message="Something went wrong on our end. Please try again later."), 500
+
 # ====================== AUTHENTICATION ======================
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -1675,6 +1692,7 @@ def admin_users():
 
 # ====================== HOME ======================
 @app.get("/")
+@require_login
 def index():
     # Get counts for dashboard
     total_nodes = len(fetch_solarwinds_nodes())
@@ -1693,6 +1711,7 @@ def index():
     )
 
 @app.get("/api/dashboard-stats")
+@require_login
 def dashboard_stats():
     """API endpoint for real-time dashboard statistics"""
     try:
@@ -1737,6 +1756,7 @@ def dashboard_stats():
 
 # ====================== JOBS CENTER ======================
 @app.get("/jobs")
+@require_login
 def jobs_center():
     """Unified jobs center - all background jobs across all tools"""
     all_jobs = db_list_jobs(limit=500)
@@ -1790,9 +1810,53 @@ def jobs_center():
             'progress': None  # Could calculate from events
         })
 
+    # Also include Bulk SSH jobs
+    bulk_ssh_jobs = list_bulk_ssh_jobs(limit=200)
+    for row in bulk_ssh_jobs:
+        job_id = row.get("job_id", "")
+        created = row.get("created", "")
+        done = bool(row.get("done"))
+        status_raw = row.get("status", "running")
+
+        # Determine status
+        if done:
+            status = "completed" if status_raw == "completed" else "failed"
+        else:
+            status = "running"
+
+        # Build description
+        device_count = row.get("device_count", 0)
+        command = row.get("command", "")[:50]
+        description = f"Bulk SSH: {command}{'...' if len(row.get('command', '')) > 50 else ''}"
+
+        # Format created time
+        try:
+            created_formatted = _format_cst(created) if created else "—"
+        except Exception:
+            created_formatted = created or "—"
+
+        # Calculate progress
+        completed_count = row.get("completed_count", 0)
+        progress = int((completed_count / device_count * 100)) if device_count > 0 else None
+
+        jobs.append({
+            'id': job_id,
+            'type': 'bulk-ssh',
+            'description': description,
+            'status': status,
+            'created_at': created,
+            'created_at_formatted': created_formatted,
+            'duration': "—",
+            'progress': progress
+        })
+
+    # Sort all jobs by created_at descending
+    jobs.sort(key=lambda j: j.get('created_at', ''), reverse=True)
+
     return render_template("jobs_center.html", jobs=jobs)
 
 @app.get("/api/jobs")
+@require_login
 def api_jobs():
     """API endpoint for jobs list (for refresh)"""
     all_jobs = db_list_jobs(limit=500)
@@ -1834,9 +1898,52 @@ def api_jobs():
             'progress': None
         })
 
+    # Also include Bulk SSH jobs
+    bulk_ssh_jobs = list_bulk_ssh_jobs(limit=200)
+    for row in bulk_ssh_jobs:
+        job_id = row.get("job_id", "")
+        created = row.get("created", "")
+        done = bool(row.get("done"))
+        status_raw = row.get("status", "running")
+
+        # Determine status
+        if done:
+            status = "completed" if status_raw == "completed" else "failed"
+        else:
+            status = "running"
+
+        # Build description
+        device_count = row.get("device_count", 0)
+        command = row.get("command", "")[:50]
+        description = f"Bulk SSH: {command}{'...' if len(row.get('command', '')) > 50 else ''}"
+
+        try:
+            created_formatted = _format_cst(created) if created else "—"
+        except Exception:
+            created_formatted = created or "—"
+
+        # Calculate progress
+        completed_count = row.get("completed_count", 0)
+        progress = int((completed_count / device_count * 100)) if device_count > 0 else None
+
+        jobs.append({
+            'id': job_id,
+            'type': 'bulk-ssh',
+            'description': description,
+            'status': status,
+            'created_at': created,
+            'created_at_formatted': created_formatted,
+            'duration': "—",
+            'progress': progress
+        })
+
+    # Sort all jobs by created_at descending
+    jobs.sort(key=lambda j: j.get('created_at', ''), reverse=True)
+
     return jsonify({'jobs': jobs})
 
 @app.get("/jobs/<job_id>")
+@require_login
 def job_detail(job_id):
     """View details of a specific job"""
     meta, events = db_load_job(job_id)
@@ -1865,6 +1972,7 @@ def job_detail(job_id):
     return render_template("job_detail.html", job=meta, events=formatted_events)
 
 @app.post("/api/jobs/<job_id>/cancel")
+@require_login
 def cancel_job(job_id):
     """Cancel a running job"""
     try:
@@ -1875,13 +1983,180 @@ def cancel_job(job_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.get("/jobs/<job_id>/progress")
+@require_login
+def job_progress_page(job_id):
+    """Live job progress page with real-time updates - supports both generic jobs and bulk SSH jobs"""
+    # First try generic jobs table
+    meta, events = db_load_job(job_id)
+    if meta:
+        params = meta.get("params", {})
+        hosts = params.get("hosts", [])
+        return render_template(
+            "job_progress.html",
+            job_id=job_id,
+            device_count=len(hosts),
+            hosts=hosts,
+            tool=meta.get("tool", "config"),
+            job_type="generic"
+        )
+
+    # Try bulk SSH jobs table
+    bulk_job = load_bulk_ssh_job(job_id)
+    if bulk_job:
+        # Get device list from results (devices that have started/completed)
+        results = load_bulk_ssh_results(job_id)
+        # We need to know the original device list - parse from command context
+        # For now, get devices from results and estimate total from device_count
+        device_count = bulk_job.get("device_count", 0)
+        completed_devices = [r.get("device") for r in results]
+
+        return render_template(
+            "job_progress.html",
+            job_id=job_id,
+            device_count=device_count,
+            hosts=completed_devices,  # Will be populated dynamically via API
+            tool="bulk-ssh",
+            job_type="bulk_ssh",
+            command=bulk_job.get("command", "")
+        )
+
+    flash("Job not found")
+    return redirect(url_for('jobs_center'))
+
+
+@app.get("/api/jobs/<job_id>/progress")
+@require_login
+def api_job_progress(job_id):
+    """API endpoint for live job progress data - supports both generic jobs and bulk SSH jobs"""
+    # First try generic jobs table
+    meta, events = db_load_job(job_id)
+    if meta:
+        params = meta.get("params", {})
+        hosts = params.get("hosts", [])
+        done = bool(meta.get("done"))
+
+        # Track per-device status
+        device_status = {h: {"status": "pending", "message": "Waiting...", "duration": ""} for h in hosts}
+        logs = []
+        completed = 0
+        success = 0
+        failed = 0
+
+        for ev in events:
+            etype = ev.get("type")
+            payload = ev.get("payload", {})
+            host = payload.get("host")
+            message = payload.get("message", "")
+
+            if etype == "success" and host:
+                device_status[host] = {
+                    "status": "success",
+                    "message": message[:80] if message else "OK",
+                    "duration": ""
+                }
+                completed += 1
+                success += 1
+                logs.append(f"[{host}] OK - {message}")
+            elif etype == "error" and host:
+                device_status[host] = {
+                    "status": "error",
+                    "message": message[:80] if message else "Failed",
+                    "duration": ""
+                }
+                completed += 1
+                failed += 1
+                logs.append(f"[{host}] FAIL - {message}")
+            elif etype == "log":
+                if message:
+                    logs.append(message)
+            elif etype == "done":
+                logs.append("Job complete.")
+            elif etype == "cancelled":
+                logs.append("Job cancelled.")
+
+        # Build device list for frontend
+        devices = []
+        for host in hosts:
+            status_info = device_status.get(host, {"status": "pending", "message": "Waiting...", "duration": ""})
+            devices.append({
+                "host": host,
+                "status": status_info["status"],
+                "message": status_info["message"],
+                "duration": status_info["duration"]
+            })
+
+        return jsonify({
+            "job_id": job_id,
+            "done": done,
+            "completed": completed,
+            "success": success,
+            "failed": failed,
+            "total": len(hosts),
+            "devices": devices,
+            "logs": logs
+        })
+
+    # Try bulk SSH jobs table
+    bulk_job = load_bulk_ssh_job(job_id)
+    if bulk_job:
+        results = load_bulk_ssh_results(job_id)
+        done = bool(bulk_job.get("done"))
+        device_count = bulk_job.get("device_count", 0)
+        completed = bulk_job.get("completed_count", 0)
+        success = bulk_job.get("success_count", 0)
+        failed = bulk_job.get("failed_count", 0)
+
+        # Build device list from results
+        devices = []
+        logs = [f"Job {job_id} started - {device_count} devices"]
+
+        for r in results:
+            device = r.get("device", "")
+            status = r.get("status", "pending")
+            error = r.get("error", "")
+            output = r.get("output", "")
+            duration_ms = r.get("duration_ms", 0)
+
+            devices.append({
+                "host": device,
+                "status": status,
+                "message": error if status == "failed" else (output[:80] if output else "OK"),
+                "duration": f"{duration_ms}ms" if duration_ms else ""
+            })
+
+            if status == "success":
+                logs.append(f"[{device}] OK - completed in {duration_ms}ms")
+            else:
+                logs.append(f"[{device}] FAIL - {error}")
+
+        if done:
+            logs.append("Job complete.")
+
+        return jsonify({
+            "job_id": job_id,
+            "done": done,
+            "completed": completed,
+            "success": success,
+            "failed": failed,
+            "total": device_count,
+            "devices": devices,
+            "logs": logs
+        })
+
+    return jsonify({"error": "Job not found"}), 404
+
+
 # ====================== INTERFACE CONFIG SEARCH ======================
 @app.get("/tools/phrase-search")
+@require_login
 def tool_phrase_search():
     node_options = _solar_node_options()
     return render_template("phrase_search.html", node_options=node_options)
 
 @app.post("/search")
+@require_login
 def search():
     hosts = _parse_hosts_field(request.form.get("hosts"))
     username = request.form.get("username", "").strip()
@@ -1929,6 +2204,7 @@ def search():
     )
 
 @app.post("/download-csv")
+@require_login
 def download_csv():
     hosts_str = request.form.get("hosts", "")
     phrase = request.form.get("phrase", "")
@@ -1962,6 +2238,7 @@ def download_csv():
 
 # ====================== TOPOLOGY REPORT ======================
 @app.get("/tools/topology")
+@require_login
 def topology_tool():
     nodes = fetch_solarwinds_nodes()
     node_options = _solar_node_options(nodes)
@@ -1986,6 +2263,7 @@ def topology_tool():
 
 
 @app.post("/tools/topology/report")
+@require_login
 def topology_report():
     scope = (request.form.get("scope") or "node").strip().lower()
     target = (request.form.get("target") or "").strip()
@@ -2169,6 +2447,7 @@ def topology_report():
 
 
 @app.route("/tools/topology/graph", methods=["GET", "POST"])
+@require_login
 def topology_graph():
     """Interactive graph view for topology discovery"""
     if request.method == "GET":
@@ -2239,6 +2518,7 @@ def topology_graph():
 
 
 @app.post("/api/topology/discover")
+@require_login
 def api_topology_discover():
     """JSON API endpoint for discovering topology of a single device"""
     target = request.json.get("target", "").strip()
@@ -2292,6 +2572,7 @@ def api_topology_discover():
 
 
 @app.post("/tools/topology/export")
+@require_login
 def topology_export():
     report_json = request.form.get("report_json") or ""
     if not report_json:
@@ -2396,6 +2677,7 @@ def topology_export():
 
 # ====================== INTERFACE ACTIONS: PREVIEW / APPLY ======================
 @app.post("/actions/prepare")
+@require_login
 def actions_prepare():
     selected = request.form.getlist("selected[]")  # ["<host>||<iface>", ...]
     action = request.form.get("action")
@@ -2428,6 +2710,7 @@ def actions_prepare():
     return render_template("action_preview.html", cli_map=cli_map, payload=payload)
 
 @app.post("/actions/apply")
+@require_login
 def actions_apply():
     payload_json = request.form.get("payload_json", "{}")
     capture_diffs = request.form.get("capture_diffs") == "1"
@@ -2443,6 +2726,18 @@ def actions_apply():
     secret = payload.get("secret")
     tool = payload.get("tool", "interface-config")
 
+    # Log to audit trail
+    current_user = session.get("username", "unknown")
+    host_count = len(cli_map)
+    total_lines = sum(len(lines) for lines in cli_map.values())
+    log_audit(
+        current_user,
+        "config_apply",
+        resource=f"{host_count} devices, {total_lines} config lines",
+        details=f"Tool: {tool} | Mode: sync | Hosts: {', '.join(list(cli_map.keys())[:5])}{'...' if host_count > 5 else ''}",
+        user_id=session.get("user_id")
+    )
+
     result = _run_cli_job_sync(
         cli_map,
         username,
@@ -2456,6 +2751,7 @@ def actions_apply():
 
 # ---------- Background apply for interface actions ----------
 @app.post("/actions/apply/start")
+@require_login
 def actions_apply_start():
     payload_json = request.form.get("payload_json", "{}")
     try:
@@ -2470,10 +2766,24 @@ def actions_apply_start():
     tool = payload.get("tool", "interface-config")
 
     job_id = _start_background_cli_job(cli_map, username, password, secret, tool)
+
+    # Log to audit trail
+    current_user = session.get("username", "unknown")
+    host_count = len(cli_map)
+    total_lines = sum(len(lines) for lines in cli_map.values())
+    log_audit(
+        current_user,
+        "config_apply",
+        resource=f"{host_count} devices, {total_lines} config lines",
+        details=f"Tool: {tool} | Mode: background | Job ID: {job_id}",
+        user_id=session.get("user_id")
+    )
+
     return jsonify({"job_id": job_id})
 
 
 @app.post("/actions/schedule")
+@require_login
 def actions_schedule():
     payload_json = request.form.get("payload_json", "{}")
     schedule_start = (request.form.get("schedule_start") or "").strip()
@@ -2556,6 +2866,7 @@ def actions_schedule():
     })
 
 @app.get("/actions/status/<job_id>")
+@require_login
 def actions_status(job_id):
     state = _get_cli_job_state(job_id)
     if not state:
@@ -2566,6 +2877,7 @@ def actions_status(job_id):
 
 
 @app.get("/changes")
+@require_login
 def changes_list():
     raw_changes = list_change_windows(limit=200)
     records = []
@@ -2582,6 +2894,7 @@ def changes_list():
 
 
 @app.get("/changes/<change_id>")
+@require_login
 def change_detail(change_id):
     raw_change, events = load_change_window(change_id)
     if not raw_change:
@@ -2676,6 +2989,7 @@ def change_detail(change_id):
 
 
 @app.post("/changes/<change_id>/start")
+@require_login
 def change_start_now(change_id):
     raw_change, _ = load_change_window(change_id)
     if not raw_change:
@@ -2692,6 +3006,7 @@ def change_start_now(change_id):
 
 
 @app.post("/changes/<change_id>/rollback")
+@require_login
 def change_trigger_rollback(change_id):
     raw_change, _ = load_change_window(change_id)
     if not raw_change:
@@ -2711,11 +3026,13 @@ def change_trigger_rollback(change_id):
 
 # ====================== GLOBAL CONFIG SEARCH/APPLY ======================
 @app.get("/tools/global-config")
+@require_login
 def tool_global_config():
     node_options = _solar_node_options()
     return render_template("global_config.html", node_options=node_options)
 
 @app.post("/global/search")
+@require_login
 def global_config_search():
     hosts = _parse_hosts_field(request.form.get("hosts"))
     username = request.form.get("username", "").strip()
@@ -2746,6 +3063,7 @@ def global_config_search():
                            errors=errors)
 
 @app.post("/global/download-csv")
+@require_login
 def global_config_download_csv():
     matches_json = request.form.get("matches_json", "[]")
     try:
@@ -2764,6 +3082,7 @@ def global_config_download_csv():
     )
 
 @app.post("/global/actions/prepare")
+@require_login
 def global_config_actions_prepare():
     selected_hosts = request.form.getlist("selected_hosts[]")
     custom_config = request.form.get("custom_config", "")
@@ -2787,6 +3106,7 @@ def global_config_actions_prepare():
     return render_template("action_preview_global.html", cli_map=cli_map, payload=payload)
 
 @app.post("/global/actions/apply")
+@require_login
 def global_config_actions_apply():
     payload_json = request.form.get("payload_json", "{}")
     capture_diffs = request.form.get("capture_diffs") == "1"
@@ -2802,6 +3122,18 @@ def global_config_actions_apply():
     secret = payload.get("secret")
     tool = payload.get("tool", "global-config")
 
+    # Log to audit trail
+    current_user = session.get("username", "unknown")
+    host_count = len(cli_map)
+    total_lines = sum(len(lines) for lines in cli_map.values())
+    log_audit(
+        current_user,
+        "config_apply",
+        resource=f"{host_count} devices, {total_lines} config lines",
+        details=f"Tool: {tool} | Mode: sync | Hosts: {', '.join(list(cli_map.keys())[:5])}{'...' if host_count > 5 else ''}",
+        user_id=session.get("user_id")
+    )
+
     result = _run_cli_job_sync(
         cli_map,
         username,
@@ -2814,6 +3146,7 @@ def global_config_actions_apply():
     return render_template("action_result.html", **result)
 
 @app.post("/global/actions/apply/start")
+@require_login
 def global_config_actions_apply_start():
     payload_json = request.form.get("payload_json", "{}")
     try:
@@ -2828,9 +3161,23 @@ def global_config_actions_apply_start():
     tool = payload.get("tool", "global-config")
 
     job_id = _start_background_cli_job(cli_map, username, password, secret, tool)
+
+    # Log to audit trail
+    current_user = session.get("username", "unknown")
+    host_count = len(cli_map)
+    total_lines = sum(len(lines) for lines in cli_map.values())
+    log_audit(
+        current_user,
+        "config_apply",
+        resource=f"{host_count} devices, {total_lines} config lines",
+        details=f"Tool: {tool} | Mode: background | Job ID: {job_id}",
+        user_id=session.get("user_id")
+    )
+
     return jsonify({"job_id": job_id})
 
 @app.get("/global/actions/status/<job_id>")
+@require_login
 def global_config_actions_status(job_id):
     state = _get_cli_job_state(job_id)
     if not state:
@@ -2877,6 +3224,7 @@ def _filter_rows(rows, username=None, tool=None, result=None, ip=None, q=None, d
     return out
 
 @app.get("/logs")
+@require_superadmin
 def audit_logs():
     username = (request.args.get("username") or "").strip() or None
     tool = (request.args.get("tool") or "").strip() or None
@@ -2929,6 +3277,7 @@ def audit_logs():
     )
 
 @app.get("/logs/download")
+@require_superadmin
 def audit_logs_download():
     username = (request.args.get("username") or "").strip() or None
     tool = (request.args.get("tool") or "").strip() or None
@@ -2968,10 +3317,12 @@ def audit_logs_download():
 # ====================== WLC AP INVENTORY ======================
 
 @app.get("/tools/wlc-inventory")
+@require_login
 def wlc_inventory():
     return render_template("wlc_inventory.html")
 
 @app.post("/tools/wlc-inventory/run")
+@require_login
 def wlc_inventory_run():
     hosts = _parse_hosts_field(request.form.get("hosts"))
 
@@ -3028,6 +3379,7 @@ def wlc_inventory_run():
     )
 
 @app.post("/tools/wlc-inventory/download")
+@require_login
 def wlc_inventory_download():
     token = (request.form.get("token") or "").strip().lower()
     if not re.fullmatch(r"[a-f0-9]{32}", token):
@@ -3064,10 +3416,12 @@ def _make_rf_csv(rows):
     return buf.getvalue()
 
 @app.get("/tools/wlc-rf")
+@require_login
 def wlc_rf():
     return render_template("wlc_rf.html")
 
 @app.post("/tools/wlc-rf/run")
+@require_login
 def wlc_rf_run():
     hosts = _parse_hosts_field(request.form.get("hosts"))
 
@@ -3175,6 +3529,7 @@ def wlc_rf_run():
     )
 
 @app.get("/tools/wlc-rf/download/<token>")
+@require_login
 def wlc_rf_download(token):
     path = os.path.join(TMP_WLC_RF_DIR, f"{token}.csv")
     if not os.path.exists(path):
@@ -3192,6 +3547,7 @@ from collections import defaultdict
 from tools.wlc_rf import get_rf_summary_many  # reuses your existing collector
 
 @app.get("/tools/wlc-rf-troubleshoot")
+@require_login
 def wlc_rf_troubleshoot():
     return render_template("wlc_rf_troubleshoot.html")
 
@@ -3278,6 +3634,7 @@ def _rf_poll_worker(job_id: str, params: dict):
     mark_done(job_id)
 
 @app.post("/tools/wlc-rf-troubleshoot/start")
+@require_login
 def wlc_rf_troubleshoot_start():
     # Single WLC
     host = (request.form.get("host") or "").strip()
@@ -3344,6 +3701,7 @@ def wlc_rf_troubleshoot_start():
     return redirect(url_for("wlc_rf_troubleshoot_job", job_id=job_id))
 
 @app.get("/tools/wlc-rf-troubleshoot/job/<job_id>")
+@require_login
 def wlc_rf_troubleshoot_job(job_id):
     meta, _ = db_load_job(job_id)
     if not meta:
@@ -3352,6 +3710,7 @@ def wlc_rf_troubleshoot_job(job_id):
     return render_template("wlc_rf_troubleshoot_job.html", job_id=job_id, params=meta.get("params", {}))
 
 @app.get("/tools/wlc-rf-troubleshoot/status/<job_id>")
+@require_login
 def wlc_rf_troubleshoot_status(job_id):
     state = _load_rf_job_state(job_id)
     if not state:
@@ -3360,6 +3719,7 @@ def wlc_rf_troubleshoot_status(job_id):
 
 # Cancel a job
 @app.post("/tools/wlc-rf-troubleshoot/cancel/<job_id>")
+@require_login
 def wlc_rf_troubleshoot_cancel(job_id):
     meta, _ = db_load_job(job_id)
     if not meta:
@@ -3374,11 +3734,13 @@ def wlc_rf_troubleshoot_cancel(job_id):
 # ====================== WLC CLIENTS TROUBLESHOOTER ======================
 
 @app.get("/tools/wlc-clients-troubleshoot")
+@require_login
 def wlc_clients_troubleshoot():
     return render_template("wlc_clients_troubleshoot.html")
 
 
 @app.post("/tools/wlc-clients-troubleshoot/start")
+@require_login
 def wlc_clients_troubleshoot_start():
     hosts = _parse_hosts_field(request.form.get("hosts"))
 
@@ -3527,6 +3889,7 @@ def _clients_poll_worker(job_id: str, params: dict):
 
 
 @app.get("/tools/wlc-clients-troubleshoot/job/<job_id>")
+@require_login
 def wlc_clients_troubleshoot_job(job_id):
     meta, _ = db_load_job(job_id)
     if not meta:
@@ -3537,6 +3900,7 @@ def wlc_clients_troubleshoot_job(job_id):
 
 
 @app.get("/tools/wlc-clients-troubleshoot/status/<job_id>")
+@require_login
 def wlc_clients_troubleshoot_status(job_id):
     state = _load_clients_job_state(job_id)
     if not state:
@@ -3545,6 +3909,7 @@ def wlc_clients_troubleshoot_status(job_id):
 
 # Jobs list endpoint for WLC CLIENTS TROUBLESHOOTER
 @app.get("/tools/wlc-clients-troubleshoot/jobs")
+@require_login
 def wlc_clients_troubleshoot_jobs():
     jobs = []
     for row in db_list_jobs(limit=200):
@@ -3565,6 +3930,7 @@ def wlc_clients_troubleshoot_jobs():
 
 
 @app.post("/tools/wlc-clients-troubleshoot/cancel/<job_id>")
+@require_login
 def wlc_clients_troubleshoot_cancel(job_id):
     meta, _ = db_load_job(job_id)
     if not meta:
@@ -3576,6 +3942,7 @@ def wlc_clients_troubleshoot_cancel(job_id):
 
 # =================== /WLC Tools ======================
 @app.get("/tools/wlc")
+@require_login
 def wlc_tools():
     return render_template("wlc_tools.html")
 
@@ -3589,6 +3956,7 @@ def _format_timezone_dt(dt: Optional[datetime], settings: dict) -> Tuple[Optiona
 
 
 @app.get("/tools/wlc/summer-guest")
+@require_login
 def wlc_summer_guest():
     settings = _get_summer_settings()
     summary = settings.get("summary")
@@ -3691,6 +4059,7 @@ def wlc_summer_guest():
 
 
 @app.get("/api/wlc/summer-guest")
+@require_login
 def wlc_summer_guest_data():
     settings = _get_summer_settings()
     summary = settings.get("summary")
@@ -3742,12 +4111,14 @@ def wlc_summer_guest_data():
 
 
 @app.post("/api/wlc/summer-guest/run")
+@require_login
 def wlc_summer_guest_run_api():
     _run_summer_poll_async()
     return jsonify({"status": "scheduled"})
 
 
 @app.post("/tools/wlc/summer-guest/run")
+@require_login
 def wlc_summer_guest_run_form():
     _run_summer_poll_async()
     flash("Summer Guest poll started in background.")
@@ -3755,6 +4126,7 @@ def wlc_summer_guest_run_form():
 
 
 @app.post("/tools/wlc/summer-guest/schedule")
+@require_login
 def wlc_summer_guest_schedule():
     settings = _get_summer_settings()
     host = request.form.get("host") or ""
@@ -3869,6 +4241,16 @@ def wlc_summer_guest_schedule():
         f"Change scheduled for {scheduled_local.strftime('%Y-%m-%d %I:%M %p CST')} to {action} {profile_name} ({wlan_id}) on {host}.",
     )
 
+    # Log to audit trail
+    current_user = session.get("username", "unknown")
+    log_audit(
+        current_user,
+        "wlc_wlan_schedule",
+        resource=f"{host}: {profile_name} ({wlan_id})",
+        details=f"Action: {action} | Scheduled: {scheduled_local.strftime('%Y-%m-%d %I:%M %p CST')} | Change ID: {change_id}",
+        user_id=session.get("user_id")
+    )
+
     _CHANGE_WAKE.set()
     flash(
         f"Scheduled change {change_id} to {action} {profile_name} ({wlan_id}) on {host} at {scheduled_local.strftime('%Y-%m-%d %I:%M %p CST')}.",
@@ -3878,6 +4260,7 @@ def wlc_summer_guest_schedule():
 
 
 @app.post("/tools/wlc/summer-guest/toggle")
+@require_login
 def wlc_summer_guest_toggle():
     settings = _get_summer_settings()
     host = request.form.get("host") or ""
@@ -3923,6 +4306,17 @@ def wlc_summer_guest_toggle():
             enable=enable,
             psk=psk,
         )
+
+        # Log to audit trail
+        current_user = session.get("username", "unknown")
+        log_audit(
+            current_user,
+            "wlc_wlan_toggle",
+            resource=f"{host}: {profile_name} ({wlan_id})",
+            details=f"Action: {'enable' if enable else 'disable'} | SSID: {profile_name}",
+            user_id=session.get("user_id")
+        )
+
         flash(
             f"WLAN {profile_name} ({wlan_id}) {'enabled' if enable else 'disabled'} on {host}.",
             "success",
@@ -3935,6 +4329,7 @@ def wlc_summer_guest_toggle():
 
 
 @app.route("/tools/wlc/summer-guest/settings", methods=["GET", "POST"])
+@require_login
 def wlc_summer_guest_settings():
     nodes = fetch_solarwinds_nodes()
     auto_hosts = _update_summer_hosts_from_solarwinds(nodes)
@@ -4026,6 +4421,7 @@ def wlc_summer_guest_settings():
 
 
 @app.get("/tools/solarwinds/nodes")
+@require_login
 def solarwinds_nodes():
     settings = _get_solar_settings()
     nodes = fetch_solarwinds_nodes()
@@ -4033,6 +4429,7 @@ def solarwinds_nodes():
 
 
 @app.get("/api/solarwinds/nodes")
+@require_login
 def api_solarwinds_nodes():
     """API endpoint for searching SolarWinds nodes (for bulk SSH inventory search)."""
     query = request.args.get("q", "").strip().lower()
@@ -4095,6 +4492,7 @@ def solarwinds_nodes_settings():
 
 
 @app.get("/tools/wlc/dashboard")
+@require_login
 def wlc_dashboard():
     selected = request.args.get("range", "24h")
     if selected not in _DASHBOARD_RANGE_TO_HOURS:
@@ -4115,6 +4513,7 @@ def wlc_dashboard():
 
 
 @app.get("/api/wlc/dashboard")
+@require_login
 def wlc_dashboard_data():
     selected = request.args.get("range", "24h")
     if selected not in _DASHBOARD_RANGE_TO_HOURS:
@@ -4237,6 +4636,7 @@ def wlc_dashboard_settings():
 
 
 @app.get("/tools/wlc/jobs")
+@require_login
 def wlc_jobs_overview():
     records = []
     for row in db_list_jobs(limit=200):
@@ -4286,12 +4686,14 @@ def wlc_jobs_overview():
 
 # =================== Bulk SSH ======================
 @app.route("/tools/bulk-ssh")
+@require_login
 def bulk_ssh():
     """Bulk SSH terminal page."""
     return render_template("bulk_ssh.html")
 
 
 @app.route("/tools/bulk-ssh/execute", methods=["POST"])
+@require_login
 def bulk_ssh_execute():
     """Execute bulk SSH job in background thread."""
     # Parse form data
@@ -4329,6 +4731,16 @@ def bulk_ssh_execute():
     # Create and start job in background thread
     job_id = str(uuid.uuid4())
 
+    # Log to audit trail
+    current_user = session.get("username", "unknown")
+    log_audit(
+        current_user,
+        "bulk_ssh_execute",
+        resource=f"{len(devices)} devices",
+        details=f"Command: {command[:100]}{'...' if len(command) > 100 else ''} | Job ID: {job_id}",
+        user_id=session.get("user_id")
+    )
+
     def run_job():
         job = BulkSSHJob(
             devices=devices,
@@ -4346,11 +4758,12 @@ def bulk_ssh_execute():
     thread = threading.Thread(target=run_job, daemon=True)
     thread.start()
 
-    flash(f"Bulk SSH job started with {len(devices)} device(s). Job ID: {job_id}", "success")
-    return redirect(url_for("bulk_ssh_results", job_id=job_id))
+    # Redirect to unified progress page
+    return redirect(url_for("job_progress_page", job_id=job_id))
 
 
 @app.route("/tools/bulk-ssh/results/<job_id>")
+@require_login
 def bulk_ssh_results(job_id: str):
     """Show results for a bulk SSH job."""
     job = load_bulk_ssh_job(job_id)
@@ -4364,6 +4777,7 @@ def bulk_ssh_results(job_id: str):
 
 
 @app.route("/tools/bulk-ssh/jobs")
+@require_login
 def bulk_ssh_jobs():
     """List all bulk SSH jobs."""
     jobs = list_bulk_ssh_jobs(limit=100)
@@ -4371,6 +4785,7 @@ def bulk_ssh_jobs():
 
 
 @app.route("/api/bulk-ssh/status/<job_id>")
+@require_login
 def bulk_ssh_status(job_id: str):
     """API endpoint to get job status (for live updates)."""
     job = load_bulk_ssh_job(job_id)
@@ -4400,6 +4815,7 @@ def bulk_ssh_status(job_id: str):
 
 
 @app.route("/api/bulk-ssh/export/<job_id>")
+@require_login
 def bulk_ssh_export(job_id: str):
     """Export bulk SSH results to CSV."""
     job = load_bulk_ssh_job(job_id)
@@ -4435,6 +4851,7 @@ def bulk_ssh_export(job_id: str):
 
 # =================== Bulk SSH Templates ======================
 @app.route("/tools/bulk-ssh/templates")
+@require_login
 def bulk_ssh_templates():
     """Command templates management page."""
     templates = list_bulk_ssh_templates()
@@ -4442,6 +4859,7 @@ def bulk_ssh_templates():
 
 
 @app.route("/tools/bulk-ssh/templates/create", methods=["POST"])
+@require_login
 def bulk_ssh_template_create():
     """Create a new template."""
     name = request.form.get("name", "").strip()
@@ -4476,6 +4894,7 @@ def bulk_ssh_template_create():
 
 
 @app.route("/tools/bulk-ssh/templates/<int:template_id>/update", methods=["POST"])
+@require_login
 def bulk_ssh_template_update(template_id: int):
     """Update an existing template."""
     name = request.form.get("name", "").strip()
@@ -4509,6 +4928,7 @@ def bulk_ssh_template_update(template_id: int):
 
 
 @app.route("/tools/bulk-ssh/templates/<int:template_id>/delete", methods=["POST"])
+@require_login
 def bulk_ssh_template_delete(template_id: int):
     """Delete a template."""
     template = load_bulk_ssh_template(template_id)
@@ -4525,6 +4945,7 @@ def bulk_ssh_template_delete(template_id: int):
 
 
 @app.route("/api/bulk-ssh/templates")
+@require_login
 def bulk_ssh_templates_api():
     """API endpoint to list all templates."""
     templates = list_bulk_ssh_templates()
@@ -4532,6 +4953,7 @@ def bulk_ssh_templates_api():
 
 
 @app.route("/api/bulk-ssh/templates/<int:template_id>")
+@require_login
 def bulk_ssh_template_api(template_id: int):
     """API endpoint to get template details."""
     template = load_bulk_ssh_template(template_id)
@@ -4541,6 +4963,7 @@ def bulk_ssh_template_api(template_id: int):
 
 
 @app.route("/tools/bulk-ssh/templates/seed-defaults", methods=["POST"])
+@require_login
 def bulk_ssh_templates_seed():
     """Seed database with common templates."""
     common = get_common_templates()
@@ -4565,6 +4988,7 @@ def bulk_ssh_templates_seed():
 
 # =================== Bulk SSH Schedules ======================
 @app.route("/tools/bulk-ssh/schedules")
+@require_login
 def bulk_ssh_schedules():
     """Scheduled jobs management page."""
     schedules = list_bulk_ssh_schedules()
@@ -4573,6 +4997,7 @@ def bulk_ssh_schedules():
 
 
 @app.route("/tools/bulk-ssh/schedules/create", methods=["POST"])
+@require_login
 def bulk_ssh_schedule_create():
     """Create a new scheduled job."""
     name = request.form.get("name", "").strip()
@@ -4664,6 +5089,7 @@ def bulk_ssh_schedule_create():
 
 
 @app.route("/tools/bulk-ssh/schedules/<int:schedule_id>/toggle", methods=["POST"])
+@require_login
 def bulk_ssh_schedule_toggle(schedule_id: int):
     """Enable or disable a schedule."""
     enabled = request.form.get("enabled") == "true"
@@ -4679,6 +5105,7 @@ def bulk_ssh_schedule_toggle(schedule_id: int):
 
 
 @app.route("/tools/bulk-ssh/schedules/<int:schedule_id>/delete", methods=["POST"])
+@require_login
 def bulk_ssh_schedule_delete(schedule_id: int):
     """Delete a schedule."""
     schedule = load_bulk_ssh_schedule(schedule_id)
@@ -4703,4 +5130,4 @@ if __name__ == "__main__":
     # Start background schedule worker
     start_schedule_worker(check_interval=60)
 
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=False)

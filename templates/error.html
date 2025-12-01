@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ error_code }} - {{ error_title }}{% endblock %}
+{% block content %}
+<section class="card" style="text-align: center; padding: 60px 40px; max-width: 600px; margin: 80px auto;">
+  <div style="font-size: 80px; font-weight: bold; color: var(--accent); margin-bottom: 16px;">
+    {{ error_code }}
+  </div>
+  <h1 class="section-title" style="margin-bottom: 12px;">{{ error_title }}</h1>
+  <p class="muted" style="margin-bottom: 32px;">{{ error_message }}</p>
+  <a href="{{ url_for('index') }}" class="btn primary">Back to Dashboard</a>
+</section>
+{% endblock %}

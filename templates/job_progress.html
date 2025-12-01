@@ -1,0 +1,582 @@
+{% extends "base.html" %}
+{% block title %}Job Progress — NOC Toolkit{% endblock %}
+{% block head_extra %}
+<style>
+  .progress-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .progress-header {
+    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  .progress-header h2 {
+    margin: 0 0 8px 0;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .progress-header p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .status-running {
+    background: color-mix(in oklab, var(--info) 15%, transparent);
+    color: var(--info);
+  }
+
+  .status-completed {
+    background: color-mix(in oklab, var(--success) 15%, transparent);
+    color: var(--success);
+  }
+
+  .status-failed {
+    background: color-mix(in oklab, var(--error) 15%, transparent);
+    color: var(--error);
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .stat-value.success { color: var(--success); }
+  .stat-value.error { color: var(--error); }
+  .stat-value.pending { color: var(--muted); }
+
+  .stat-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .progress-bar-container {
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .progress-bar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .progress-bar-label {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .progress-bar-percent {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .progress-bar {
+    height: 12px;
+    background: var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    border-radius: 6px;
+    transition: width 0.3s ease;
+    position: relative;
+  }
+
+  .progress-fill.complete {
+    background: linear-gradient(90deg, var(--success), #34d399);
+  }
+
+  .progress-fill.has-errors {
+    background: linear-gradient(90deg, var(--warning), #fbbf24);
+  }
+
+  .device-list {
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .device-list-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .device-list-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .device-list-body {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .device-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+
+  .device-item:last-child {
+    border-bottom: none;
+  }
+
+  .device-item.success {
+    background: color-mix(in oklab, var(--success) 5%, transparent);
+  }
+
+  .device-item.error,
+  .device-item.failed {
+    background: color-mix(in oklab, var(--error) 5%, transparent);
+  }
+
+  .device-item.pending {
+    opacity: 0.6;
+  }
+
+  .device-item.in-progress {
+    background: color-mix(in oklab, var(--info) 5%, transparent);
+  }
+
+  .device-status-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .device-status-icon.success {
+    background: var(--success);
+    color: #fff;
+  }
+
+  .device-status-icon.error,
+  .device-status-icon.failed {
+    background: var(--error);
+    color: #fff;
+  }
+
+  .device-status-icon.pending {
+    background: var(--border);
+    color: var(--muted);
+  }
+
+  .device-status-icon.in-progress {
+    background: var(--info);
+    color: #fff;
+  }
+
+  .device-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .device-host {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .device-message {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .device-time {
+    font-size: 12px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .log-panel {
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-top: 24px;
+  }
+
+  .log-panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .log-panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .log-content {
+    padding: 16px 20px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    background: var(--bg);
+  }
+
+  .log-line {
+    padding: 2px 0;
+  }
+
+  .log-line.success { color: var(--success); }
+  .log-line.error { color: var(--error); }
+  .log-line.info { color: var(--info); }
+
+  .action-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    justify-content: flex-end;
+  }
+
+  .pulse {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="{{ url_for('index') }}">Dashboard</a>
+  <span class="breadcrumbs-separator">/</span>
+  <a href="{{ url_for('jobs_center') }}">Jobs</a>
+  <span class="breadcrumbs-separator">/</span>
+  <span class="breadcrumbs-current">Job Progress</span>
+</nav>
+
+<div class="progress-container">
+  <div class="progress-header">
+    <h2>
+      <span id="jobTitle">Configuration Job</span>
+      <span id="statusBadge" class="status-indicator status-running">
+        <span class="spinner"></span>
+        Running
+      </span>
+    </h2>
+    <p id="jobDescription">Applying configuration changes to <strong id="deviceCount">{{ device_count }}</strong> device(s)</p>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value" id="completedCount">0</div>
+      <div class="stat-label">Completed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value success" id="successCount">0</div>
+      <div class="stat-label">Successful</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value error" id="errorCount">0</div>
+      <div class="stat-label">Failed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value pending" id="pendingCount">{{ device_count }}</div>
+      <div class="stat-label">Pending</div>
+    </div>
+  </div>
+
+  <!-- Progress Bar -->
+  <div class="progress-bar-container">
+    <div class="progress-bar-header">
+      <span class="progress-bar-label">Overall Progress</span>
+      <span class="progress-bar-percent" id="progressPercent">0%</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+  </div>
+
+  <!-- Device List -->
+  <div class="device-list">
+    <div class="device-list-header">
+      <h3>Device Status</h3>
+      <span class="muted" id="deviceProgress">0 of {{ device_count }} completed</span>
+    </div>
+    <div class="device-list-body" id="deviceList">
+      {% if hosts %}
+        {% for host in hosts %}
+        <div class="device-item pending" data-host="{{ host }}">
+          <div class="device-status-icon pending">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+              <circle cx="10" cy="10" r="5"/>
+            </svg>
+          </div>
+          <div class="device-info">
+            <div class="device-host">{{ host }}</div>
+            <div class="device-message">Waiting...</div>
+          </div>
+          <div class="device-time"></div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="device-item pending" id="waitingPlaceholder">
+          <div class="device-info" style="text-align: center; width: 100%; padding: 20px;">
+            <div class="device-message">Waiting for devices to start processing...</div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Log Panel -->
+  <div class="log-panel">
+    <div class="log-panel-header" onclick="toggleLogs()">
+      <h3>Activity Log</h3>
+      <svg id="logToggle" width="20" height="20" viewBox="0 0 20 20" fill="currentColor" style="transition: transform 0.2s;">
+        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+      </svg>
+    </div>
+    <div class="log-content" id="logContent"></div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="action-buttons">
+    <a href="{{ url_for('jobs_center') }}" class="btn">View All Jobs</a>
+    <button class="btn primary" id="doneBtn" style="display: none;" onclick="window.location.href='{{ url_for('tool_phrase_search') }}'">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right: 4px;">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+      </svg>
+      Done
+    </button>
+  </div>
+</div>
+
+<script>
+const jobId = "{{ job_id }}";
+const totalDevices = {{ device_count }};
+let pollInterval = null;
+let logsExpanded = true;
+
+function toggleLogs() {
+  const content = document.getElementById('logContent');
+  const toggle = document.getElementById('logToggle');
+  logsExpanded = !logsExpanded;
+  content.style.display = logsExpanded ? 'block' : 'none';
+  toggle.style.transform = logsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+}
+
+function updateUI(data) {
+  const completed = data.completed || 0;
+  const success = data.success || 0;
+  const failed = data.failed || 0;
+  const pending = totalDevices - completed;
+  const percent = totalDevices > 0 ? Math.round((completed / totalDevices) * 100) : 0;
+
+  // Update stats
+  document.getElementById('completedCount').textContent = completed;
+  document.getElementById('successCount').textContent = success;
+  document.getElementById('errorCount').textContent = failed;
+  document.getElementById('pendingCount').textContent = pending;
+
+  // Update progress bar
+  document.getElementById('progressPercent').textContent = percent + '%';
+  const progressFill = document.getElementById('progressFill');
+  progressFill.style.width = percent + '%';
+
+  if (data.done) {
+    progressFill.classList.add('complete');
+    if (failed > 0) {
+      progressFill.classList.add('has-errors');
+    }
+  }
+
+  // Update device progress text
+  document.getElementById('deviceProgress').textContent = `${completed} of ${totalDevices} completed`;
+
+  // Update device items - handle both pre-populated and dynamically added devices
+  if (data.devices) {
+    const deviceList = document.getElementById('deviceList');
+    const placeholder = document.getElementById('waitingPlaceholder');
+    if (placeholder && data.devices.length > 0) {
+      placeholder.remove();
+    }
+
+    data.devices.forEach(device => {
+      let item = document.querySelector(`[data-host="${device.host}"]`);
+
+      // If device doesn't exist in DOM, create it (for bulk SSH where devices are added dynamically)
+      if (!item) {
+        item = document.createElement('div');
+        item.className = 'device-item pending';
+        item.setAttribute('data-host', device.host);
+        item.innerHTML = `
+          <div class="device-status-icon pending">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+              <circle cx="10" cy="10" r="5"/>
+            </svg>
+          </div>
+          <div class="device-info">
+            <div class="device-host">${escapeHtml(device.host)}</div>
+            <div class="device-message">Processing...</div>
+          </div>
+          <div class="device-time"></div>
+        `;
+        deviceList.appendChild(item);
+      }
+
+      item.className = 'device-item ' + device.status;
+
+      const icon = item.querySelector('.device-status-icon');
+      icon.className = 'device-status-icon ' + device.status;
+
+      if (device.status === 'success') {
+        icon.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>';
+      } else if (device.status === 'error' || device.status === 'failed') {
+        icon.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/></svg>';
+      } else if (device.status === 'in-progress') {
+        icon.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;"></span>';
+      }
+
+      item.querySelector('.device-message').textContent = device.message || '';
+      item.querySelector('.device-time').textContent = device.duration || '';
+    });
+  }
+
+  // Update logs
+  if (data.logs && data.logs.length > 0) {
+    const logContent = document.getElementById('logContent');
+    logContent.innerHTML = data.logs.map(log => {
+      let className = 'log-line';
+      if (log.includes('OK') || log.includes('success')) className += ' success';
+      else if (log.includes('FAIL') || log.includes('error')) className += ' error';
+      else if (log.includes('Started') || log.includes('Job')) className += ' info';
+      return `<div class="${className}">${escapeHtml(log)}</div>`;
+    }).join('');
+    logContent.scrollTop = logContent.scrollHeight;
+  }
+
+  // Update status badge
+  if (data.done) {
+    const badge = document.getElementById('statusBadge');
+    if (failed > 0) {
+      badge.className = 'status-indicator status-failed';
+      badge.innerHTML = '<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"/></svg> Completed with Errors';
+    } else {
+      badge.className = 'status-indicator status-completed';
+      badge.innerHTML = '<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/></svg> Completed';
+    }
+    document.getElementById('doneBtn').style.display = 'inline-flex';
+
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function pollProgress() {
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/progress`);
+    if (!res.ok) throw new Error('Failed to fetch progress');
+    const data = await res.json();
+    updateUI(data);
+  } catch (err) {
+    console.error('Poll error:', err);
+  }
+}
+
+// Start polling
+pollProgress();
+pollInterval = setInterval(pollProgress, 800);
+
+// Stop polling when page is hidden
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  } else if (!document.hidden && !pollInterval) {
+    pollInterval = setInterval(pollProgress, 800);
+  }
+});
+</script>
+{% endblock %}

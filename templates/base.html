@@ -347,6 +347,38 @@
     }
     .footer span:last-child{text-align:right;}
 
+    /* Admin login button - bottom left */
+    .admin-login-btn{
+      position:fixed;
+      bottom:20px;
+      left:20px;
+      z-index:1000;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color:#fff;
+      border:none;
+      border-radius:10px;
+      font-size:13px;
+      font-weight:600;
+      text-decoration:none;
+      box-shadow: 0 4px 15px rgba(79,70,229,0.3);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .admin-login-btn:hover{
+      transform:translateY(-2px);
+      box-shadow: 0 6px 20px rgba(79,70,229,0.4);
+    }
+    .admin-login-btn.superadmin{
+      background: linear-gradient(135deg, var(--error), #dc2626);
+      box-shadow: 0 4px 15px rgba(239,68,68,0.3);
+    }
+    .admin-login-btn.superadmin:hover{
+      box-shadow: 0 6px 20px rgba(239,68,68,0.4);
+    }
+
     @media (max-width: 768px){
       .footer{flex-direction:column; text-align:center;}
       .shell{padding:16px;}
@@ -424,12 +456,14 @@
             </svg>
             <span>Bulk SSH Terminal</span>
           </a>
+          {% if session.get('role') == 'superadmin' %}
           <a href="{{ url_for('audit_logs') }}" class="nav-item {% if request.endpoint == 'audit_logs' %}active{% endif %}">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             <span>Audit Logs</span>
           </a>
+          {% endif %}
         </div>
 
         <div class="nav-section">
@@ -544,6 +578,16 @@
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Admin Login Button - Bottom Left (only when not logged in) -->
+  {% if not session.get('user_id') %}
+  <a href="{{ url_for('login') }}" class="admin-login-btn">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+    </svg>
+    <span>Admin Login</span>
+  </a>
+  {% endif %}
 
   <script>
     // Sidebar toggle for mobile
