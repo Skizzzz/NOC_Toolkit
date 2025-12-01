@@ -413,13 +413,7 @@
 
   <div class="app-layout">
     <nav class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <a href="{{ url_for('index') }}" class="sidebar-logo">
-          <div class="logo" style="width:32px; height:32px; font-size:14px;">NT</div>
-          <span>NOC Toolkit</span>
-        </a>
-      </div>
-      <div class="sidebar-nav">
+      <div class="sidebar-nav" style="padding-top:8px;">
         <div class="nav-section">
           <div class="nav-section-title">Main</div>
           <a href="{{ url_for('index') }}" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
@@ -571,8 +565,6 @@
       </main>
 
       <footer class="footer">
-        <span>NOC Toolkit © 2025</span>
-        <span>Built for speed, with guardrails.</span>
       </footer>
     </div>
   </div>
