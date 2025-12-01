@@ -150,10 +150,11 @@
         <!-- Selection Info -->
         <div class="selection-info">
           <div>
-            <span class="selection-count" id="selectedCount">0</span> interface(s) selected
+            <span class="selection-count" id="selectedCount">0</span> of <span id="totalCount">{{ results|length }}</span> interface(s) selected
           </div>
           <div style="display:flex; gap:10px;">
-            <button type="button" class="btn" onclick="selectAll()">Select All</button>
+            <button type="button" class="btn" onclick="selectAllVisible()">Select Visible</button>
+            <button type="button" class="btn primary" onclick="selectAllResults()">Select All {{ results|length }}</button>
             <button type="button" class="btn" onclick="selectNone()">Clear Selection</button>
           </div>
         </div>
@@ -163,7 +164,7 @@
           <thead>
             <tr>
               <th style="width:48px">
-                <input type="checkbox" id="selectAllCheckbox" aria-label="Select all visible" />
+                <input type="checkbox" id="selectAllCheckbox" aria-label="Select all on current page" title="Select all on current page" />
               </th>
               <th>Switch IP</th>
               <th>Interface</th>
@@ -265,7 +266,8 @@
     $(document).ready(function(){
       // Initialize DataTable
       table = $('#resultsTable').DataTable({
-        pageLength: 25,
+        pageLength: 100,
+        lengthMenu: [[25, 50, 100, -1], [25, 50, 100, "All"]],
         order: [[1, 'asc']], // Sort by Switch IP
         columnDefs: [
           { orderable: false, targets: 0 } // Disable sorting on checkbox column
@@ -308,8 +310,15 @@
       $('#submitBtn').prop('disabled', count === 0);
     }
 
-    function selectAll(){
+    function selectAllVisible(){
+      // Only select rows that are currently visible (filtered/paginated)
       table.rows({search: 'applied'}).nodes().to$().find('.row-select').prop('checked', true);
+      updateSelectionCount();
+    }
+
+    function selectAllResults(){
+      // Select ALL checkboxes across all pages, regardless of pagination
+      $('.row-select').prop('checked', true);
       $('#selectAllCheckbox').prop('checked', true);
       updateSelectionCount();
     }

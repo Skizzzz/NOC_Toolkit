@@ -20,8 +20,11 @@ instance/
 *.sqlite
 *.sqlite3
 
-# Encryption key (sensitive!)
+# Encryption keys (sensitive!)
 .encryption_key
+*.encryption_key
+*encryption_key*
+*.key
 
 # Environment variables
 .env
