@@ -3,7 +3,7 @@
 Aruba AOS Controller (7200 series) - Client and AP count collection via SSH.
 
 Commands used:
-- show user-table count: Gets connected client count
+- show user-table summary: Gets connected client count (Total Users)
 - show ap database: Gets AP inventory and count
 """
 import re
@@ -41,22 +41,14 @@ def get_aruba_snapshot(
         ) as conn:
             # Get client count
             try:
-                # "show user-table count" gives total authenticated users
-                user_out = conn.send_command("show user-table count", read_timeout=60)
-                # Example output: "User Entries: 245"
-                client_match = re.search(r"User\s+Entries\s*:\s*(\d+)", user_out or "", re.I)
+                # "show user-table summary" gives total authenticated users
+                # Example output: "Unique Users: 759  Total Users: 805"
+                user_out = conn.send_command("show user-table summary", read_timeout=60)
+                client_match = re.search(r"Total\s+Users\s*:\s*(\d+)", user_out or "", re.I)
                 if client_match:
                     result["total_clients"] = int(client_match.group(1))
                 else:
-                    # Alternative: try "show user" and count lines
-                    user_list = conn.send_command("show user", read_timeout=90)
-                    if user_list:
-                        # Count non-header lines that look like user entries (have MAC addresses)
-                        mac_pattern = re.compile(r"[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}")
-                        count = sum(1 for line in user_list.splitlines() if mac_pattern.search(line))
-                        result["total_clients"] = count
-                    else:
-                        errors.append(f"{host}: Client count not found")
+                    errors.append(f"{host}: Client count not found in user-table summary")
             except Exception as exc:
                 errors.append(f"{host}: client count failed ({exc})")
 
