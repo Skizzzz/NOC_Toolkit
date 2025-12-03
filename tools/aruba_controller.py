@@ -54,29 +54,17 @@ def get_aruba_snapshot(
 
             # Get AP count
             try:
-                # "show ap database" lists all APs
+                # Disable paging first to get full output
+                conn.send_command("no paging", read_timeout=10)
+                # "show ap database" lists all APs, "Total APs:XXX" at bottom
                 ap_out = conn.send_command("show ap database", read_timeout=90)
                 if ap_out:
-                    # Look for "Total APs: X" line
+                    # Look for "Total APs:XXX" at the bottom of output
                     total_match = re.search(r"Total\s+APs?\s*:\s*(\d+)", ap_out or "", re.I)
                     if total_match:
                         result["ap_count"] = int(total_match.group(1))
                     else:
-                        # Count lines with AP entries (contain "Up" status typically)
-                        # Skip header lines and empty lines
-                        lines = [l.strip() for l in ap_out.splitlines() if l.strip()]
-                        # AP entries typically have IP addresses
-                        ip_pattern = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
-                        ap_count = 0
-                        for line in lines:
-                            # Skip obvious header/separator lines
-                            if line.startswith("-") or line.startswith("="):
-                                continue
-                            if "Name" in line and "Group" in line:
-                                continue
-                            if ip_pattern.search(line):
-                                ap_count += 1
-                        result["ap_count"] = ap_count
+                        errors.append(f"{host}: Total APs not found in ap database output")
                 else:
                     errors.append(f"{host}: AP database empty")
             except Exception as exc:
@@ -136,6 +124,8 @@ def get_aruba_ap_inventory(
             timeout=120,
             auto_enable=bool(secret),
         ) as conn:
+            # Disable paging first to get full output
+            conn.send_command("no paging", read_timeout=10)
             # Get detailed AP info
             ap_out = conn.send_command("show ap database long", read_timeout=120)
             if not ap_out:
