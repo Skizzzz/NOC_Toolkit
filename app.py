@@ -536,6 +536,7 @@ def _set_solar_settings(settings: dict):
 
 
 def _derive_wlc_hosts_from_solarwinds(nodes: Optional[list[dict]] = None) -> list[str]:
+    """Derive Cisco 9800 WLC hosts from SolarWinds nodes."""
     if nodes is None:
         nodes = fetch_solarwinds_nodes()
     hosts: list[str] = []
@@ -552,6 +553,37 @@ def _derive_wlc_hosts_from_solarwinds(nodes: Optional[list[dict]] = None) -> lis
                 seen.add(ip_address)
                 hosts.append(ip_address)
     return hosts
+
+
+def _derive_aruba_hosts_from_solarwinds(nodes: Optional[list[dict]] = None) -> list[str]:
+    """Derive Aruba controller hosts from SolarWinds nodes (hostname starts with wc0, vendor starts with Aruba)."""
+    if nodes is None:
+        nodes = fetch_solarwinds_nodes()
+    hosts: list[str] = []
+    seen: set[str] = set()
+    for node in nodes:
+        caption = (node.get("caption") or "").lower()
+        vendor = (node.get("vendor") or "").lower()
+        ip_address = (node.get("ip_address") or "").strip()
+        if not ip_address:
+            continue
+        # Match: hostname starts with "wc0" and vendor starts with "aruba"
+        if caption.startswith("wc0") and vendor.startswith("aruba"):
+            if ip_address not in seen:
+                seen.add(ip_address)
+                hosts.append(ip_address)
+    return hosts
+
+
+def _update_aruba_hosts_from_solarwinds(nodes: Optional[list[dict]] = None) -> list[str]:
+    """Update Aruba hosts in dashboard settings from SolarWinds."""
+    auto_hosts = _derive_aruba_hosts_from_solarwinds(nodes)
+    with _DASHBOARD_SETTINGS_LOCK:
+        current_hosts = _DASHBOARD_SETTINGS.get("aruba_hosts") or []
+        if auto_hosts != current_hosts:
+            _DASHBOARD_SETTINGS["aruba_hosts"] = auto_hosts
+            save_wlc_dashboard_settings(_DASHBOARD_SETTINGS)
+    return auto_hosts
 
 
 def _update_wlc_hosts_from_solarwinds(nodes: Optional[list[dict]] = None) -> list[str]:
@@ -1421,22 +1453,19 @@ def _load_clients_job_state(job_id):
 
 
 def _dashboard_poll_once(settings: dict):
-    # Cisco controller settings
+    # Controller credentials (shared between Cisco and Aruba)
     hosts = settings.get("hosts") or []
     username = settings.get("username") or ""
     password = decrypt_password(settings.get("password") or "")
     secret = decrypt_password(settings.get("secret") or "") if settings.get("secret") else None
 
-    # Aruba controller settings
+    # Aruba controller settings (uses same credentials)
     aruba_enabled = settings.get("aruba_enabled", False)
     aruba_hosts = settings.get("aruba_hosts") or []
-    aruba_username = settings.get("aruba_username") or ""
-    aruba_password = decrypt_password(settings.get("aruba_password") or "")
-    aruba_secret = decrypt_password(settings.get("aruba_secret") or "") if settings.get("aruba_secret") else None
 
     # Check if we have any hosts to poll
     has_cisco = hosts and username and password
-    has_aruba = aruba_enabled and aruba_hosts and aruba_username and aruba_password
+    has_aruba = aruba_enabled and aruba_hosts and username and password
     all_hosts = list(hosts) + (aruba_hosts if has_aruba else [])
 
     if not (has_cisco or has_aruba):
@@ -1474,10 +1503,10 @@ def _dashboard_poll_once(settings: dict):
         if has_cisco:
             for host in hosts:
                 futures[executor.submit(_collect_wlc_snapshot, host, username, password, secret)] = host
-        # Submit Aruba controller jobs
+        # Submit Aruba controller jobs (using same credentials)
         if has_aruba:
             for host in aruba_hosts:
-                futures[executor.submit(_collect_aruba_snapshot, host, aruba_username, aruba_password, aruba_secret)] = host
+                futures[executor.submit(_collect_aruba_snapshot, host, username, password, secret)] = host
 
         for fut in as_completed(futures):
             host = futures[fut]
@@ -4599,15 +4628,29 @@ def wlc_dashboard_data():
 def wlc_dashboard_settings():
     settings = _get_dashboard_settings()
     nodes = fetch_solarwinds_nodes()
+
+    # Auto-discover Cisco controllers
     auto_hosts = _update_wlc_hosts_from_solarwinds(nodes)
     if auto_hosts != settings.get("hosts"):
         updated_settings = dict(settings)
         updated_settings["hosts"] = auto_hosts
         _set_dashboard_settings(updated_settings)
         settings = _get_dashboard_settings()
+
+    # Auto-discover Aruba controllers
+    auto_aruba_hosts = _update_aruba_hosts_from_solarwinds(nodes)
+    if auto_aruba_hosts != settings.get("aruba_hosts"):
+        updated_settings = dict(settings)
+        updated_settings["aruba_hosts"] = auto_aruba_hosts
+        _set_dashboard_settings(updated_settings)
+        settings = _get_dashboard_settings()
+
     settings = dict(settings)
     settings["hosts"] = auto_hosts
+    settings["aruba_hosts"] = auto_aruba_hosts
     auto_host_labels = _label_wlc_hosts(auto_hosts, nodes)
+    auto_aruba_labels = _label_wlc_hosts(auto_aruba_hosts, nodes)
+
     if request.method == "POST":
         action = request.form.get("action") or "save"
         enabled = request.form.get("enabled") == "1"
@@ -4620,19 +4663,12 @@ def wlc_dashboard_settings():
             interval_min = 5
         interval_sec = max(interval_min * 60, 300)
 
-        # Aruba settings
+        # Aruba settings - uses same credentials, just enable/disable toggle
         aruba_enabled = request.form.get("aruba_enabled") == "1"
-        aruba_hosts_raw = request.form.get("aruba_hosts") or ""
-        aruba_hosts = [h.strip() for h in aruba_hosts_raw.splitlines() if h.strip()]
-        aruba_username = (request.form.get("aruba_username") or "").strip()
-        aruba_password = request.form.get("aruba_password") or ""
-        aruba_secret = request.form.get("aruba_secret") or ""
 
         # Encrypt passwords before storing
         encrypted_password = encrypt_password(password) if password else settings.get("password", "")
         encrypted_secret = encrypt_password(secret) if secret else settings.get("secret", "")
-        encrypted_aruba_password = encrypt_password(aruba_password) if aruba_password else settings.get("aruba_password", "")
-        encrypted_aruba_secret = encrypt_password(aruba_secret) if aruba_secret else settings.get("aruba_secret", "")
 
         new_settings = dict(settings)
         new_settings.update({
@@ -4643,12 +4679,9 @@ def wlc_dashboard_settings():
             "secret": encrypted_secret,
             "interval_sec": interval_sec,
             "validation": settings.get("validation", []),
-            # Aruba settings
+            # Aruba settings - auto-discovered hosts, same credentials
             "aruba_enabled": aruba_enabled,
-            "aruba_hosts": aruba_hosts,
-            "aruba_username": aruba_username,
-            "aruba_password": encrypted_aruba_password,
-            "aruba_secret": encrypted_aruba_secret,
+            "aruba_hosts": auto_aruba_hosts,
         })
 
         if action == "validate":
@@ -4665,11 +4698,11 @@ def wlc_dashboard_settings():
                 except Exception as exc:
                     status["message"] = str(exc)
                 validation.append(status)
-            # Validate Aruba controllers
-            for host in aruba_hosts:
+            # Validate Aruba controllers (using same credentials)
+            for host in auto_aruba_hosts:
                 status = {"host": host, "clients": False, "message": "", "controller_type": "aruba"}
                 try:
-                    result, errors = get_aruba_snapshot(host, aruba_username, aruba_password, aruba_secret)
+                    result, errors = get_aruba_snapshot(host, username, password, secret)
                     if result.get("total_clients") is not None:
                         status["clients"] = True
                         status["message"] = f"Clients: {result['total_clients']}, APs: {result.get('ap_count', 'N/A')}"
@@ -4692,14 +4725,14 @@ def wlc_dashboard_settings():
     display_settings = dict(settings)
     display_settings["password"] = ""  # Don't display encrypted password
     display_settings["secret"] = ""  # Don't display encrypted secret
-    display_settings["aruba_password"] = ""  # Don't display encrypted Aruba password
-    display_settings["aruba_secret"] = ""  # Don't display encrypted Aruba secret
 
     return render_template(
         "wlc_dashboard_settings.html",
         settings=display_settings,
         auto_hosts=auto_hosts,
         auto_host_labels=auto_host_labels,
+        auto_aruba_hosts=auto_aruba_hosts,
+        auto_aruba_labels=auto_aruba_labels,
     )
 
 
