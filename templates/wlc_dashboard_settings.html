@@ -15,7 +15,7 @@
 </section>
 
 <section class="card" style="margin-top:18px;">
-  <h3 class="section-title" style="margin:0 0 6px 0;">Discovered WLC Targets</h3>
+  <h3 class="section-title" style="margin:0 0 6px 0;">Cisco 9800 Controllers (Auto-Discovered)</h3>
   <p class="muted" style="margin:0 0 10px 0;">Derived from SolarWinds nodes where hostname contains <code>wc01</code>, vendor contains <code>Cisco</code>, and model contains <code>9800</code>.</p>
   {% set host_labels = auto_host_labels or auto_hosts %}
   {% if host_labels %}
@@ -30,6 +30,7 @@
 </section>
 
 <form method="post" class="card" style="margin-top:18px; display:grid; gap:18px;">
+  <h3 class="section-title" style="margin:0 0 6px 0;">Cisco 9800 Credentials</h3>
   <div class="row" style="gap:16px; flex-wrap:wrap;">
     <div class="field" style="flex:1 1 240px;">
       <label for="username">Username</label>
@@ -48,6 +49,55 @@
       <input id="secret" type="password" name="secret" value="{{ settings.secret or '' }}" autocomplete="new-password" />
       <span class="muted">Leave blank if enable secret not required.</span>
     </div>
+  </div>
+
+  <hr style="border:none; border-top:1px solid var(--border); margin:8px 0;">
+
+  <h3 class="section-title" style="margin:0 0 6px 0;">Aruba Controllers (72XX Series)</h3>
+  <p class="muted" style="margin:0 0 10px 0;">Manually configure Aruba Mobility Controllers. Enter hostnames or IPs, one per line.</p>
+
+  <div class="row" style="gap:16px; flex-wrap:wrap;">
+    <div class="field" style="flex:1 1 100%;">
+      <label for="aruba_hosts">Aruba Controller Hosts</label>
+      <textarea id="aruba_hosts" name="aruba_hosts" rows="3" placeholder="e.g. aruba-mc01.example.com&#10;10.1.1.50" style="font-family:monospace;">{{ (settings.aruba_hosts or [])|join('\n') }}</textarea>
+      <span class="muted">Enter one hostname or IP per line.</span>
+    </div>
+  </div>
+
+  <div class="row" style="gap:16px; flex-wrap:wrap;">
+    <div class="field" style="flex:1 1 240px;">
+      <label for="aruba_username">Aruba Username</label>
+      <input id="aruba_username" type="text" name="aruba_username" value="{{ settings.aruba_username or '' }}" autocomplete="off" />
+    </div>
+    <div class="field" style="flex:1 1 240px;">
+      <label for="aruba_password">Aruba Password</label>
+      <input id="aruba_password" type="password" name="aruba_password" value="{{ settings.aruba_password or '' }}" autocomplete="new-password" />
+    </div>
+    <div class="field" style="flex:1 1 240px;">
+      <label for="aruba_secret">Aruba Enable Secret (optional)</label>
+      <input id="aruba_secret" type="password" name="aruba_secret" value="{{ settings.aruba_secret or '' }}" autocomplete="new-password" />
+    </div>
+  </div>
+
+  <div class="card" style="background:color-mix(in hsl, var(--card) 96%, transparent); border:1px dashed var(--border);">
+    <div class="row" style="align-items:center; justify-content:space-between;">
+      <div>
+        <label style="font-weight:600;">Include Aruba Controllers in Polling</label>
+        <p class="muted" style="margin:4px 0 0 0;">When enabled, Aruba controllers will be polled alongside Cisco controllers.</p>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+          <input type="checkbox" name="aruba_enabled" value="1" {% if settings.aruba_enabled %}checked{% endif %} />
+          <span>Enable Aruba</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <hr style="border:none; border-top:1px solid var(--border); margin:8px 0;">
+
+  <h3 class="section-title" style="margin:0 0 6px 0;">Polling Settings</h3>
+  <div class="row" style="gap:16px; flex-wrap:wrap;">
     <div class="field" style="flex:0 0 220px;">
       <label for="interval">Polling interval (minutes)</label>
       <input id="interval" type="number" name="interval" min="5" step="1" value="{{ (settings.interval_sec or 300) // 60 }}" />
@@ -73,7 +123,7 @@
 
   <div class="row" style="justify-content:flex-end; gap:10px;">
     <a class="btn" href="{{ url_for('wlc_dashboard') }}">Back to Dashboard</a>
-    <button class="btn" name="action" value="validate" type="submit" {% if not auto_hosts %}disabled{% endif %}>Validate Hosts</button>
+    <button class="btn" name="action" value="validate" type="submit">Validate All Hosts</button>
     <button class="btn btn-gradient" name="action" value="save" type="submit">Save Settings</button>
   </div>
 </form>
@@ -84,6 +134,7 @@
   <table>
     <thead>
       <tr>
+        <th>Type</th>
         <th>Host</th>
         <th>Status</th>
         <th>Message</th>
@@ -92,6 +143,13 @@
     <tbody>
       {% for item in settings.validation %}
       <tr>
+        <td>
+          {% if item.controller_type == 'aruba' %}
+            <span style="background:#ff8300; color:#fff; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Aruba</span>
+          {% else %}
+            <span style="background:#049fd9; color:#fff; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Cisco</span>
+          {% endif %}
+        </td>
         <td>{{ item.host }}</td>
         <td>
           {% if item.clients %}

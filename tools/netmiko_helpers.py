@@ -110,3 +110,40 @@ def ios_xe_connection(
         yield conn
     finally:
         conn.disconnect()
+
+
+@contextmanager
+def aruba_aos_connection(
+    host: str,
+    username: str,
+    password: str,
+    secret: Optional[str] = None,
+    *,
+    fast_cli: bool = False,
+    timeout: int = 90,
+    global_delay_factor: int = 2,
+    auto_enable: bool = True,
+    extra: Optional[Dict[str, Any]] = None,
+):
+    """Yield a Netmiko connection to an Aruba AOS controller (7200 series, etc.)."""
+    device = _build_device_dict(
+        host=host,
+        username=username,
+        password=password,
+        secret=secret,
+        device_type="aruba_os",
+        fast_cli=fast_cli,
+        timeout=timeout,
+        global_delay_factor=global_delay_factor,
+        extra=extra,
+    )
+    conn = ConnectHandler(**device)
+    if auto_enable and secret:
+        try:
+            conn.enable()
+        except Exception:
+            pass
+    try:
+        yield conn
+    finally:
+        conn.disconnect()

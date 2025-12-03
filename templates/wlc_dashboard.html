@@ -308,20 +308,33 @@
       </svg>
     </summary>
     <div id="hostsList">
-      {% set hosts = settings.hosts or host_details.keys() %}
-      {% if hosts %}
+      {% set cisco_hosts = settings.hosts or [] %}
+      {% set aruba_hosts = settings.aruba_hosts or [] %}
+      {% set all_hosts = cisco_hosts + aruba_hosts %}
+      {% if all_hosts %}
         <table class="controllers-table">
           <thead>
             <tr>
+              <th>Type</th>
               <th>Controller</th>
               <th style="text-align:right;">Clients</th>
               <th style="text-align:right;">Access Points</th>
             </tr>
           </thead>
           <tbody>
-            {% for host in hosts %}
+            {% for host in cisco_hosts %}
               {% set info = host_details.get(host, {}) %}
               <tr>
+                <td><span style="background:#049fd9; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">Cisco</span></td>
+                <td style="font-weight:600;">{{ host }}</td>
+                <td style="text-align:right;">{{ info.total_clients if info.total_clients is not none else '—' }}</td>
+                <td style="text-align:right;">{{ info.ap_count if info.ap_count is not none else '—' }}</td>
+              </tr>
+            {% endfor %}
+            {% for host in aruba_hosts %}
+              {% set info = host_details.get(host, {}) %}
+              <tr>
+                <td><span style="background:#ff8300; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">Aruba</span></td>
                 <td style="font-weight:600;">{{ host }}</td>
                 <td style="text-align:right;">{{ info.total_clients if info.total_clients is not none else '—' }}</td>
                 <td style="text-align:right;">{{ info.ap_count if info.ap_count is not none else '—' }}</td>
@@ -441,28 +454,43 @@
     document.getElementById('chartEmpty').style.display = points.length ? 'none' : 'block';
   }
 
-  function renderHostsTable(wrapper, hosts, details){
+  function renderHostsTable(wrapper, ciscoHosts, arubaHosts, details){
     if (!wrapper) return;
     wrapper.innerHTML = '';
-    const list = (hosts && hosts.length) ? hosts : Object.keys(details || {});
-    if (!list.length){
-    wrapper.innerHTML = '<p class="muted">No controllers configured yet.</p>';
+    const allHosts = [...(ciscoHosts || []), ...(arubaHosts || [])];
+    if (!allHosts.length){
+      wrapper.innerHTML = '<p class="muted">No controllers configured yet.</p>';
       return;
     }
     const table = document.createElement('table');
     table.className = 'controllers-table';
-    table.innerHTML = '<thead><tr><th>Controller</th><th style="text-align:right;">Clients</th><th style="text-align:right;">Access Points</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>Type</th><th>Controller</th><th style="text-align:right;">Clients</th><th style="text-align:right;">Access Points</th></tr></thead>';
     const tbody = document.createElement('tbody');
-    list.forEach(host => {
+
+    // Render Cisco hosts
+    (ciscoHosts || []).forEach(host => {
       const info = details && details[host] ? details[host] : {};
       const tr = document.createElement('tr');
       const clients = (info && typeof info.total_clients === 'number') ? info.total_clients : null;
       const aps = (info && typeof info.ap_count === 'number') ? info.ap_count : null;
       const clientsText = clients == null ? '—' : fmtNumber.format(clients);
       const apsText = aps == null ? '—' : fmtNumber.format(aps);
-      tr.innerHTML = `<td style="font-weight:600;">${escapeHtml(host)}</td><td style="text-align:right;">${clientsText}</td><td style="text-align:right;">${apsText}</td>`;
+      tr.innerHTML = `<td><span style="background:#049fd9; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">Cisco</span></td><td style="font-weight:600;">${escapeHtml(host)}</td><td style="text-align:right;">${clientsText}</td><td style="text-align:right;">${apsText}</td>`;
       tbody.appendChild(tr);
     });
+
+    // Render Aruba hosts
+    (arubaHosts || []).forEach(host => {
+      const info = details && details[host] ? details[host] : {};
+      const tr = document.createElement('tr');
+      const clients = (info && typeof info.total_clients === 'number') ? info.total_clients : null;
+      const aps = (info && typeof info.ap_count === 'number') ? info.ap_count : null;
+      const clientsText = clients == null ? '—' : fmtNumber.format(clients);
+      const apsText = aps == null ? '—' : fmtNumber.format(aps);
+      tr.innerHTML = `<td><span style="background:#ff8300; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">Aruba</span></td><td style="font-weight:600;">${escapeHtml(host)}</td><td style="text-align:right;">${clientsText}</td><td style="text-align:right;">${apsText}</td>`;
+      tbody.appendChild(tr);
+    });
+
     table.appendChild(tbody);
     wrapper.appendChild(table);
   }
@@ -559,7 +587,7 @@
 
     const hostsWrap = document.getElementById('hostsList');
     if (hostsWrap){
-      renderHostsTable(hostsWrap, body.hosts || [], details);
+      renderHostsTable(hostsWrap, body.hosts || [], body.aruba_hosts || [], details);
     }
 
   }

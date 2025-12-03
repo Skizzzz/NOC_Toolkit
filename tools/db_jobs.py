@@ -57,6 +57,12 @@ _DEFAULT_WLC_DASHBOARD_SETTINGS = {
     "last_poll_message": "",
     "validation": [],
     "poll_summary": None,
+    # Aruba controller settings
+    "aruba_hosts": [],
+    "aruba_username": "",
+    "aruba_password": "",
+    "aruba_secret": "",
+    "aruba_enabled": False,
 }
 
 _DEFAULT_WLC_SUMMER_SETTINGS = {
