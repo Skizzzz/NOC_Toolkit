@@ -411,7 +411,7 @@ def _log_row(username, tool, job_id, switch_ip, result, message, config_lines):
         if new_file:
             w.writeheader()
         w.writerow({
-            "timestamp": datetime.now().isoformat(sep=" ", timespec="seconds"),
+            "timestamp": datetime.now(_CST_TZ).isoformat(sep=" ", timespec="seconds"),
             "username": username,
             "tool": tool,
             "job_id": job_id,
@@ -742,7 +742,7 @@ def _clamp_workers(requested: Optional[str], hosts_count: int, *, default: int =
 
 def _new_job_id() -> str:
     """Return a reasonably unique job identifier."""
-    return datetime.now().strftime("%Y%m%d%H%M%S%f")
+    return datetime.now(_CST_TZ).strftime("%Y%m%d%H%M%S%f")
 
 
 def _filter_cli_map(cli_map):
@@ -820,7 +820,7 @@ def _start_background_cli_job(cli_map, username, password, secret, tool):
     """Kick off a background job that persists progress in SQLite."""
     task_map = _filter_cli_map(cli_map)
     job_id = _new_job_id()
-    created_ts = datetime.now().isoformat(timespec="seconds")
+    created_ts = datetime.now(_CST_TZ).isoformat(timespec="seconds")
 
     params_blob = {
         "hosts": list(task_map.keys()),
@@ -1328,7 +1328,7 @@ def _run_solarwinds_poll(manual: bool = False) -> tuple[bool, str]:
         message = f"Poll complete. Stored {len(nodes)} node(s)."
         if errors:
             message += " " + "; ".join(errors)
-        ts_iso = datetime.now().isoformat(timespec="seconds")
+        ts_iso = datetime.now(_CST_TZ).isoformat(timespec="seconds")
         update_solarwinds_poll_status(ts=ts_iso, status=status, message=message)
         new_settings = dict(settings)
         new_settings.update({
@@ -1340,7 +1340,7 @@ def _run_solarwinds_poll(manual: bool = False) -> tuple[bool, str]:
         return True, message
     except SolarWindsError as exc:
         message = str(exc)
-        ts_iso = datetime.now().isoformat(timespec="seconds")
+        ts_iso = datetime.now(_CST_TZ).isoformat(timespec="seconds")
         update_solarwinds_poll_status(ts=ts_iso if manual else None, status="error", message=message)
         new_settings = dict(settings)
         new_settings.update({
@@ -1470,7 +1470,7 @@ def _dashboard_poll_once(settings: dict):
 
     if not (has_cisco or has_aruba):
         summary = {
-            "ts": datetime.now().isoformat(timespec="seconds"),
+            "ts": datetime.now(_CST_TZ).isoformat(timespec="seconds"),
             "status": "error",
             "message": "Missing hosts or credentials",
             "total_hosts": len(all_hosts),
@@ -1488,7 +1488,7 @@ def _dashboard_poll_once(settings: dict):
     controller_types: Dict[str, str] = {}
     errors: list[str] = []
     host_status: Dict[str, Dict] = {}
-    timestamp = datetime.now().isoformat(timespec="seconds")
+    timestamp = datetime.now(_CST_TZ).isoformat(timespec="seconds")
 
     # Mark controller types
     for h in hosts:
@@ -1614,7 +1614,7 @@ def _dashboard_worker_loop():
             _dashboard_poll_once(settings)
         except Exception as exc:
             _record_dashboard_poll_status(
-                datetime.now().isoformat(timespec="seconds"),
+                datetime.now(_CST_TZ).isoformat(timespec="seconds"),
                 "error",
                 f"worker exception: {exc}",
             )
@@ -3665,7 +3665,7 @@ def _rf_poll_worker(job_id: str, params: dict):
             })
 
         sample = {
-            "ts": datetime.now().isoformat(timespec="seconds"),
+            "ts": datetime.now(_CST_TZ).isoformat(timespec="seconds"),
             "series": round_series,
             "errors": errors,
             "round": i + 1,
@@ -3740,7 +3740,7 @@ def wlc_rf_troubleshoot_start():
         return redirect(url_for("wlc_rf_troubleshoot"))
 
     job_id = _new_job_id()
-    created_ts = datetime.now().isoformat(timespec="seconds")
+    created_ts = datetime.now(_CST_TZ).isoformat(timespec="seconds")
     params_blob = {
         "hosts": [host],
         "username": username,
@@ -3849,7 +3849,7 @@ def wlc_clients_troubleshoot_start():
         return redirect(url_for("wlc_clients_troubleshoot"))
 
     job_id = _new_job_id()
-    created_ts = datetime.now().isoformat(timespec="seconds")
+    created_ts = datetime.now(_CST_TZ).isoformat(timespec="seconds")
     params_blob = {
         "hosts": hosts,                # 1..N WLCs
         "username": username,
@@ -3914,7 +3914,7 @@ def _clients_poll_worker(job_id: str, params: dict):
                 totals_by_wlc, wlans, errors, total_all = {}, [], [str(exc)], 0
 
             sample = {
-                "ts": datetime.now().isoformat(timespec="seconds"),
+                "ts": datetime.now(_CST_TZ).isoformat(timespec="seconds"),
                 "totals_by_wlc": totals_by_wlc,
                 "total_all": total_all,
                 "wlans": wlans,
@@ -5125,8 +5125,7 @@ def bulk_ssh_schedule_create():
     devices_json = json.dumps(devices)
 
     # Calculate next run time based on schedule type
-    from datetime import datetime, timedelta
-    now = datetime.now()
+    now = datetime.now(_CST_TZ)
 
     if schedule_type == "once":
         run_date = request.form.get("run_date", "")
