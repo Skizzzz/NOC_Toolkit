@@ -1,4 +1,4 @@
-"""Background worker for executing scheduled bulk SSH jobs."""
+"""Background worker for executing scheduled bulk SSH jobs and ISE cert syncs."""
 import json
 import logging
 import threading
@@ -11,8 +11,14 @@ from tools.db_jobs import (
     fetch_due_bulk_ssh_schedules,
     update_bulk_ssh_schedule_run,
     load_bulk_ssh_template,
+    load_cert_sync_settings,
+    update_cert_sync_status,
+    get_enabled_ise_nodes,
+    insert_certificate,
+    certificate_exists,
 )
 from tools.template_engine import substitute_variables
+from tools.cert_tracker import pull_ise_certs
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +63,88 @@ class ScheduleWorker:
             except Exception as e:
                 logger.error(f"Error in schedule worker: {e}")
 
+            try:
+                self._check_ise_cert_sync()
+            except Exception as e:
+                logger.error(f"Error in ISE cert sync: {e}")
+
             # Sleep for check_interval seconds
             time.sleep(self.check_interval)
+
+    def _check_ise_cert_sync(self):
+        """Check if ISE cert sync is due and execute if needed."""
+        settings = load_cert_sync_settings()
+
+        if not settings.get("enabled"):
+            return
+
+        interval_hours = settings.get("interval_hours", 24)
+        last_sync_ts = settings.get("last_sync_ts")
+
+        # Check if sync is due
+        if last_sync_ts:
+            try:
+                last_sync = datetime.fromisoformat(last_sync_ts)
+                next_sync = last_sync + timedelta(hours=interval_hours)
+                if datetime.now() < next_sync:
+                    return  # Not due yet
+            except (ValueError, TypeError):
+                pass  # Invalid timestamp, run sync
+
+        # Execute sync
+        self._execute_ise_cert_sync()
+
+    def _execute_ise_cert_sync(self):
+        """Execute ISE certificate sync."""
+        logger.info("Starting scheduled ISE certificate sync")
+
+        try:
+            nodes = get_enabled_ise_nodes()
+            if not nodes:
+                update_cert_sync_status(status="warning", message="No enabled ISE nodes configured")
+                return
+
+            certs, sync_errors = pull_ise_certs(nodes)
+            added = 0
+            skipped = 0
+
+            for cert in certs:
+                serial = cert.get("serial", "")
+                if serial and certificate_exists(serial):
+                    skipped += 1
+                    continue
+
+                insert_certificate(
+                    cn=cert.get("cn", "Unknown"),
+                    expires=cert.get("expires", "Unknown"),
+                    issued_to=cert.get("issued_to", ""),
+                    issued_by=cert.get("issued_by", ""),
+                    used_by=cert.get("used_by", ""),
+                    notes="",
+                    devices="",
+                    source_type="ise",
+                    source_ip=cert.get("source_ip", ""),
+                    source_hostname=cert.get("source_hostname", ""),
+                    serial=serial,
+                )
+                added += 1
+
+            if sync_errors:
+                error_count = len(sync_errors)
+                message = f"Synced {len(nodes)} node(s): {added} added, {skipped} existing, {error_count} error(s)"
+                update_cert_sync_status(status="warning", message=message)
+                logger.warning(f"ISE cert sync with errors: {message}")
+                for err in sync_errors:
+                    logger.warning(f"  - {err}")
+            else:
+                message = f"Synced {len(nodes)} node(s): {added} added, {skipped} existing"
+                update_cert_sync_status(status="success", message=message)
+                logger.info(f"ISE cert sync complete: {message}")
+
+        except Exception as e:
+            error_msg = f"Sync failed: {str(e)}"
+            update_cert_sync_status(status="error", message=error_msg)
+            logger.error(f"ISE cert sync failed: {e}")
 
     def _check_and_execute_schedules(self):
         """Check for due schedules and execute them."""

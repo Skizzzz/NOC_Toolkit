@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+{% block title %}ISE Nodes{% endblock %}
+{% block head_extra %}
+<style>
+  .node-card{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:16px;
+  }
+  .node-card.hidden{display:none;}
+  .node-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:12px;
+  }
+  .node-title{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .node-icon{
+    width:40px;
+    height:40px;
+    border-radius:10px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+  }
+  .node-info h3{margin:0; font-size:16px;}
+  .node-info .ip{color:var(--muted); font-size:13px; margin-top:2px;}
+  .node-status{
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .status-dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+  }
+  .status-dot.enabled{background:var(--success);}
+  .status-dot.disabled{background:var(--muted);}
+  .node-details{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:12px;
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px solid var(--border);
+  }
+  .detail-item{font-size:13px;}
+  .detail-label{color:var(--muted); margin-bottom:2px;}
+  .detail-value{font-weight:500;}
+  .node-actions{
+    display:flex;
+    gap:8px;
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px solid var(--border);
+    flex-wrap:wrap;
+  }
+
+  .add-node-form{
+    display:none;
+  }
+  .add-node-form.active{
+    display:block;
+  }
+  .sync-status{
+    margin-top:16px;
+    padding:16px;
+    background: color-mix(in oklab, var(--card) 90%, transparent);
+    border-radius:8px;
+  }
+
+  .search-bar{
+    display:flex;
+    gap:12px;
+    margin-bottom:20px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .search-bar input{
+    flex:1;
+    min-width:200px;
+  }
+  .search-count{
+    font-size:13px;
+    color:var(--muted);
+  }
+
+  .version-badge{
+    display:inline-block;
+    padding:2px 8px;
+    background:color-mix(in oklab, var(--info) 15%, transparent);
+    color:var(--info);
+    border-radius:4px;
+    font-size:11px;
+    font-weight:600;
+  }
+  .patch-badge{
+    display:inline-block;
+    padding:2px 8px;
+    background:color-mix(in oklab, var(--success) 15%, transparent);
+    color:var(--success);
+    border-radius:4px;
+    font-size:11px;
+    font-weight:600;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div style="max-width:900px; margin:0 auto;">
+  <div style="margin-bottom:24px;">
+    <a href="{{ url_for('cert_tracker') }}" class="muted" style="text-decoration:none;">&larr; Back to Certificate Tracker</a>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h2 style="margin:0;">ISE Nodes</h2>
+      <p class="muted" style="margin:4px 0 0;">Configure Cisco ISE nodes to automatically sync certificates</p>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn primary" onclick="toggleAddForm()">Add ISE Node</button>
+      <form method="post" action="{{ url_for('ise_sync_now') }}" style="display:inline;">
+        <button type="submit" class="btn">Sync All</button>
+      </form>
+      <form method="post" action="{{ url_for('ise_node_fetch_all_versions') }}" style="display:inline;">
+        <button type="submit" class="btn">Fetch All Versions</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sync Settings -->
+  <div class="card" style="margin-bottom:24px;">
+    <h3 style="margin:0 0 16px;">Auto-Sync Settings</h3>
+    <form method="post" action="{{ url_for('ise_nodes_settings') }}">
+      <div class="row" style="align-items:flex-end;">
+        <div class="field" style="flex:0 0 auto;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" name="enabled" {% if sync_settings.enabled %}checked{% endif %} style="width:auto;">
+            Enable Auto-Sync
+          </label>
+        </div>
+        <div class="field" style="max-width:200px;">
+          <label>Sync Interval</label>
+          <select name="interval_hours">
+            <option value="1" {% if sync_settings.interval_hours == 1 %}selected{% endif %}>Every hour</option>
+            <option value="6" {% if sync_settings.interval_hours == 6 %}selected{% endif %}>Every 6 hours</option>
+            <option value="12" {% if sync_settings.interval_hours == 12 %}selected{% endif %}>Every 12 hours</option>
+            <option value="24" {% if sync_settings.interval_hours == 24 %}selected{% endif %}>Every 24 hours</option>
+          </select>
+        </div>
+        <button type="submit" class="btn primary">Save Settings</button>
+      </div>
+      {% if sync_settings.last_sync_ts %}
+      <div class="sync-status">
+        <div class="detail-item">
+          <span class="detail-label">Last Sync:</span>
+          <span class="detail-value">{{ sync_settings.last_sync_ts }}</span>
+          <span class="badge {% if sync_settings.last_sync_status == 'success' %}success{% elif sync_settings.last_sync_status == 'error' %}error{% else %}neutral{% endif %}" style="margin-left:8px;">
+            {{ sync_settings.last_sync_status }}
+          </span>
+        </div>
+        {% if sync_settings.last_sync_message %}
+        <div class="detail-item" style="margin-top:8px;">
+          <span class="muted">{{ sync_settings.last_sync_message }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- Add Node Form -->
+  <div class="card add-node-form" id="addNodeForm" style="margin-bottom:24px;">
+    <h3 style="margin:0 0 16px;">Add ISE Node</h3>
+    <form method="post" action="{{ url_for('ise_node_add') }}">
+      <div class="grid" style="gap:16px;">
+        <div class="row">
+          <div class="field">
+            <label>Hostname</label>
+            <input type="text" name="hostname" placeholder="e.g., aaa01-campus" required>
+          </div>
+          <div class="field">
+            <label>IP Address</label>
+            <input type="text" name="ip" placeholder="e.g., 10.0.0.1" required>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>API Username</label>
+            <input type="text" name="username" placeholder="admin" required>
+          </div>
+          <div class="field">
+            <label>API Password</label>
+            <input type="password" name="password" required>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:12px;">
+        <button type="submit" class="btn primary">Add Node</button>
+        <button type="button" class="btn" onclick="toggleAddForm()">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Search Bar -->
+  {% if nodes %}
+  <div class="search-bar">
+    <input type="text" id="nodeSearch" placeholder="Search by hostname, IP, version, or patch..." oninput="filterNodes()">
+    <span class="search-count" id="searchCount">{{ nodes|length }} node(s)</span>
+  </div>
+  {% endif %}
+
+  <!-- Node List -->
+  {% if nodes %}
+  {% for node in nodes %}
+  <div class="node-card" data-hostname="{{ node.hostname|lower }}" data-ip="{{ node.ip }}" data-version="{{ node.ise_version or ''|lower }}" data-patch="{{ node.ise_patch or ''|lower }}">
+    <div class="node-header">
+      <div class="node-title">
+        <div class="node-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+            <line x1="6" y1="6" x2="6.01" y2="6"/>
+            <line x1="6" y1="18" x2="6.01" y2="18"/>
+          </svg>
+        </div>
+        <div class="node-info">
+          <h3>{{ node.hostname }}</h3>
+          <div class="ip">{{ node.ip }}</div>
+        </div>
+      </div>
+      <div class="node-status">
+        <span class="status-dot {% if node.enabled %}enabled{% else %}disabled{% endif %}"></span>
+        <span>{% if node.enabled %}Enabled{% else %}Disabled{% endif %}</span>
+      </div>
+    </div>
+
+    <div class="node-details">
+      <div class="detail-item">
+        <div class="detail-label">Username</div>
+        <div class="detail-value">{{ node.username }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">ISE Version</div>
+        <div class="detail-value">
+          {% if node.ise_version %}
+            <span class="version-badge">{{ node.ise_version }}</span>
+          {% else %}
+            <span class="muted">Not fetched</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Patch</div>
+        <div class="detail-value">
+          {% if node.ise_patch %}
+            <span class="patch-badge">{{ node.ise_patch }}</span>
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Last Sync</div>
+        <div class="detail-value">{{ node.last_sync or 'Never' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Sync Status</div>
+        <div class="detail-value">
+          {% if node.last_sync_status == 'success' %}
+            <span class="badge success">Success</span>
+          {% elif node.last_sync_status == 'error' %}
+            <span class="badge error">Error</span>
+          {% else %}
+            <span class="badge neutral">Pending</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if node.last_sync_message %}
+    <div style="margin-top:12px; font-size:13px; color:var(--muted);">
+      {{ node.last_sync_message }}
+    </div>
+    {% endif %}
+
+    <div class="node-actions">
+      <a href="{{ url_for('ise_node_edit', node_id=node.id) }}" class="btn">Edit</a>
+      <form method="post" action="{{ url_for('ise_node_toggle', node_id=node.id) }}" style="display:inline;">
+        <button type="submit" class="btn">{% if node.enabled %}Disable{% else %}Enable{% endif %}</button>
+      </form>
+      <form method="post" action="{{ url_for('ise_node_sync', node_id=node.id) }}" style="display:inline;">
+        <button type="submit" class="btn">Sync Certs</button>
+      </form>
+      <form method="post" action="{{ url_for('ise_node_fetch_version', node_id=node.id) }}" style="display:inline;">
+        <button type="submit" class="btn">Fetch Version</button>
+      </form>
+      {% if session.get('role') == 'superadmin' %}
+      <form method="post" action="{{ url_for('ise_node_delete', node_id=node.id) }}" style="display:inline;" onsubmit="return confirm('Delete this ISE node?');">
+        <button type="submit" class="btn" style="color:var(--error);">Delete</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="card" style="text-align:center; padding:48px;">
+    <h3 style="margin:0 0 8px;">No ISE nodes configured</h3>
+    <p class="muted" style="margin:0 0 16px;">Add ISE nodes to automatically sync certificates from your Cisco ISE deployments.</p>
+    <button class="btn primary" onclick="toggleAddForm()">Add Your First Node</button>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function toggleAddForm() {
+  const form = document.getElementById('addNodeForm');
+  form.classList.toggle('active');
+  if (form.classList.contains('active')) {
+    form.scrollIntoView({behavior: 'smooth', block: 'start'});
+    form.querySelector('input[name="hostname"]').focus();
+  }
+}
+
+function filterNodes() {
+  const query = document.getElementById('nodeSearch').value.toLowerCase().trim();
+  const cards = document.querySelectorAll('.node-card');
+  let visibleCount = 0;
+
+  cards.forEach(card => {
+    const hostname = card.dataset.hostname || '';
+    const ip = card.dataset.ip || '';
+    const version = card.dataset.version || '';
+    const patch = card.dataset.patch || '';
+
+    const matches = !query ||
+      hostname.includes(query) ||
+      ip.includes(query) ||
+      version.includes(query) ||
+      patch.includes(query);
+
+    if (matches) {
+      card.classList.remove('hidden');
+      visibleCount++;
+    } else {
+      card.classList.add('hidden');
+    }
+  });
+
+  document.getElementById('searchCount').textContent = visibleCount + ' node(s)';
+}
+</script>
+{% endblock %}

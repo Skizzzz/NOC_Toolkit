@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}Certificate Tracker{% endblock %}
+{% block head_extra %}
+<style>
+  .cert-stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:16px;
+    margin-bottom:24px;
+  }
+  .stat-card{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+    position:relative;
+  }
+  .stat-card::before{
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:3px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-radius:12px 12px 0 0;
+  }
+  .stat-card.warning::before{background:var(--warning);}
+  .stat-card.error::before{background:var(--error);}
+  .stat-card.success::before{background:var(--success);}
+  .stat-card.dark-red::before{background:#991b1b;}
+  .stat-card.light-red::before{background:#ef4444;}
+  .stat-card.orange::before{background:#f97316;}
+  .stat-card.yellow::before{background:#eab308;}
+  .stat-card:hover{transform:translateY(-2px); box-shadow:var(--shadow); cursor:pointer;}
+  .sortable{cursor:pointer; user-select:none;}
+  .sortable:hover{color:var(--accent);}
+  .sort-icon{margin-left:4px; opacity:0.5;}
+  .sort-icon.active{opacity:1; color:var(--accent);}
+  .stat-label{font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin-bottom:6px;}
+  .stat-value{font-size:28px; font-weight:700; line-height:1;}
+
+  .filter-bar{
+    display:flex;
+    gap:12px;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .filter-bar input[type="text"]{
+    flex:1;
+    min-width:200px;
+  }
+
+  .cert-table{width:100%; border-collapse:collapse; font-size:14px;}
+  .cert-table th, .cert-table td{
+    padding:10px 12px;
+    border:1px solid var(--border);
+    text-align:left;
+    vertical-align:middle;
+  }
+  .cert-table th{
+    background: color-mix(in oklab, var(--card) 94%, transparent);
+    font-weight:600;
+    white-space:nowrap;
+  }
+  .cert-table tbody tr:hover{
+    background: color-mix(in oklab, var(--accent) 5%, transparent);
+  }
+
+  /* Expiry status colors */
+  .exp-expired{background-color:rgba(239,68,68,0.15) !important;}
+  .exp-expired td{color:var(--error);}
+  .exp-critical{background-color:rgba(239,68,68,0.1) !important;}
+  .exp-warning{background-color:rgba(245,158,11,0.1) !important;}
+  .exp-caution{background-color:rgba(234,179,8,0.08) !important;}
+  .exp-ok{}
+  .exp-unknown{background-color:rgba(148,163,184,0.1) !important;}
+
+  .actions-cell{white-space:nowrap;}
+  .actions-cell .btn{padding:6px 10px; font-size:12px;}
+
+  .empty-state{
+    text-align:center;
+    padding:48px 24px;
+    color:var(--muted);
+  }
+  .empty-state h3{margin-bottom:8px;}
+
+  .source-badge{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:600;
+    text-transform:uppercase;
+  }
+  .source-badge.ise{background:color-mix(in oklab, var(--info) 15%, transparent); color:var(--info);}
+  .source-badge.upload{background:color-mix(in oklab, var(--success) 15%, transparent); color:var(--success);}
+</style>
+{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+  <div>
+    <h2 style="margin:0;">Certificate Tracker</h2>
+    <p class="muted" style="margin:4px 0 0;">Track and manage SSL/TLS certificates across your infrastructure</p>
+  </div>
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <a href="{{ url_for('cert_upload') }}" class="btn primary">Upload Certificate</a>
+    <a href="{{ url_for('cert_export', **request.args) }}" class="btn">Export CSV</a>
+    <button class="btn" onclick="document.getElementById('chainUploadModal').style.display='flex'">View Chain</button>
+    <a href="{{ url_for('cert_converter') }}" class="btn">Converter</a>
+    <a href="{{ url_for('ise_nodes') }}" class="btn">ISE Nodes</a>
+  </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="cert-stats">
+  <a href="{{ url_for('cert_tracker') }}" class="stat-card" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">Total Certificates</div>
+    <div class="stat-value">{{ stats.total }}</div>
+  </a>
+  <a href="{{ url_for('cert_tracker', status='expired') }}" class="stat-card dark-red" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">Expired</div>
+    <div class="stat-value">{{ stats.expired }}</div>
+  </a>
+  <a href="{{ url_for('cert_tracker', status='14') }}" class="stat-card light-red" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">Expiring in 14 Days</div>
+    <div class="stat-value">{{ stats.expiring_14 }}</div>
+  </a>
+  <a href="{{ url_for('cert_tracker', status='30') }}" class="stat-card orange" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">Expiring in 30 Days</div>
+    <div class="stat-value">{{ stats.expiring_30 }}</div>
+  </a>
+  <a href="{{ url_for('cert_tracker', status='60') }}" class="stat-card yellow" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">Expiring in 60 Days</div>
+    <div class="stat-value">{{ stats.expiring_60 }}</div>
+  </a>
+  <a href="{{ url_for('cert_tracker', source='ise') }}" class="stat-card success" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">ISE Synced</div>
+    <div class="stat-value">{{ stats.ise_synced }}</div>
+  </a>
+  <a href="{{ url_for('cert_tracker', source='upload') }}" class="stat-card" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">Uploaded</div>
+    <div class="stat-value">{{ stats.uploaded }}</div>
+  </a>
+</div>
+
+<!-- Filter Bar -->
+<div class="card" style="margin-bottom:16px;">
+  <form method="get" class="filter-bar" style="flex-wrap:wrap;">
+    <input type="text" name="cn" placeholder="CN..." value="{{ request.args.get('cn', '') }}" style="min-width:150px;">
+    <select name="status">
+      <option value="">All Status</option>
+      <option value="expired" {% if request.args.get('status') == 'expired' %}selected{% endif %}>Expired</option>
+      <option value="14" {% if request.args.get('status') == '14' %}selected{% endif %}>Expiring in 14 days</option>
+      <option value="30" {% if request.args.get('status') == '30' %}selected{% endif %}>Expiring in 30 days</option>
+      <option value="60" {% if request.args.get('status') == '60' %}selected{% endif %}>Expiring in 60 days</option>
+      <option value="ok" {% if request.args.get('status') == 'ok' %}selected{% endif %}>Valid (60+ days)</option>
+    </select>
+    <input type="text" name="issued_to" placeholder="Issued To..." value="{{ request.args.get('issued_to', '') }}" style="min-width:120px;">
+    <input type="text" name="issued_by" placeholder="Issued By..." value="{{ request.args.get('issued_by', '') }}" style="min-width:120px;">
+    <select name="source">
+      <option value="">All Sources</option>
+      <option value="ise" {% if request.args.get('source') == 'ise' %}selected{% endif %}>ISE Synced</option>
+      <option value="upload" {% if request.args.get('source') == 'upload' %}selected{% endif %}>Uploaded</option>
+    </select>
+    <input type="text" name="devices" placeholder="Devices..." value="{{ request.args.get('devices', '') }}" style="min-width:120px;">
+    <button type="submit" class="btn primary">Filter</button>
+    {% if request.args.get('cn') or request.args.get('source') or request.args.get('status') or request.args.get('issued_to') or request.args.get('issued_by') or request.args.get('devices') %}
+    <a href="{{ url_for('cert_tracker') }}" class="btn">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Certificates Table -->
+<div class="card">
+  {% if certs %}
+  <div style="overflow-x:auto;">
+    <table class="cert-table">
+      <thead>
+        <tr>
+          <th>CN</th>
+          <th>Expires</th>
+          <th class="sortable" onclick="sortByDays()">
+            Days Left
+            {% if sort_by == 'days' %}
+              <span class="sort-icon active">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+            {% else %}
+              <span class="sort-icon">▲</span>
+            {% endif %}
+          </th>
+          <th>Issued To</th>
+          <th>Issued By</th>
+          <th>Source</th>
+          <th>Devices</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cert in certs %}
+        <tr class="{{ cert.expiry_class }}">
+          <td><strong>{{ cert.cn or 'Unknown' }}</strong></td>
+          <td>{{ cert.expires_formatted }}</td>
+          <td>
+            {% if cert.days_left is not none %}
+              {% if cert.days_left < 0 %}
+                <span style="color:var(--error); font-weight:600;">Expired</span>
+              {% elif cert.days_left == 0 %}
+                <span style="color:var(--error); font-weight:600;">Today</span>
+              {% elif cert.days_left <= 7 %}
+                <span style="color:var(--error); font-weight:600;">{{ cert.days_left }}d</span>
+              {% elif cert.days_left <= 30 %}
+                <span style="color:var(--warning); font-weight:600;">{{ cert.days_left }}d</span>
+              {% else %}
+                {{ cert.days_left }}d
+              {% endif %}
+            {% else %}
+              <span class="muted">Unknown</span>
+            {% endif %}
+          </td>
+          <td>{{ cert.issued_to or '-' }}</td>
+          <td>{{ cert.issued_by or '-' }}</td>
+          <td>
+            {% if cert.source_type == 'ise' %}
+              <span class="source-badge ise">ISE</span>
+            {% else %}
+              <span class="source-badge upload">Upload</span>
+            {% endif %}
+          </td>
+          <td>{{ cert.devices or cert.source_hostname or '-' }}</td>
+          <td class="actions-cell">
+            <a href="{{ url_for('cert_view', cert_id=cert.id) }}" class="btn">View</a>
+            <a href="{{ url_for('cert_edit', cert_id=cert.id) }}" class="btn">Edit</a>
+            {% if session.get('role') == 'superadmin' %}
+            <form method="post" action="{{ url_for('cert_delete', cert_id=cert.id) }}" style="display:inline;" onsubmit="return confirm('Delete this certificate?');">
+              <button type="submit" class="btn" style="color:var(--error);">Delete</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h3>No certificates found</h3>
+    <p>Upload certificates or configure ISE nodes to sync certificates automatically.</p>
+    <div style="margin-top:16px; display:flex; gap:10px; justify-content:center;">
+      <a href="{{ url_for('cert_upload') }}" class="btn primary">Upload Certificate</a>
+      <a href="{{ url_for('ise_nodes') }}" class="btn">Configure ISE Nodes</a>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Chain Upload Modal -->
+<div id="chainUploadModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+  <div class="card" style="max-width:500px; width:90%; margin:20px;">
+    <h3 style="margin:0 0 16px;">View Certificate Chain</h3>
+    <p class="muted" style="margin:0 0 16px;">Upload a PEM file containing one or more certificates to view the full chain details.</p>
+    <form method="post" action="{{ url_for('cert_chain_view') }}" enctype="multipart/form-data">
+      <div class="field">
+        <label>Certificate File (.pem, .crt, .cer)</label>
+        <input type="file" name="cert_file" accept=".pem,.crt,.cer,.cert" required>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:12px;">
+        <button type="submit" class="btn primary">View Chain</button>
+        <button type="button" class="btn" onclick="document.getElementById('chainUploadModal').style.display='none'">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function sortByDays() {
+  const url = new URL(window.location.href);
+  const currentSort = url.searchParams.get('sort');
+  const currentDir = url.searchParams.get('dir') || 'asc';
+
+  url.searchParams.set('sort', 'days');
+
+  // Toggle direction if already sorting by days
+  if (currentSort === 'days') {
+    url.searchParams.set('dir', currentDir === 'asc' ? 'desc' : 'asc');
+  } else {
+    url.searchParams.set('dir', 'asc');
+  }
+
+  window.location.href = url.toString();
+}
+
+// Close modal on outside click
+document.getElementById('chainUploadModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    this.style.display = 'none';
+  }
+});
+</script>
+{% endblock %}

@@ -567,6 +567,74 @@ def init_db():
         cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_schedules_next_run ON bulk_ssh_schedules(next_run)")
         cx.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ssh_schedules_enabled ON bulk_ssh_schedules(enabled)")
 
+        # Certificate Tracker tables
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS certificates(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              cn TEXT,
+              expires TEXT,
+              issued_to TEXT,
+              issued_by TEXT,
+              used_by TEXT,
+              notes TEXT,
+              devices TEXT,
+              source_type TEXT,
+              source_ip TEXT,
+              source_hostname TEXT,
+              uploaded TEXT,
+              updated TEXT,
+              serial TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_certs_cn ON certificates(cn)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_certs_expires ON certificates(expires)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_certs_source ON certificates(source_type)")
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ise_nodes(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              hostname TEXT,
+              ip TEXT,
+              username TEXT,
+              password_encrypted TEXT,
+              enabled INTEGER DEFAULT 1,
+              last_sync TEXT,
+              last_sync_status TEXT,
+              last_sync_message TEXT,
+              created TEXT,
+              updated TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_ise_nodes_hostname ON ise_nodes(hostname)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_ise_nodes_ip ON ise_nodes(ip)")
+
+        # Add version and patch columns if they don't exist (migration)
+        try:
+            cx.execute("ALTER TABLE ise_nodes ADD COLUMN ise_version TEXT")
+        except Exception:
+            pass  # Column already exists
+        try:
+            cx.execute("ALTER TABLE ise_nodes ADD COLUMN ise_patch TEXT")
+        except Exception:
+            pass  # Column already exists
+
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cert_sync_settings(
+              id INTEGER PRIMARY KEY CHECK(id=1),
+              enabled INTEGER DEFAULT 0,
+              interval_hours INTEGER DEFAULT 24,
+              last_sync_ts TEXT,
+              last_sync_status TEXT,
+              last_sync_message TEXT
+            )
+            """
+        )
+
         _maybe_seed_change_logs(cx)
 
 
@@ -2073,3 +2141,458 @@ def fetch_due_bulk_ssh_schedules() -> List[dict]:
             return schedules
     except Exception:
         return []
+
+
+# ===================== CERTIFICATE TRACKER =====================
+
+
+def insert_certificate(
+    *,
+    cn: str,
+    expires: str,
+    issued_to: Optional[str] = None,
+    issued_by: Optional[str] = None,
+    used_by: Optional[str] = None,
+    notes: Optional[str] = None,
+    devices: Optional[str] = None,
+    source_type: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    source_hostname: Optional[str] = None,
+    serial: Optional[str] = None,
+) -> Optional[int]:
+    """Insert a new certificate and return its ID."""
+    now = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                INSERT INTO certificates(cn, expires, issued_to, issued_by, used_by, notes, devices,
+                                         source_type, source_ip, source_hostname, uploaded, updated, serial)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (cn, expires, issued_to, issued_by, used_by, notes, devices,
+                 source_type, source_ip, source_hostname, now, now, serial),
+            )
+            return cur.lastrowid
+    except Exception:
+        return None
+
+
+def update_certificate(
+    cert_id: int,
+    *,
+    cn: Optional[str] = None,
+    expires: Optional[str] = None,
+    issued_to: Optional[str] = None,
+    issued_by: Optional[str] = None,
+    used_by: Optional[str] = None,
+    notes: Optional[str] = None,
+    devices: Optional[str] = None,
+) -> bool:
+    """Update certificate fields. Only non-None values are updated."""
+    updates = []
+    params = []
+    if cn is not None:
+        updates.append("cn=?")
+        params.append(cn)
+    if expires is not None:
+        updates.append("expires=?")
+        params.append(expires)
+    if issued_to is not None:
+        updates.append("issued_to=?")
+        params.append(issued_to)
+    if issued_by is not None:
+        updates.append("issued_by=?")
+        params.append(issued_by)
+    if used_by is not None:
+        updates.append("used_by=?")
+        params.append(used_by)
+    if notes is not None:
+        updates.append("notes=?")
+        params.append(notes)
+    if devices is not None:
+        updates.append("devices=?")
+        params.append(devices)
+
+    if not updates:
+        return False
+
+    updates.append("updated=?")
+    params.append(datetime.now().isoformat(timespec="seconds"))
+    params.append(cert_id)
+
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                f"UPDATE certificates SET {', '.join(updates)} WHERE id=?",
+                params,
+            )
+            return True
+    except Exception:
+        return False
+
+
+def delete_certificate(cert_id: int) -> bool:
+    """Delete a certificate by ID."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute("DELETE FROM certificates WHERE id=?", (cert_id,))
+            return True
+    except Exception:
+        return False
+
+
+def get_certificate(cert_id: int) -> Optional[Dict]:
+    """Get a single certificate by ID."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT * FROM certificates WHERE id=?", (cert_id,)).fetchone()
+            return dict(row) if row else None
+    except Exception:
+        return None
+
+
+def list_certificates(
+    *,
+    cn_filter: Optional[str] = None,
+    source_type: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    limit: int = 500,
+) -> List[Dict]:
+    """List certificates with optional filters."""
+    where = []
+    params = []
+
+    if cn_filter:
+        where.append("LOWER(cn) LIKE ?")
+        params.append(f"%{cn_filter.lower()}%")
+    if source_type:
+        where.append("source_type=?")
+        params.append(source_type)
+    if source_ip:
+        where.append("source_ip=?")
+        params.append(source_ip)
+
+    where_clause = " WHERE " + " AND ".join(where) if where else ""
+    params.append(limit)
+
+    try:
+        with _DB_LOCK, _conn() as cx:
+            rows = cx.execute(
+                f"SELECT * FROM certificates{where_clause} ORDER BY expires LIMIT ?",
+                params,
+            ).fetchall()
+            return [dict(row) for row in rows]
+    except Exception:
+        return []
+
+
+def get_certificate_stats() -> Dict:
+    """Get certificate statistics for dashboard."""
+    try:
+        from dateutil import parser as date_parser
+        now = datetime.now()
+
+        with _DB_LOCK, _conn() as cx:
+            rows = cx.execute("SELECT expires, source_type FROM certificates").fetchall()
+
+            total = len(rows)
+            expired = 0
+            expiring_14 = 0
+            expiring_30 = 0
+            expiring_60 = 0
+            ise_count = 0
+            uploaded_count = 0
+
+            for row in rows:
+                expires_str = row[0] or ""
+                source_type = row[1] or ""
+
+                # Count expired and expiring certificates by parsing the date
+                if expires_str:
+                    try:
+                        exp_date = date_parser.parse(expires_str, fuzzy=True)
+                        # Make both timezone-naive for comparison
+                        if exp_date.tzinfo:
+                            exp_date = exp_date.replace(tzinfo=None)
+
+                        days_left = (exp_date - now).days
+
+                        if days_left < 0:
+                            expired += 1
+                        elif days_left <= 14:
+                            expiring_14 += 1
+                        elif days_left <= 30:
+                            expiring_30 += 1
+                        elif days_left <= 60:
+                            expiring_60 += 1
+                    except (ValueError, TypeError):
+                        pass
+
+                # Count by source type
+                if source_type == 'ise':
+                    ise_count += 1
+                elif source_type == 'upload' or not source_type:
+                    uploaded_count += 1
+
+            return {
+                "total": total,
+                "expired": expired,
+                "expiring_14": expiring_14,
+                "expiring_30": expiring_30,
+                "expiring_60": expiring_60,
+                "ise_synced": ise_count,
+                "uploaded": uploaded_count,
+            }
+    except Exception:
+        return {"total": 0, "expired": 0, "expiring_14": 0, "expiring_30": 0, "expiring_60": 0, "ise_synced": 0, "uploaded": 0}
+
+
+def certificate_exists(serial: str) -> bool:
+    """Check if a certificate with the same serial number already exists."""
+    if not serial:
+        return False
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute(
+                "SELECT 1 FROM certificates WHERE serial=? LIMIT 1",
+                (serial,),
+            ).fetchone()
+            return row is not None
+    except Exception:
+        return False
+
+
+# ===================== ISE NODE MANAGEMENT =====================
+
+
+def insert_ise_node(
+    *,
+    hostname: str,
+    ip: str,
+    username: str,
+    password: str,
+    enabled: bool = True,
+) -> Optional[int]:
+    """Insert a new ISE node and return its ID."""
+    now = datetime.now().isoformat(timespec="seconds")
+    password_enc = _encrypt_secret(password)
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cur = cx.execute(
+                """
+                INSERT INTO ise_nodes(hostname, ip, username, password_encrypted, enabled, created, updated)
+                VALUES(?,?,?,?,?,?,?)
+                """,
+                (hostname, ip, username, password_enc, 1 if enabled else 0, now, now),
+            )
+            return cur.lastrowid
+    except Exception:
+        return None
+
+
+def update_ise_node(
+    node_id: int,
+    *,
+    hostname: Optional[str] = None,
+    ip: Optional[str] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    enabled: Optional[bool] = None,
+) -> bool:
+    """Update ISE node fields."""
+    updates = []
+    params = []
+
+    if hostname is not None:
+        updates.append("hostname=?")
+        params.append(hostname)
+    if ip is not None:
+        updates.append("ip=?")
+        params.append(ip)
+    if username is not None:
+        updates.append("username=?")
+        params.append(username)
+    if password is not None:
+        updates.append("password_encrypted=?")
+        params.append(_encrypt_secret(password))
+    if enabled is not None:
+        updates.append("enabled=?")
+        params.append(1 if enabled else 0)
+
+    if not updates:
+        return False
+
+    updates.append("updated=?")
+    params.append(datetime.now().isoformat(timespec="seconds"))
+    params.append(node_id)
+
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                f"UPDATE ise_nodes SET {', '.join(updates)} WHERE id=?",
+                params,
+            )
+            return True
+    except Exception:
+        return False
+
+
+def update_ise_node_sync_status(
+    node_id: int,
+    *,
+    status: str,
+    message: str = "",
+) -> bool:
+    """Update the sync status of an ISE node."""
+    now = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE ise_nodes SET last_sync=?, last_sync_status=?, last_sync_message=? WHERE id=?",
+                (now, status, message, node_id),
+            )
+            return True
+    except Exception:
+        return False
+
+
+def update_ise_node_version(
+    node_id: int,
+    *,
+    version: str = "",
+    patch: str = "",
+) -> bool:
+    """Update the version and patch info of an ISE node."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE ise_nodes SET ise_version=?, ise_patch=? WHERE id=?",
+                (version, patch, node_id),
+            )
+            return True
+    except Exception:
+        return False
+
+
+def delete_ise_node(node_id: int) -> bool:
+    """Delete an ISE node by ID."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute("DELETE FROM ise_nodes WHERE id=?", (node_id,))
+            return True
+    except Exception:
+        return False
+
+
+def get_ise_node(node_id: int) -> Optional[Dict]:
+    """Get a single ISE node by ID (with decrypted password)."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT * FROM ise_nodes WHERE id=?", (node_id,)).fetchone()
+            if not row:
+                return None
+            node = dict(row)
+            node["password"] = _decrypt_secret(node.get("password_encrypted", ""))
+            return node
+    except Exception:
+        return None
+
+
+def list_ise_nodes(*, include_passwords: bool = False) -> List[Dict]:
+    """List all ISE nodes."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            rows = cx.execute("SELECT * FROM ise_nodes ORDER BY hostname").fetchall()
+            nodes = []
+            for row in rows:
+                node = dict(row)
+                if include_passwords:
+                    node["password"] = _decrypt_secret(node.get("password_encrypted", ""))
+                else:
+                    node["password"] = "***" if node.get("password_encrypted") else ""
+                nodes.append(node)
+            return nodes
+    except Exception:
+        return []
+
+
+def get_enabled_ise_nodes() -> List[Dict]:
+    """Get all enabled ISE nodes with decrypted passwords for sync."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            rows = cx.execute(
+                "SELECT * FROM ise_nodes WHERE enabled=1 ORDER BY hostname"
+            ).fetchall()
+            nodes = []
+            for row in rows:
+                node = dict(row)
+                node["password"] = _decrypt_secret(node.get("password_encrypted", ""))
+                nodes.append(node)
+            return nodes
+    except Exception:
+        return []
+
+
+# ===================== CERT SYNC SETTINGS =====================
+
+
+def load_cert_sync_settings() -> Dict:
+    """Load certificate sync settings."""
+    defaults = {
+        "enabled": False,
+        "interval_hours": 24,
+        "last_sync_ts": None,
+        "last_sync_status": "never",
+        "last_sync_message": "",
+    }
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT * FROM cert_sync_settings WHERE id=1").fetchone()
+            if row:
+                return {
+                    "enabled": bool(row["enabled"]),
+                    "interval_hours": row["interval_hours"] or 24,
+                    "last_sync_ts": row["last_sync_ts"],
+                    "last_sync_status": row["last_sync_status"] or "never",
+                    "last_sync_message": row["last_sync_message"] or "",
+                }
+    except Exception:
+        pass
+    return defaults
+
+
+def save_cert_sync_settings(settings: Dict) -> bool:
+    """Save certificate sync settings."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT OR REPLACE INTO cert_sync_settings(id, enabled, interval_hours, last_sync_ts, last_sync_status, last_sync_message)
+                VALUES(1, ?, ?, ?, ?, ?)
+                """,
+                (
+                    1 if settings.get("enabled") else 0,
+                    settings.get("interval_hours", 24),
+                    settings.get("last_sync_ts"),
+                    settings.get("last_sync_status"),
+                    settings.get("last_sync_message"),
+                ),
+            )
+            return True
+    except Exception:
+        return False
+
+
+def update_cert_sync_status(*, status: str, message: str = "") -> bool:
+    """Update the last sync status."""
+    now = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE cert_sync_settings SET last_sync_ts=?, last_sync_status=?, last_sync_message=? WHERE id=1",
+                (now, status, message),
+            )
+            return True
+    except Exception:
+        return False

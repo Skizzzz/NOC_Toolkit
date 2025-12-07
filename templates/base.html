@@ -511,6 +511,29 @@
           </a>
         </div>
 
+        <div class="nav-section">
+          <div class="nav-section-title">Certificates</div>
+          <a href="{{ url_for('cert_tracker') }}" class="nav-item {% if request.endpoint in ['cert_tracker', 'cert_upload', 'cert_edit'] %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            <span>Certificate Tracker</span>
+          </a>
+          <a href="{{ url_for('cert_converter') }}" class="nav-item {% if request.endpoint == 'cert_converter' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M8 7h12M8 12h12M8 17h12M3 7h.01M3 12h.01M3 17h.01"/>
+            </svg>
+            <span>Cert Converter</span>
+          </a>
+          <a href="{{ url_for('ise_nodes') }}" class="nav-item {% if request.endpoint in ['ise_nodes', 'ise_node_edit'] %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="2" width="16" height="6" rx="2"/><rect x="2" y="12" width="16" height="6" rx="2"/>
+              <circle cx="5" cy="5" r="1"/><circle cx="5" cy="15" r="1"/>
+            </svg>
+            <span>ISE Nodes</span>
+          </a>
+        </div>
+
         {% if session.get('user_id') %}
         <div style="margin-top:auto; padding:16px; border-top:1px solid var(--border);">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
