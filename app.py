@@ -27,6 +27,7 @@ from tools.global_config import (
 from tools.push_config import push_config_lines, show_run_full, show_run_interfaces
 
 from tools.wlc_inventory import get_ap_inventory_many, make_ap_csv
+from tools.aruba_controller import get_aruba_ap_inventory_many
 
 from tools.wlc_rf import get_rf_summary_many, collect_rf_samples
 from tools.wlc_clients import RE_TOTAL
@@ -52,6 +53,11 @@ from tools.security import (
     migrate_existing_passwords,
     change_password,
     create_user,
+    get_kb_access_level,
+    can_user_create_kb,
+    can_view_kb_article,
+    require_kb_create,
+    require_page_enabled,
 )
 
 from tools.db_jobs import (
@@ -123,6 +129,13 @@ from tools.db_jobs import (
     load_cert_sync_settings,
     save_cert_sync_settings,
     update_cert_sync_status,
+    # Customer dashboard functions
+    get_organizations_from_nodes,
+    fetch_customer_dashboard_metrics,
+    # Page visibility functions
+    get_page_settings,
+    get_enabled_pages,
+    bulk_update_page_settings,
 )
 
 from tools.cert_tracker import (
@@ -152,6 +165,13 @@ init_db()
 init_security_db()
 migrate_existing_passwords()
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-me-in-prod-use-env-var")
+
+
+@app.context_processor
+def inject_enabled_pages():
+    """Inject enabled_pages into all templates for navigation filtering."""
+    return {"enabled_pages": get_enabled_pages()}
+
 
 _DASHBOARD_SETTINGS_LOCK = threading.Lock()
 _DASHBOARD_WAKE = threading.Event()
@@ -1767,6 +1787,8 @@ def profile():
 @require_superadmin
 def admin_users():
     """User management (superadmin only)"""
+    import sqlite3
+
     if request.method == "POST":
         action = request.form.get("action")
 
@@ -1774,24 +1796,91 @@ def admin_users():
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             role = request.form.get("role", "user")
+            kb_access_level = request.form.get("kb_access_level", "FSR")
+            can_create_kb = 1 if request.form.get("can_create_kb") else 0
 
             if len(password) < 8:
                 flash("Password must be at least 8 characters", "error")
             elif create_user(username, password, role):
+                # Update KB permissions for the new user
+                conn = sqlite3.connect("noc_toolkit.db")
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE users SET kb_access_level = ?, can_create_kb = ? WHERE username = ?",
+                    (kb_access_level, can_create_kb, username)
+                )
+                conn.commit()
+                conn.close()
                 log_audit(session["username"], "user_create", resource=username, user_id=session["user_id"])
                 flash(f"User '{username}' created successfully", "success")
             else:
                 flash(f"Username '{username}' already exists", "error")
 
-    # Fetch all users
-    import sqlite3
+        elif action == "update_kb":
+            user_id = request.form.get("user_id")
+            kb_access_level = request.form.get("kb_access_level", "FSR")
+            can_create_kb = 1 if request.form.get("can_create_kb") else 0
+
+            conn = sqlite3.connect("noc_toolkit.db")
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE users SET kb_access_level = ?, can_create_kb = ? WHERE id = ?",
+                (kb_access_level, can_create_kb, user_id)
+            )
+            conn.commit()
+            conn.close()
+            flash("User KB permissions updated", "success")
+
+    # Fetch all users including KB permissions
     conn = sqlite3.connect("noc_toolkit.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, role, created_at, last_login FROM users ORDER BY id")
-    users = [{"id": r[0], "username": r[1], "role": r[2], "created_at": r[3], "last_login": r[4]} for r in cursor.fetchall()]
+    cursor.execute("SELECT id, username, role, created_at, last_login, kb_access_level, can_create_kb FROM users ORDER BY id")
+    users = [{
+        "id": r[0],
+        "username": r[1],
+        "role": r[2],
+        "created_at": r[3],
+        "last_login": r[4],
+        "kb_access_level": r[5] or "FSR",
+        "can_create_kb": r[6] or 0
+    } for r in cursor.fetchall()]
     conn.close()
 
     return render_template("admin_users.html", users=users)
+
+
+@app.route("/admin/page-settings", methods=["GET", "POST"])
+@require_superadmin
+def admin_page_settings():
+    """Page visibility settings (superadmin only)."""
+    if request.method == "POST":
+        # Get all page keys from form and update settings
+        all_pages = get_page_settings()
+        updates = {}
+        for page in all_pages:
+            key = page["page_key"]
+            # If checkbox is checked, it will be in form data
+            enabled = request.form.get(f"page_{key}") == "on"
+            updates[key] = enabled
+
+        if bulk_update_page_settings(updates):
+            log_audit(session["username"], "page_settings_update", user_id=session["user_id"])
+            flash("Page visibility settings updated.", "success")
+        else:
+            flash("Failed to update page settings.", "error")
+
+        return redirect(url_for("admin_page_settings"))
+
+    # Group pages by category
+    pages = get_page_settings()
+    pages_by_category = {}
+    for page in pages:
+        cat = page.get("category") or "Other"
+        if cat not in pages_by_category:
+            pages_by_category[cat] = []
+        pages_by_category[cat].append(page)
+
+    return render_template("admin_page_settings.html", pages_by_category=pages_by_category)
 
 
 # ====================== HOME ======================
@@ -1861,6 +1950,7 @@ def dashboard_stats():
 # ====================== JOBS CENTER ======================
 @app.get("/jobs")
 @require_login
+@require_page_enabled("jobs_center")
 def jobs_center():
     """Unified jobs center - all background jobs across all tools"""
     all_jobs = db_list_jobs(limit=500)
@@ -2255,6 +2345,7 @@ def api_job_progress(job_id):
 # ====================== INTERFACE CONFIG SEARCH ======================
 @app.get("/tools/phrase-search")
 @require_login
+@require_page_enabled("tool_phrase_search")
 def tool_phrase_search():
     node_options = _solar_node_options()
     return render_template("phrase_search.html", node_options=node_options)
@@ -2343,6 +2434,7 @@ def download_csv():
 # ====================== TOPOLOGY REPORT ======================
 @app.get("/tools/topology")
 @require_login
+@require_page_enabled("topology_tool")
 def topology_tool():
     nodes = fetch_solarwinds_nodes()
     node_options = _solar_node_options(nodes)
@@ -2982,6 +3074,7 @@ def actions_status(job_id):
 
 @app.get("/changes")
 @require_login
+@require_page_enabled("changes_list")
 def changes_list():
     raw_changes = list_change_windows(limit=200)
     records = []
@@ -3131,6 +3224,7 @@ def change_trigger_rollback(change_id):
 # ====================== GLOBAL CONFIG SEARCH/APPLY ======================
 @app.get("/tools/global-config")
 @require_login
+@require_page_enabled("tool_global_config")
 def tool_global_config():
     node_options = _solar_node_options()
     return render_template("global_config.html", node_options=node_options)
@@ -3329,6 +3423,7 @@ def _filter_rows(rows, username=None, tool=None, result=None, ip=None, q=None, d
 
 @app.get("/logs")
 @require_superadmin
+@require_page_enabled("audit_logs")
 def audit_logs():
     username = (request.args.get("username") or "").strip() or None
     tool = (request.args.get("tool") or "").strip() or None
@@ -3422,8 +3517,17 @@ def audit_logs_download():
 
 @app.get("/tools/wlc-inventory")
 @require_login
+@require_page_enabled("wlc_inventory")
 def wlc_inventory():
-    return render_template("wlc_inventory.html")
+    # Get auto-discovered hosts from dashboard settings
+    settings = _get_dashboard_settings()
+    cisco_hosts = settings.get("hosts") or []
+    aruba_hosts = settings.get("aruba_hosts") or []
+    return render_template(
+        "wlc_inventory.html",
+        cisco_hosts=cisco_hosts,
+        aruba_hosts=aruba_hosts,
+    )
 
 @app.post("/tools/wlc-inventory/run")
 @require_login
@@ -3436,6 +3540,9 @@ def wlc_inventory_run():
 
     max_workers = _clamp_workers(request.form.get("max_workers"), len(hosts), default=10, upper=50)
 
+    # Controller type: cisco (default) or aruba
+    controller_type = (request.form.get("controller_type") or "cisco").strip().lower()
+
     # Optional filters
     f_ap    = (request.form.get("f_ap") or "").strip().lower()
     f_state = (request.form.get("f_state") or "").strip().lower()
@@ -3444,8 +3551,25 @@ def wlc_inventory_run():
         flash("Hosts, username, and password are required.")
         return redirect(url_for("wlc_inventory"))
 
-    # Collect inventory in parallel
-    rows, errors = get_ap_inventory_many(hosts, username, password, secret, max_workers=max_workers)
+    # Build IP-to-hostname mapping from SolarWinds nodes
+    solar_nodes = fetch_solarwinds_nodes()
+    ip_to_hostname: Dict[str, str] = {}
+    for node in solar_nodes:
+        node_ip = (node.get("ip_address") or "").strip()
+        node_hostname = (node.get("caption") or "").strip()
+        if node_ip and node_hostname:
+            ip_to_hostname[node_ip] = node_hostname
+
+    # Collect inventory in parallel based on controller type
+    if controller_type == "aruba":
+        rows, errors = get_aruba_ap_inventory_many(hosts, username, password, secret, max_workers=max_workers)
+    else:
+        rows, errors = get_ap_inventory_many(hosts, username, password, secret, max_workers=max_workers)
+
+    # Add WLC hostname from SolarWinds to each row
+    for row in rows:
+        wlc_ip = row.get("wlc", "")
+        row["wlc_hostname"] = ip_to_hostname.get(wlc_ip, "")
 
     # Apply optional filters
     def keep(r):
@@ -3464,10 +3588,10 @@ def wlc_inventory_run():
     with open(file_path, "w", newline="") as f:
         f.write(csv_text)
 
-    # Per-WLC summary
+    # Per-WLC summary (include hostname)
     from collections import Counter
     per_counts = Counter(r.get("wlc", "") for r in rows)
-    per_wlc = [{"wlc": w, "count": c} for w, c in per_counts.most_common()]
+    per_wlc = [{"wlc": w, "wlc_hostname": ip_to_hostname.get(w, ""), "count": c} for w, c in per_counts.most_common()]
     total_aps = len(rows)
 
     # Quick summary message
@@ -3493,13 +3617,13 @@ def wlc_inventory_download():
     if not os.path.exists(path):
         return Response("CSV not found (token expired or invalid).", status=404)
 
+    # Use absolute path for send_file
+    abs_path = os.path.abspath(path)
     return send_file(
-        path,
+        abs_path,
         mimetype="text/csv",
         as_attachment=True,
         download_name="wlc_ap_inventory.csv",
-        max_age=0,
-        conditional=True,
     )
 
 # ====================== WLC RF ======================
@@ -3521,6 +3645,7 @@ def _make_rf_csv(rows):
 
 @app.get("/tools/wlc-rf")
 @require_login
+@require_page_enabled("wlc_rf")
 def wlc_rf():
     return render_template("wlc_rf.html")
 
@@ -4061,6 +4186,7 @@ def _format_timezone_dt(dt: Optional[datetime], settings: dict) -> Tuple[Optiona
 
 @app.get("/tools/wlc/summer-guest")
 @require_login
+@require_page_enabled("wlc_summer_guest")
 def wlc_summer_guest():
     settings = _get_summer_settings()
     summary = settings.get("summary")
@@ -4084,35 +4210,6 @@ def wlc_summer_guest():
     targets.setdefault("profile_names", settings.get("profile_names") or [])
     targets.setdefault("wlan_ids", settings.get("wlan_ids") or [])
     targets.setdefault("auto_prefix", settings.get("auto_prefix") or "Summer")
-    hosts_list = settings.get("hosts") or []
-    upcoming_map = fetch_upcoming_changes_for_hosts("wlc-summer-toggle", hosts_list)
-    host_status = summary.setdefault("host_status", [])
-    existing_hosts = set()
-    for entry in host_status:
-        host = entry.get("host")
-        if not host:
-            continue
-        existing_hosts.add(host)
-        entry.setdefault("display", entry.get("host", host))
-        change_indicator = _build_change_indicator(upcoming_map.get(host))
-        if change_indicator:
-            entry["upcoming_change"] = change_indicator
-    for host in hosts_list:
-        if host in existing_hosts:
-            continue
-        placeholder = {
-            "host": host,
-            "display": host,
-            "ok": False,
-            "message": "Awaiting poll.",
-            "entries": [],
-            "errors": [],
-        }
-        change_indicator = _build_change_indicator(upcoming_map.get(host))
-        if change_indicator:
-            placeholder["upcoming_change"] = change_indicator
-        host_status.append(placeholder)
-    summary["total_hosts"] = len(hosts_list)
     hosts_list = settings.get("hosts") or []
     upcoming_map = fetch_upcoming_changes_for_hosts("wlc-summer-toggle", hosts_list)
     host_status = summary.setdefault("host_status", [])
@@ -4526,6 +4623,7 @@ def wlc_summer_guest_settings():
 
 @app.get("/tools/solarwinds/nodes")
 @require_login
+@require_page_enabled("solarwinds_nodes")
 def solarwinds_nodes():
     settings = _get_solar_settings()
     nodes = fetch_solarwinds_nodes()
@@ -4597,6 +4695,7 @@ def solarwinds_nodes_settings():
 
 @app.get("/tools/wlc/dashboard")
 @require_login
+@require_page_enabled("wlc_dashboard")
 def wlc_dashboard():
     selected = request.args.get("range", "24h")
     if selected not in _DASHBOARD_RANGE_TO_HOURS:
@@ -4829,6 +4928,7 @@ def wlc_jobs_overview():
 # =================== Bulk SSH ======================
 @app.route("/tools/bulk-ssh")
 @require_login
+@require_page_enabled("bulk_ssh")
 def bulk_ssh():
     """Bulk SSH terminal page."""
     return render_template("bulk_ssh.html")
@@ -4847,6 +4947,7 @@ def bulk_ssh_execute():
     device_type = request.form.get("device_type", "cisco_ios")
     max_workers = int(request.form.get("max_workers", 10))
     timeout = int(request.form.get("timeout", 60))
+    config_mode = request.form.get("config_mode", "0") == "1"
 
     # Parse device list
     devices = []
@@ -4875,11 +4976,12 @@ def bulk_ssh_execute():
 
     # Log to audit trail
     current_user = session.get("username", "unknown")
+    mode_label = "Config Mode" if config_mode else "Show Commands"
     log_audit(
         current_user,
         "bulk_ssh_execute",
         resource=f"{len(devices)} devices",
-        details=f"Command: {command[:100]}{'...' if len(command) > 100 else ''} | Job ID: {job_id}",
+        details=f"Command: {command[:100]}{'...' if len(command) > 100 else ''} | Mode: {mode_label} | Job ID: {job_id}",
         user_id=session.get("user_id")
     )
 
@@ -4894,6 +4996,7 @@ def bulk_ssh_execute():
             max_workers=max_workers,
             timeout=timeout,
             job_id=job_id,
+            config_mode=config_mode,
         )
         job.execute()
 
@@ -5267,6 +5370,7 @@ def bulk_ssh_schedule_delete(schedule_id: int):
 # ====================== Certificate Tracker ======================
 @app.route("/certs")
 @require_login
+@require_page_enabled("cert_tracker")
 def cert_tracker():
     """Main certificate tracker dashboard."""
     certs = list_certificates()
@@ -5579,6 +5683,7 @@ def cert_chain_view():
 
 @app.route("/certs/converter", methods=["GET", "POST"])
 @require_login
+@require_page_enabled("cert_converter")
 def cert_converter():
     """Certificate format converter."""
     error = None
@@ -5699,6 +5804,7 @@ def cert_converter():
 # ====================== ISE Node Management ======================
 @app.route("/ise-nodes")
 @require_login
+@require_page_enabled("ise_nodes")
 def ise_nodes():
     """ISE node management page."""
     nodes = list_ise_nodes()
@@ -6009,6 +6115,256 @@ def ise_node_fetch_all_versions():
 
     return redirect(url_for('ise_nodes'))
 # =================== /ISE Node Management ======================
+
+
+# ====================== KNOWLEDGE BASE ======================
+import sqlite3 as kb_sqlite
+
+def get_kb_articles_for_user(user_id: int):
+    """Get all KB articles visible to a user based on their access level."""
+    access_level = get_kb_access_level(user_id) if user_id else 'FSR'
+
+    conn = kb_sqlite.connect("noc_toolkit.db")
+    conn.row_factory = kb_sqlite.Row
+    cursor = conn.cursor()
+
+    # Get all articles and filter by visibility
+    cursor.execute("""
+        SELECT a.*, u.username as author_name
+        FROM kb_articles a
+        LEFT JOIN users u ON a.created_by = u.id
+        ORDER BY a.updated_at DESC
+    """)
+
+    all_articles = cursor.fetchall()
+    conn.close()
+
+    # Filter based on user access level
+    visible_articles = []
+    for article in all_articles:
+        if can_view_kb_article(access_level, article['visibility']):
+            visible_articles.append(dict(article))
+
+    return visible_articles
+
+
+def get_kb_article(article_id: int):
+    """Get a single KB article by ID."""
+    conn = kb_sqlite.connect("noc_toolkit.db")
+    conn.row_factory = kb_sqlite.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT a.*, u.username as author_name
+        FROM kb_articles a
+        LEFT JOIN users u ON a.created_by = u.id
+        WHERE a.id = ?
+    """, (article_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_kb_article(title: str, subject: str, content: str, visibility: str, created_by: int) -> int:
+    """Create a new KB article and return its ID."""
+    conn = kb_sqlite.connect("noc_toolkit.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO kb_articles (title, subject, content, visibility, created_by)
+        VALUES (?, ?, ?, ?, ?)
+    """, (title, subject, content, visibility, created_by))
+    article_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return article_id
+
+
+def update_kb_article(article_id: int, title: str, subject: str, content: str, visibility: str):
+    """Update an existing KB article."""
+    conn = kb_sqlite.connect("noc_toolkit.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE kb_articles
+        SET title = ?, subject = ?, content = ?, visibility = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (title, subject, content, visibility, article_id))
+    conn.commit()
+    conn.close()
+
+
+def delete_kb_article(article_id: int):
+    """Delete a KB article."""
+    conn = kb_sqlite.connect("noc_toolkit.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM kb_articles WHERE id = ?", (article_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_kb_subjects():
+    """Get all unique subjects from KB articles."""
+    conn = kb_sqlite.connect("noc_toolkit.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT subject FROM kb_articles ORDER BY subject")
+    subjects = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return subjects
+
+
+@app.route("/knowledge-base")
+@require_login
+@require_page_enabled("knowledge_base")
+def knowledge_base():
+    """Knowledge Base main page - list all visible articles."""
+    user_id = session.get('user_id')
+    articles = get_kb_articles_for_user(user_id)
+    subjects = get_kb_subjects()
+    can_create = can_user_create_kb(user_id)
+    user_access_level = get_kb_access_level(user_id)
+
+    # Filter by subject if provided
+    subject_filter = request.args.get('subject', '')
+    if subject_filter:
+        articles = [a for a in articles if a['subject'] == subject_filter]
+
+    # Search by title/content if provided
+    search_query = request.args.get('q', '')
+    if search_query:
+        search_lower = search_query.lower()
+        articles = [a for a in articles if search_lower in a['title'].lower() or search_lower in a['content'].lower()]
+
+    return render_template(
+        "knowledge_base.html",
+        articles=articles,
+        subjects=subjects,
+        can_create=can_create,
+        user_access_level=user_access_level,
+        subject_filter=subject_filter,
+        search_query=search_query,
+    )
+
+
+@app.route("/knowledge-base/create", methods=["GET", "POST"])
+@require_login
+@require_kb_create
+def knowledge_base_create():
+    """Create a new KB article."""
+    if request.method == "POST":
+        title = request.form.get('title', '').strip()
+        subject = request.form.get('subject', '').strip()
+        content = request.form.get('content', '').strip()
+        visibility = request.form.get('visibility', 'FSR')
+
+        if not title or not subject or not content:
+            flash("Title, subject, and content are required.", "error")
+            return render_template("knowledge_base_form.html", mode="create", article={
+                'title': title, 'subject': subject, 'content': content, 'visibility': visibility
+            }, subjects=get_kb_subjects())
+
+        article_id = create_kb_article(title, subject, content, visibility, session['user_id'])
+        log_audit(session.get('username', 'unknown'), 'kb_create', f'article:{article_id}', f'Created KB article: {title}')
+        flash("Knowledge base article created successfully.", "success")
+        return redirect(url_for('knowledge_base_view', article_id=article_id))
+
+    return render_template("knowledge_base_form.html", mode="create", article={}, subjects=get_kb_subjects())
+
+
+@app.route("/knowledge-base/<int:article_id>")
+@require_login
+def knowledge_base_view(article_id):
+    """View a KB article."""
+    article = get_kb_article(article_id)
+    if not article:
+        flash("Article not found.", "error")
+        return redirect(url_for('knowledge_base'))
+
+    # Check if user can view this article
+    user_access_level = get_kb_access_level(session.get('user_id'))
+    if not can_view_kb_article(user_access_level, article['visibility']):
+        flash("You don't have permission to view this article.", "error")
+        return redirect(url_for('knowledge_base'))
+
+    can_edit = can_user_create_kb(session.get('user_id'))
+
+    return render_template("knowledge_base_article.html", article=article, can_edit=can_edit)
+
+
+@app.route("/knowledge-base/<int:article_id>/edit", methods=["GET", "POST"])
+@require_login
+@require_kb_create
+def knowledge_base_edit(article_id):
+    """Edit a KB article."""
+    article = get_kb_article(article_id)
+    if not article:
+        flash("Article not found.", "error")
+        return redirect(url_for('knowledge_base'))
+
+    if request.method == "POST":
+        title = request.form.get('title', '').strip()
+        subject = request.form.get('subject', '').strip()
+        content = request.form.get('content', '').strip()
+        visibility = request.form.get('visibility', 'FSR')
+
+        if not title or not subject or not content:
+            flash("Title, subject, and content are required.", "error")
+            return render_template("knowledge_base_form.html", mode="edit", article={
+                'id': article_id, 'title': title, 'subject': subject, 'content': content, 'visibility': visibility
+            }, subjects=get_kb_subjects())
+
+        update_kb_article(article_id, title, subject, content, visibility)
+        log_audit(session.get('username', 'unknown'), 'kb_update', f'article:{article_id}', f'Updated KB article: {title}')
+        flash("Knowledge base article updated successfully.", "success")
+        return redirect(url_for('knowledge_base_view', article_id=article_id))
+
+    return render_template("knowledge_base_form.html", mode="edit", article=article, subjects=get_kb_subjects())
+
+
+@app.route("/knowledge-base/<int:article_id>/delete", methods=["POST"])
+@require_login
+@require_kb_create
+def knowledge_base_delete(article_id):
+    """Delete a KB article."""
+    article = get_kb_article(article_id)
+    if not article:
+        flash("Article not found.", "error")
+        return redirect(url_for('knowledge_base'))
+
+    delete_kb_article(article_id)
+    log_audit(session.get('username', 'unknown'), 'kb_delete', f'article:{article_id}', f'Deleted KB article: {article["title"]}')
+    flash("Knowledge base article deleted.", "success")
+    return redirect(url_for('knowledge_base'))
+
+
+# ====================== /KNOWLEDGE BASE ======================
+
+
+# ====================== CUSTOMER DASHBOARD ======================
+
+@app.route("/customer/dashboard")
+@require_login
+@require_page_enabled("customer_dashboard")
+def customer_dashboard():
+    """Executive customer dashboard - professional printable network health report."""
+    nodes = fetch_solarwinds_nodes()
+    org_options = get_organizations_from_nodes(nodes)
+    selected_org = request.args.get("org", "")
+
+    metrics = None
+    if selected_org:
+        wlc_details = fetch_wlc_dashboard_latest_details()
+        metrics = fetch_customer_dashboard_metrics(selected_org, nodes, wlc_details)
+
+    generated_at = datetime.now(_CST_TZ).strftime("%B %d, %Y at %I:%M %p CST")
+
+    return render_template(
+        "customer_dashboard.html",
+        org_options=org_options,
+        selected_org=selected_org,
+        metrics=metrics,
+        generated_at=generated_at,
+    )
+
+
+# ====================== /CUSTOMER DASHBOARD ======================
 
 
 # ====================== MAIN ======================
