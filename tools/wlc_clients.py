@@ -22,7 +22,7 @@ def _connect_and_run(host, username, password, secret, commands):
         ) as conn:
             for cmd in commands:
                 try:
-                    out_map[cmd] = conn.send_command(cmd, read_timeout=60)
+                    out_map[cmd] = conn.send_command(cmd, read_timeout=120)
                 except Exception as e:
                     out_map[cmd] = f"<error: {e}>"
     except Exception as e:

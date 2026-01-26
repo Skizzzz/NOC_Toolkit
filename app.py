@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, url_for, render_template, flash, Response, jsonify, send_file, session
+from flask import Flask, request, redirect, url_for, render_template, flash, Response, jsonify, send_file, session, make_response
 import json, csv, os, re, threading, difflib, uuid, time, ipaddress
 from io import StringIO
 from datetime import datetime, timedelta
@@ -28,6 +28,7 @@ from tools.push_config import push_config_lines, show_run_full, show_run_interfa
 
 from tools.wlc_inventory import get_ap_inventory_many, make_ap_csv
 from tools.aruba_controller import get_aruba_ap_inventory_many
+from tools.device_inventory import collect_device_inventory_many, make_inventory_csv
 
 from tools.wlc_rf import get_rf_summary_many, collect_rf_samples
 from tools.wlc_clients import RE_TOTAL
@@ -129,6 +130,12 @@ from tools.db_jobs import (
     load_cert_sync_settings,
     save_cert_sync_settings,
     update_cert_sync_status,
+    # Device inventory functions
+    upsert_device_inventory,
+    list_device_inventory,
+    get_device_inventory,
+    delete_device_inventory,
+    get_device_inventory_stats,
     # Customer dashboard functions
     get_organizations_from_nodes,
     fetch_customer_dashboard_metrics,
@@ -1651,11 +1658,11 @@ def _dashboard_poll_once(settings: dict):
     _set_dashboard_settings(new_settings)
 def _dashboard_worker_loop():
     settings = _get_dashboard_settings()
-    interval = max(int(settings.get("interval_sec") or 300), 60)
+    interval = max(int(settings.get("interval_sec") or 600), 60)
     next_run = _next_aligned_run(interval)
     while True:
         settings = _get_dashboard_settings()
-        interval = max(int(settings.get("interval_sec") or 300), 60)
+        interval = max(int(settings.get("interval_sec") or 600), 60)
         if not settings.get("enabled"):
             _DASHBOARD_WAKE.wait(timeout=60)
             _DASHBOARD_WAKE.clear()
@@ -4023,7 +4030,6 @@ def wlc_clients_troubleshoot_start():
         "secret": secret,
         "polls": polls,
         "interval_sec": interval_sec,
-        "username": username,
     }
 
     insert_job(job_id=job_id, tool="wlc-clients", created=created_ts, params=params_blob)
@@ -4621,6 +4627,242 @@ def wlc_summer_guest_settings():
     )
 
 
+# ====================== Device Inventory ======================
+
+@app.get("/tools/device-inventory")
+@require_login
+@require_page_enabled("device_inventory")
+def device_inventory():
+    """Device inventory page showing hardware and firmware versions from SolarWinds."""
+    # Get all SolarWinds nodes as the inventory source
+    nodes = fetch_solarwinds_nodes()
+
+    # Get filters from query params
+    vendor_filter = request.args.get("vendor", "").strip()
+    model_filter = request.args.get("model", "").strip()
+    version_filter = request.args.get("version", "").strip()
+    org_filter = request.args.get("org", "").strip()
+    search_filter = request.args.get("search", "").strip().lower()
+
+    # Apply filters
+    filtered = nodes
+    if vendor_filter:
+        filtered = [n for n in filtered if (n.get("vendor") or "").lower() == vendor_filter.lower()]
+    if model_filter:
+        filtered = [n for n in filtered if model_filter.lower() in (n.get("model") or "").lower()]
+    if version_filter:
+        filtered = [n for n in filtered if version_filter.lower() in (n.get("version") or "").lower()]
+    if org_filter:
+        filtered = [n for n in filtered if (n.get("organization") or "").lower() == org_filter.lower()]
+    if search_filter:
+        filtered = [n for n in filtered if (
+            search_filter in (n.get("caption") or "").lower() or
+            search_filter in (n.get("ip_address") or "").lower() or
+            search_filter in (n.get("model") or "").lower() or
+            search_filter in (n.get("vendor") or "").lower()
+        )]
+
+    # Build stats from all nodes (not filtered)
+    stats = {
+        "total": len(nodes),
+        "by_vendor": {},
+        "by_org": {},
+    }
+    for n in nodes:
+        vendor = n.get("vendor") or "Unknown"
+        org = n.get("organization") or "Unknown"
+        stats["by_vendor"][vendor] = stats["by_vendor"].get(vendor, 0) + 1
+        stats["by_org"][org] = stats["by_org"].get(org, 0) + 1
+
+    # Get unique values for filter dropdowns
+    vendor_options = sorted(set(n.get("vendor") for n in nodes if n.get("vendor")))
+    org_options = sorted(set(n.get("organization") for n in nodes if n.get("organization")))
+    model_options = sorted(set(n.get("model") for n in nodes if n.get("model")))[:20]  # Limit models
+
+    return render_template(
+        "device_inventory.html",
+        stats=stats,
+        devices=filtered,
+        vendor_options=vendor_options,
+        org_options=org_options,
+        model_options=model_options,
+        filters={
+            "vendor": vendor_filter,
+            "model": model_filter,
+            "version": version_filter,
+            "org": org_filter,
+            "search": search_filter,
+        },
+    )
+
+
+@app.post("/tools/device-inventory/scan")
+@require_login
+def device_inventory_scan():
+    """Scan devices and collect inventory information."""
+    # Get form data
+    hosts_text = request.form.get("hosts", "").strip()
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    secret = request.form.get("secret", "") or None
+    device_type = request.form.get("device_type", "cisco_ios").strip()
+    max_workers = int(request.form.get("max_workers", "10") or "10")
+    max_workers = max(1, min(max_workers, 50))
+
+    # Parse hosts (comma or newline separated)
+    hosts = []
+    for line in hosts_text.replace(",", "\n").split("\n"):
+        host = line.strip()
+        if host:
+            hosts.append(host)
+
+    if not hosts:
+        flash("Please enter at least one device to scan.", "error")
+        return redirect(url_for("device_inventory"))
+
+    if not username or not password:
+        flash("Username and password are required.", "error")
+        return redirect(url_for("device_inventory"))
+
+    # Log the scan action
+    log_audit(
+        session.get("username", "unknown"),
+        "device_inventory_scan",
+        resource=f"{len(hosts)} devices",
+        details=f"Device type: {device_type}",
+        user_id=session.get("user_id"),
+    )
+
+    # Collect inventory from devices
+    results, errors = collect_device_inventory_many(
+        hosts=hosts,
+        username=username,
+        password=password,
+        secret=secret,
+        device_type=device_type,
+        max_workers=max_workers,
+    )
+
+    # Save results to database
+    success_count = 0
+    failed_count = 0
+    for r in results:
+        if r.get("error"):
+            scan_status = "failed"
+            failed_count += 1
+        else:
+            scan_status = "success"
+            success_count += 1
+
+        upsert_device_inventory(
+            device=r["device"],
+            device_type=r.get("device_type", device_type),
+            vendor=r.get("vendor", ""),
+            model=r.get("model", ""),
+            serial_number=r.get("serial_number", ""),
+            firmware_version=r.get("firmware_version", ""),
+            hostname=r.get("hostname", ""),
+            uptime=r.get("uptime", ""),
+            scan_status=scan_status,
+            scan_error=r.get("error", ""),
+        )
+
+    if failed_count > 0 and success_count > 0:
+        flash(f"Scan complete: {success_count} succeeded, {failed_count} failed.", "warning")
+    elif failed_count > 0:
+        flash(f"Scan failed for all {failed_count} devices.", "error")
+    else:
+        flash(f"Scan complete: {success_count} devices scanned successfully.", "success")
+
+    return redirect(url_for("device_inventory"))
+
+
+@app.get("/tools/device-inventory/export")
+@require_login
+def device_inventory_export():
+    """Export device inventory as CSV from SolarWinds data."""
+    import io
+    import csv as csv_module
+
+    nodes = fetch_solarwinds_nodes()
+
+    # Apply same filters as the main view
+    vendor_filter = request.args.get("vendor", "").strip()
+    model_filter = request.args.get("model", "").strip()
+    version_filter = request.args.get("version", "").strip()
+    org_filter = request.args.get("org", "").strip()
+    search_filter = request.args.get("search", "").strip().lower()
+
+    if vendor_filter:
+        nodes = [n for n in nodes if (n.get("vendor") or "").lower() == vendor_filter.lower()]
+    if model_filter:
+        nodes = [n for n in nodes if model_filter.lower() in (n.get("model") or "").lower()]
+    if version_filter:
+        nodes = [n for n in nodes if version_filter.lower() in (n.get("version") or "").lower()]
+    if org_filter:
+        nodes = [n for n in nodes if (n.get("organization") or "").lower() == org_filter.lower()]
+    if search_filter:
+        nodes = [n for n in nodes if (
+            search_filter in (n.get("caption") or "").lower() or
+            search_filter in (n.get("ip_address") or "").lower() or
+            search_filter in (n.get("model") or "").lower()
+        )]
+
+    # Generate CSV
+    buf = io.StringIO()
+    fields = ["caption", "ip_address", "organization", "vendor", "model", "version", "status"]
+    writer = csv_module.DictWriter(buf, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
+    writer.writeheader()
+    for n in nodes:
+        row = {k: n.get(k) or n.get(k.replace("_", "")) or "" for k in fields}
+        writer.writerow(row)
+
+    timestamp = datetime.now(_CST_TZ).strftime("%Y%m%d_%H%M%S")
+
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=device_inventory_{timestamp}.csv"},
+    )
+
+
+@app.post("/tools/device-inventory/<device>/delete")
+@require_login
+def device_inventory_delete(device: str):
+    """Delete a device from inventory."""
+    if session.get("role") != "superadmin":
+        flash("Only superadmins can delete devices from inventory.", "error")
+        return redirect(url_for("device_inventory"))
+
+    if delete_device_inventory(device):
+        flash(f"Device '{device}' removed from inventory.", "success")
+    else:
+        flash("Failed to delete device.", "error")
+
+    return redirect(url_for("device_inventory"))
+
+
+@app.get("/api/device-inventory")
+@require_login
+def api_device_inventory():
+    """JSON API for device inventory data from SolarWinds."""
+    nodes = fetch_solarwinds_nodes()
+    stats = {
+        "total": len(nodes),
+        "by_vendor": {},
+        "by_org": {},
+    }
+    for n in nodes:
+        vendor = n.get("vendor") or "Unknown"
+        org = n.get("organization") or "Unknown"
+        stats["by_vendor"][vendor] = stats["by_vendor"].get(vendor, 0) + 1
+        stats["by_org"][org] = stats["by_org"].get(org, 0) + 1
+    return jsonify({"devices": nodes, "stats": stats})
+
+
+# ====================== /Device Inventory ======================
+
+
 @app.get("/tools/solarwinds/nodes")
 @require_login
 @require_page_enabled("solarwinds_nodes")
@@ -4746,7 +4988,7 @@ def wlc_dashboard_data():
         "status": settings.get("last_poll_status", "never"),
         "message": settings.get("last_poll_message", ""),
         "ts": settings.get("last_poll_ts"),
-        "interval_sec": int(settings.get("interval_sec") or 300),
+        "interval_sec": int(settings.get("interval_sec") or 600),
         "total_hosts": summary.get("total_hosts", 0),
         "success_hosts": summary.get("success_hosts", 0),
         "errors": summary.get("errors", []),
@@ -4798,10 +5040,10 @@ def wlc_dashboard_settings():
         password = request.form.get("password") or ""
         secret = request.form.get("secret") or ""
         try:
-            interval_min = int(request.form.get("interval") or "5")
+            interval_min = int(request.form.get("interval") or "10")
         except Exception:
-            interval_min = 5
-        interval_sec = max(interval_min * 60, 300)
+            interval_min = 10
+        interval_sec = max(interval_min * 60, 600)
 
         # Aruba settings - uses same credentials, just enable/disable toggle
         aruba_enabled = request.form.get("aruba_enabled") == "1"

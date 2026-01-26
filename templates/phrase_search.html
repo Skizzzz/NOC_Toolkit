@@ -1,126 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Interface Config Search{% endblock %}
-{% block head_extra %}
-<style>
-  .tool-header{
-    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
-    border:1px solid var(--border);
-    border-radius:12px;
-    padding:24px;
-    margin-bottom:24px;
-  }
-  .tool-header h2{margin:0 0 8px 0; font-size:28px;}
-  .tool-header p{margin:0; font-size:15px; line-height:1.5;}
-  .tool-icon{
-    width:48px;
-    height:48px;
-    background:linear-gradient(135deg, var(--accent), var(--accent-2));
-    border-radius:12px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:#fff;
-    margin-bottom:16px;
-  }
-
-  .form-section{
-    background: color-mix(in oklab, var(--card) 98%, transparent);
-    border:1px solid var(--border);
-    border-radius:12px;
-    padding:20px;
-    margin-bottom:16px;
-  }
-  .form-section-header{
-    display:flex;
-    align-items:center;
-    gap:12px;
-    margin-bottom:16px;
-    padding-bottom:12px;
-    border-bottom:1px solid var(--border);
-  }
-  .form-section-icon{
-    width:32px;
-    height:32px;
-    border-radius:8px;
-    background: color-mix(in oklab, var(--accent) 15%, transparent);
-    color:var(--accent);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    flex-shrink:0;
-  }
-  .form-section-title{
-    margin:0;
-    font-size:16px;
-    font-weight:600;
-  }
-  .form-section-subtitle{
-    margin:0;
-    font-size:13px;
-    color:var(--muted);
-  }
-
-  .field-with-icon{position:relative;}
-  .field-with-icon .field-icon{
-    position:absolute;
-    left:12px;
-    top:38px;
-    color:var(--muted);
-    pointer-events:none;
-  }
-  .field-with-icon input{padding-left:38px;}
-
-  .checkbox-group{
-    display:flex;
-    flex-direction:column;
-    gap:10px;
-  }
-  .checkbox-option{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding:12px;
-    background: color-mix(in oklab, var(--card) 96%, transparent);
-    border:1px solid var(--border);
-    border-radius:8px;
-    cursor:pointer;
-    transition:all 0.15s ease;
-  }
-  .checkbox-option:hover{
-    background: color-mix(in oklab, var(--accent) 5%, transparent);
-    border-color:var(--accent);
-  }
-  .checkbox-option input[type="checkbox"]{
-    width:18px;
-    height:18px;
-    cursor:pointer;
-  }
-  .checkbox-option-content{flex:1;}
-  .checkbox-option-title{font-weight:600; font-size:14px; margin-bottom:2px;}
-  .checkbox-option-desc{font-size:12px; color:var(--muted);}
-
-  .host-count{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    padding:4px 10px;
-    background: color-mix(in oklab, var(--info) 15%, transparent);
-    color:var(--info);
-    border-radius:6px;
-    font-size:12px;
-    font-weight:600;
-  }
-
-  .action-buttons{
-    display:flex;
-    gap:12px;
-    justify-content:flex-end;
-    padding-top:20px;
-    margin-top:20px;
-    border-top:1px solid var(--border);
-  }
-</style>
-{% endblock %}
+{% block head_extra %}{% endblock %}
 {% block content %}
   <nav class="breadcrumbs">
     <a href="{{ url_for('index') }}">Dashboard</a>
@@ -169,7 +49,7 @@
             Switch IPs / FQDNs
           </label>
           <textarea id="phrase-hosts" name="hosts" placeholder="Enter IP addresses or hostnames (comma or newline separated)&#10;&#10;Examples:&#10;10.1.1.10, 10.1.1.11&#10;10.1.1.12&#10;switch-building-a.local" rows="6">{{ request.form.get('hosts','') }}</textarea>
-          <div class="muted">💡 Tip: You can paste a list of IPs from Excel or use the node search below</div>
+          <div class="muted">You can paste a list of IPs from Excel or use the node search below</div>
         </div>
 
         <div class="field host-selector"
@@ -185,9 +65,9 @@
           <input id="phrase-host-search" type="text" data-host-search placeholder="Type hostname or IP to search inventory…" autocomplete="off" {% if not node_options %}disabled{% endif %} />
           <div class="muted">
             {% if node_options %}
-              ✅ {{ node_options|length }} nodes available - Press Enter or click to add
+              {{ node_options|length }} nodes available - Press Enter or click to add
             {% else %}
-              ⚠️ No SolarWinds nodes available. <a href="{{ url_for('solarwinds_nodes') }}">Sync from Nodes page</a> to enable search.
+              No SolarWinds nodes available. <a href="{{ url_for('solarwinds_nodes') }}">Sync from Nodes page</a> to enable search.
             {% endif %}
           </div>
           <div class="host-selector-results" hidden></div>

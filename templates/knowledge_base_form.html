@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'edit' %}Edit{% else %}Create{% endif %} Article - Knowledge Base{% endblock %}
+{% block head_extra %}
+<style>
+  .form-header {
+    margin-bottom: 28px;
+  }
+  .form-header h2 {
+    margin: 0;
+    font-size: 26px;
+    font-family: 'Instrument Sans', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .form-header p {
+    margin-top: 6px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .kb-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+  }
+
+  .field label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    transition: all 0.2s ease;
+  }
+
+  .field input:focus,
+  .field select:focus,
+  .field textarea:focus {
+    outline: none;
+    border-color: var(--pink);
+    box-shadow: 0 0 0 3px rgba(245,4,80,0.15);
+  }
+
+  .field textarea {
+    min-height: 400px;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    line-height: 1.7;
+    resize: vertical;
+    font-size: 13px;
+  }
+
+  .field .hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  .visibility-options {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .visibility-option {
+    flex: 1;
+    min-width: 160px;
+  }
+
+  .visibility-option input[type="radio"] {
+    display: none;
+  }
+
+  .visibility-option label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    border: 2px solid var(--border-subtle);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    background: var(--bg);
+  }
+
+  .visibility-option input[type="radio"]:checked + label {
+    border-color: var(--pink);
+    background: rgba(245,4,80,0.08);
+  }
+
+  .visibility-option label:hover {
+    border-color: rgba(245,4,80,0.4);
+  }
+
+  .visibility-name {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 6px;
+    font-family: 'Instrument Sans', sans-serif;
+  }
+
+  .visibility-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .visibility-option.fsr input:checked + label {
+    border-color: var(--success);
+    background: rgba(0,214,127,0.08);
+  }
+  .visibility-option.fsr .visibility-name { color: var(--success); }
+
+  .visibility-option.noc input:checked + label {
+    border-color: var(--info);
+    background: rgba(59,139,255,0.08);
+  }
+  .visibility-option.noc .visibility-name { color: var(--info); }
+
+  .visibility-option.admin input:checked + label {
+    border-color: var(--warning);
+    background: rgba(255,168,38,0.08);
+  }
+  .visibility-option.admin .visibility-name { color: var(--warning); }
+
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .subject-input-wrapper {
+    position: relative;
+  }
+
+  .subject-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    margin-top: 6px;
+    max-height: 160px;
+    overflow-y: auto;
+    z-index: 10;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  }
+
+  .subject-suggestions.show {
+    display: block;
+  }
+
+  .subject-suggestion {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s ease;
+  }
+
+  .subject-suggestion:hover {
+    background: rgba(245,4,80,0.08);
+    color: var(--pink);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="{{ url_for('index') }}">Dashboard</a>
+  <span class="breadcrumbs-separator">/</span>
+  <a href="{{ url_for('knowledge_base') }}">Knowledge Base</a>
+  <span class="breadcrumbs-separator">/</span>
+  <span class="breadcrumbs-current">{% if mode == 'edit' %}Edit Article{% else %}New Article{% endif %}</span>
+</nav>
+
+<div class="form-header">
+  <h2>{% if mode == 'edit' %}Edit Article{% else %}Create New Article{% endif %}</h2>
+  <p>{% if mode == 'edit' %}Update the knowledge base article below{% else %}Add a new article to the knowledge base{% endif %}</p>
+</div>
+
+<div class="card">
+  <form class="kb-form" method="post">
+    <div class="form-row">
+      <div class="field">
+        <label for="title">Title *</label>
+        <input type="text" id="title" name="title" value="{{ article.title or '' }}" required placeholder="Enter article title">
+      </div>
+
+      <div class="field">
+        <label for="subject">Subject *</label>
+        <div class="subject-input-wrapper">
+          <input type="text" id="subject" name="subject" value="{{ article.subject or '' }}" required placeholder="e.g., Wireless, Switching, Troubleshooting" autocomplete="off">
+          <div class="subject-suggestions" id="subjectSuggestions">
+            {% for subj in subjects %}
+            <div class="subject-suggestion" data-value="{{ subj }}">{{ subj }}</div>
+            {% endfor %}
+          </div>
+        </div>
+        <p class="hint">Enter a category/topic for this article. Select an existing subject or create a new one.</p>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="content">Content *</label>
+      <textarea id="content" name="content" required placeholder="Write your article content here...
+
+You can include:
+- Step-by-step instructions
+- Command examples
+- Troubleshooting tips
+- Best practices">{{ article.content or '' }}</textarea>
+      <p class="hint">Write the main content of your article. Plain text formatting is preserved.</p>
+    </div>
+
+    <div class="field">
+      <label>Visibility *</label>
+      <p class="hint" style="margin-bottom: 12px;">Choose who can view this article based on their access level.</p>
+      <div class="visibility-options">
+        <div class="visibility-option fsr">
+          <input type="radio" id="vis_fsr" name="visibility" value="FSR" {% if not article.visibility or article.visibility == 'FSR' %}checked{% endif %}>
+          <label for="vis_fsr">
+            <span class="visibility-name">FSR</span>
+            <span class="visibility-desc">Visible to all users</span>
+          </label>
+        </div>
+        <div class="visibility-option noc">
+          <input type="radio" id="vis_noc" name="visibility" value="NOC" {% if article.visibility == 'NOC' %}checked{% endif %}>
+          <label for="vis_noc">
+            <span class="visibility-name">NOC</span>
+            <span class="visibility-desc">NOC team and Admins only</span>
+          </label>
+        </div>
+        <div class="visibility-option admin">
+          <input type="radio" id="vis_admin" name="visibility" value="Admin" {% if article.visibility == 'Admin' %}checked{% endif %}>
+          <label for="vis_admin">
+            <span class="visibility-name">Admin</span>
+            <span class="visibility-desc">Administrators only</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+        </svg>
+        {% if mode == 'edit' %}Save Changes{% else %}Create Article{% endif %}
+      </button>
+      <a href="{{ url_for('knowledge_base') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const subjectInput = document.getElementById('subject');
+  const suggestions = document.getElementById('subjectSuggestions');
+  const suggestionItems = suggestions.querySelectorAll('.subject-suggestion');
+
+  subjectInput.addEventListener('focus', function() {
+    if (suggestionItems.length > 0) {
+      suggestions.classList.add('show');
+    }
+  });
+
+  subjectInput.addEventListener('blur', function() {
+    // Delay to allow click on suggestion
+    setTimeout(() => {
+      suggestions.classList.remove('show');
+    }, 200);
+  });
+
+  subjectInput.addEventListener('input', function() {
+    const value = this.value.toLowerCase();
+    let hasVisible = false;
+
+    suggestionItems.forEach(item => {
+      const text = item.dataset.value.toLowerCase();
+      if (text.includes(value) && value !== item.dataset.value.toLowerCase()) {
+        item.style.display = 'block';
+        hasVisible = true;
+      } else {
+        item.style.display = 'none';
+      }
+    });
+
+    if (hasVisible && value) {
+      suggestions.classList.add('show');
+    } else {
+      suggestions.classList.remove('show');
+    }
+  });
+
+  suggestionItems.forEach(item => {
+    item.addEventListener('click', function() {
+      subjectInput.value = this.dataset.value;
+      suggestions.classList.remove('show');
+    });
+  });
+});
+</script>
+{% endblock %}

@@ -62,9 +62,40 @@ def init_security_db():
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'user',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            last_login TEXT
+            last_login TEXT,
+            kb_access_level TEXT NOT NULL DEFAULT 'FSR',
+            can_create_kb INTEGER NOT NULL DEFAULT 0
         )
     """)
+
+    # Add kb columns to existing users table if they don't exist
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN kb_access_level TEXT NOT NULL DEFAULT 'FSR'")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN can_create_kb INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # Knowledge Base articles table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS kb_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            content TEXT NOT NULL,
+            visibility TEXT NOT NULL DEFAULT 'FSR',
+            created_by INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(created_by) REFERENCES users(id)
+        )
+    """)
+
+    # Create indexes for kb_articles
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_kb_articles_visibility ON kb_articles(visibility)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_kb_articles_subject ON kb_articles(subject)")
 
     # Session management table
     cursor.execute("""
@@ -244,6 +275,69 @@ def change_password(user_id: int, new_password: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def get_kb_access_level(user_id: int) -> str:
+    """Get user's knowledge base access level"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT kb_access_level FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 'FSR'
+
+
+def can_user_create_kb(user_id: int) -> bool:
+    """Check if user has permission to create knowledge base articles"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT can_create_kb, role FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return False
+    # Superadmins can always create KB articles
+    return row[0] == 1 or row[1] == 'superadmin'
+
+
+def can_view_kb_article(user_access_level: str, article_visibility: str) -> bool:
+    """Check if user with given access level can view an article with given visibility"""
+    # Hierarchy: Admin > NOC > FSR
+    levels = {'FSR': 1, 'NOC': 2, 'Admin': 3}
+    user_level = levels.get(user_access_level, 1)
+    article_level = levels.get(article_visibility, 1)
+    return user_level >= article_level
+
+
+def require_kb_create(f):
+    """Decorator to require knowledge base create permission"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session:
+            flash("Please log in to access this page", "error")
+            return redirect(url_for("login", next=request.url))
+
+        if not can_user_create_kb(session["user_id"]):
+            flash("You don't have permission to create knowledge base articles", "error")
+            return redirect(url_for("knowledge_base"))
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def require_page_enabled(page_key: str):
+    """Decorator to check if a page is enabled before allowing access."""
+    from tools.db_jobs import is_page_enabled
+
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not is_page_enabled(page_key):
+                flash("This page has been disabled by an administrator.", "error")
+                return redirect(url_for("index"))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 
 def migrate_existing_passwords():

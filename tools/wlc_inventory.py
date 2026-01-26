@@ -13,8 +13,8 @@ def get_ap_inventory(host: str, username: str, password: str, secret: Optional[s
     ]
     """
     rows: List[Dict] = []
-    with ios_xe_connection(host, username, password, secret, timeout=60) as conn:
-        output = conn.send_command("show ap summary", read_timeout=90)
+    with ios_xe_connection(host, username, password, secret, timeout=120) as conn:
+        output = conn.send_command("show ap summary", read_timeout=120)
 
     # Normalize lines and find header
     lines = [l.rstrip() for l in output.splitlines() if l.strip()]
@@ -103,7 +103,7 @@ def get_ap_inventory_many(hosts: List[str], username: str, password: str, secret
 # --- CSV ---
 
 def make_ap_csv(rows: List[Dict]) -> str:
-    fields = ["wlc", "ap_name", "ip", "model", "state", "location", "slots", "ether_mac", "radio_mac", "country", "protocol"]
+    fields = ["wlc", "wlc_hostname", "ap_name", "ip", "model", "state", "location", "slots", "ether_mac", "radio_mac", "country", "protocol"]
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n")
     w.writeheader()

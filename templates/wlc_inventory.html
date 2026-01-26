@@ -2,93 +2,81 @@
 {% block title %}WLC AP Inventory{% endblock %}
 {% block head_extra %}
 <style>
-  .tool-header{
-    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
-    border:1px solid var(--border);
-    border-radius:12px;
-    padding:24px;
-    margin-bottom:24px;
-  }
-  .tool-header h2{margin:0 0 8px 0; font-size:28px;}
-  .tool-header p{margin:0; font-size:15px; line-height:1.5;}
-  .tool-icon{
-    width:48px;
-    height:48px;
-    background:linear-gradient(135deg, var(--accent), var(--accent-2));
-    border-radius:12px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:#fff;
-    margin-bottom:16px;
+  .wlc-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--accent-soft);
+    color: var(--pink);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
   }
 
-  .form-section{
-    background: color-mix(in oklab, var(--card) 98%, transparent);
-    border:1px solid var(--border);
-    border-radius:12px;
-    padding:20px;
-    margin-bottom:16px;
+  .quick-select-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
   }
-  .form-section-header{
-    display:flex;
-    align-items:center;
-    gap:12px;
-    margin-bottom:16px;
-    padding-bottom:12px;
-    border-bottom:1px solid var(--border);
+  .quick-select-btn:hover {
+    border-color: var(--pink);
+    background: var(--accent-soft);
   }
-  .form-section-icon{
-    width:32px;
-    height:32px;
-    border-radius:8px;
-    background: color-mix(in oklab, var(--accent) 15%, transparent);
-    color:var(--accent);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    flex-shrink:0;
-  }
-  .form-section-title{
-    margin:0;
-    font-size:16px;
-    font-weight:600;
-  }
-  .form-section-subtitle{
-    margin:0;
-    font-size:13px;
-    color:var(--muted);
+  .quick-select-btn.primary {
+    background: var(--pink);
+    border-color: var(--pink);
+    color: white;
   }
 
-  .field-with-icon{position:relative;}
-  .field-with-icon .field-icon{
-    position:absolute;
-    left:12px;
-    top:38px;
-    color:var(--muted);
-    pointer-events:none;
+  .vendor-tag {
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
   }
-  .field-with-icon input{padding-left:38px;}
+  .vendor-tag.cisco { background: #049fd9; }
+  .vendor-tag.aruba { background: #ff8300; }
 
-  .wlc-count{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    padding:4px 10px;
-    background: color-mix(in oklab, var(--info) 15%, transparent);
-    color:var(--info);
-    border-radius:6px;
-    font-size:12px;
-    font-weight:600;
+  .info-tip {
+    margin-top: 20px;
+    padding: 16px 20px;
+    background: var(--accent-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
-
-  .action-buttons{
-    display:flex;
-    gap:12px;
-    justify-content:flex-end;
-    padding-top:20px;
-    margin-top:20px;
-    border-top:1px solid var(--border);
+  .info-tip-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .info-tip-icon {
+    flex-shrink: 0;
+    color: var(--pink);
+    margin-top: 2px;
+  }
+  .info-tip-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--pink);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .info-tip-content {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
   }
 </style>
 {% endblock %}
@@ -107,8 +95,8 @@
         <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
       </svg>
     </div>
-    <h2>Cisco 9800 Access Point Inventory</h2>
-    <p>Query one or many wireless controllers in parallel to discover all joined access points. Filter by name or state, then export results to CSV for reporting and analysis.</p>
+    <h2>Wireless Controller AP Inventory</h2>
+    <p>Query one or many wireless controllers in parallel to discover all joined access points. Supports Cisco 9800 and Aruba AOS controllers. Filter by name or state, then export results to CSV.</p>
   </div>
 
   <form method="post" action="{{ url_for('wlc_inventory_run') }}">
@@ -132,16 +120,58 @@
         </span>
       </div>
 
+      <!-- Quick Select Presets -->
       <div class="field">
-        <label>
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
-            <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
-          </svg>
-          WLC IPs / Hostnames
-        </label>
-        <textarea id="wlc-hosts" name="hosts" placeholder="Enter IP addresses or hostnames (comma or newline separated)&#10;&#10;Examples:&#10;10.20.30.40, 10.20.30.41&#10;wlc-building-a.domain.com" rows="5">{{ request.form.get('hosts','') }}</textarea>
-        <div class="muted">💡 Tip: Paste from Excel or enter multiple addresses separated by commas or new lines</div>
+        <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; display:block;">Quick Select</label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          {% if cisco_hosts %}
+          <button type="button" class="quick-select-btn" id="btn-all-cisco" onclick="selectPreset('cisco')">
+            <span class="vendor-tag cisco">Cisco</span>
+            All 9800 Controllers ({{ cisco_hosts|length }})
+          </button>
+          {% endif %}
+          {% if aruba_hosts %}
+          <button type="button" class="quick-select-btn" id="btn-all-aruba" onclick="selectPreset('aruba')">
+            <span class="vendor-tag aruba">Aruba</span>
+            All AOS Controllers ({{ aruba_hosts|length }})
+          </button>
+          {% endif %}
+          <button type="button" class="quick-select-btn" id="btn-manual" onclick="selectPreset('manual')">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+            </svg>
+            Enter Manually
+          </button>
+        </div>
+        {% if not cisco_hosts and not aruba_hosts %}
+        <div style="margin-top:10px; font-size:13px; color:var(--text-muted);">No controllers configured in WLC Dashboard Settings. Enter hosts manually below.</div>
+        {% endif %}
       </div>
+
+      <div class="row">
+        <div class="field" style="flex:0 0 220px;">
+          <label>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm11 1H6v8l4-2 4 2V6z"/>
+            </svg>
+            Controller Type
+          </label>
+          <select name="controller_type" id="controller-type" style="height:42px;">
+            <option value="cisco" {{ 'selected' if request.form.get('controller_type','cisco') == 'cisco' else '' }}>Cisco 9800</option>
+            <option value="aruba" {{ 'selected' if request.form.get('controller_type') == 'aruba' else '' }}>Aruba AOS</option>
+          </select>
+        </div>
+        <div class="field" style="flex:1;">
+          <label>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
+            </svg>
+            WLC IPs / Hostnames
+          </label>
+          <textarea id="wlc-hosts" name="hosts" placeholder="Enter IP addresses or hostnames (comma or newline separated)&#10;&#10;Examples:&#10;10.20.30.40, 10.20.30.41&#10;wlc-building-a.domain.com" rows="3">{{ request.form.get('hosts','') }}</textarea>
+        </div>
+      </div>
+      <div class="muted">Paste from Excel or enter multiple addresses separated by commas or new lines</div>
     </div>
 
     <!-- Authentication Section -->
@@ -228,15 +258,15 @@
         </div>
       </div>
 
-      <div style="margin-top:16px; padding:12px; background: color-mix(in oklab, var(--info) 8%, transparent); border-radius:8px; border:1px solid color-mix(in oklab, var(--info) 20%, transparent);">
-        <div style="display:flex; align-items:flex-start; gap:10px;">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="var(--info)" style="flex-shrink:0; margin-top:2px;">
+      <div class="info-tip">
+        <div class="info-tip-header">
+          <svg class="info-tip-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
           </svg>
           <div style="flex:1;">
-            <div style="font-weight:600; font-size:13px; margin-bottom:4px; color:var(--info);">How it works</div>
-            <div style="font-size:13px; color:var(--muted); line-height:1.5;">
-              We'll SSH to each controller, run <code>show ap summary</code>, parse the output, apply your filters, and combine results. You can then export to CSV for further analysis in Excel.
+            <div class="info-tip-title">How it works</div>
+            <div class="info-tip-content">
+              We'll SSH to each controller and run the appropriate command (<code style="background:rgba(245,4,80,0.1); padding:2px 6px; border-radius:4px;">show ap summary</code> for Cisco 9800, <code style="background:rgba(245,4,80,0.1); padding:2px 6px; border-radius:4px;">show ap database long</code> for Aruba AOS), parse the output, apply your filters, and combine results. Export to CSV for further analysis.
             </div>
           </div>
         </div>
@@ -262,9 +292,17 @@
   </form>
 
   <script>
-    // Update WLC count dynamically
+    // Controller host lists from server
+    const ciscoHosts = {{ cisco_hosts | tojson }};
+    const arubaHosts = {{ aruba_hosts | tojson }};
+
+    // DOM elements
     const hostsTextarea = document.getElementById('wlc-hosts');
     const wlcCountNumber = document.getElementById('wlcCountNumber');
+    const controllerTypeSelect = document.getElementById('controller-type');
+    const btnCisco = document.getElementById('btn-all-cisco');
+    const btnAruba = document.getElementById('btn-all-aruba');
+    const btnManual = document.getElementById('btn-manual');
 
     function updateWlcCount(){
       const text = hostsTextarea.value.trim();
@@ -276,7 +314,37 @@
       wlcCountNumber.textContent = hosts.length;
     }
 
-    hostsTextarea.addEventListener('input', updateWlcCount);
+    function clearButtonStates(){
+      if(btnCisco) btnCisco.classList.remove('primary');
+      if(btnAruba) btnAruba.classList.remove('primary');
+      if(btnManual) btnManual.classList.remove('primary');
+    }
+
+    function selectPreset(preset){
+      clearButtonStates();
+      if(preset === 'cisco'){
+        hostsTextarea.value = ciscoHosts.join('\n');
+        controllerTypeSelect.value = 'cisco';
+        if(btnCisco) btnCisco.classList.add('primary');
+      } else if(preset === 'aruba'){
+        hostsTextarea.value = arubaHosts.join('\n');
+        controllerTypeSelect.value = 'aruba';
+        if(btnAruba) btnAruba.classList.add('primary');
+      } else {
+        hostsTextarea.value = '';
+        if(btnManual) btnManual.classList.add('primary');
+      }
+      updateWlcCount();
+      hostsTextarea.focus();
+    }
+
+    hostsTextarea.addEventListener('input', function(){
+      updateWlcCount();
+      // Clear preset selection when manually editing
+      clearButtonStates();
+      if(btnManual) btnManual.classList.add('primary');
+    });
+
     updateWlcCount();
   </script>
 {% endblock %}

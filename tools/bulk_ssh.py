@@ -32,6 +32,7 @@ class BulkSSHJob:
         timeout: int = 60,
         job_id: Optional[str] = None,
         progress_callback: Optional[Callable[[int, int, int], None]] = None,
+        config_mode: bool = False,
     ):
         """
         Initialize a bulk SSH job.
@@ -47,6 +48,7 @@ class BulkSSHJob:
             timeout: SSH connection timeout in seconds (default: 60)
             job_id: Unique job ID (auto-generated if not provided)
             progress_callback: Optional callback function(completed, success, failed)
+            config_mode: If True, run commands in config mode (config t). Default False.
         """
         self.devices = devices
         self.command = command
@@ -58,6 +60,7 @@ class BulkSSHJob:
         self.timeout = timeout
         self.job_id = job_id or str(uuid.uuid4())
         self.progress_callback = progress_callback
+        self.config_mode = config_mode
 
         self.results: Dict[str, dict] = {}
         self.completed = 0
@@ -104,16 +107,26 @@ class BulkSSHJob:
                     except Exception:
                         pass
 
-                # Check if command contains newlines (multi-line config commands)
-                if '\n' in self.command:
-                    # Multi-line mode: treat as config commands
+                # Execute based on config_mode setting
+                if self.config_mode:
+                    # Config mode: enter config t, run commands, exit
                     commands = [line.strip() for line in self.command.split('\n') if line.strip()]
                     output = conn.send_config_set(commands, read_timeout=self.timeout)
                     result["output"] = output
                     result["status"] = "success"
                 else:
-                    # Single command mode
-                    output = conn.send_command(self.command, read_timeout=self.timeout)
+                    # Show command mode: run as-is (supports multi-line show commands too)
+                    if '\n' in self.command:
+                        # Multiple show commands - run each one
+                        outputs = []
+                        for cmd in self.command.split('\n'):
+                            cmd = cmd.strip()
+                            if cmd:
+                                outputs.append(f">>> {cmd}")
+                                outputs.append(conn.send_command(cmd, read_timeout=self.timeout))
+                        output = '\n'.join(outputs)
+                    else:
+                        output = conn.send_command(self.command, read_timeout=self.timeout)
                     result["output"] = output
                     result["status"] = "success"
 
@@ -216,6 +229,7 @@ def run_bulk_ssh(
     device_type: str = "cisco_ios",
     max_workers: int = 10,
     timeout: int = 60,
+    config_mode: bool = False,
 ) -> tuple[str, Dict[str, dict]]:
     """
     Convenience function to run a bulk SSH job.
@@ -232,6 +246,7 @@ def run_bulk_ssh(
         device_type=device_type,
         max_workers=max_workers,
         timeout=timeout,
+        config_mode=config_mode,
     )
     results = job.execute()
     return job.job_id, results

@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Page Settings{% endblock %}
+{% block head_extra %}
+<style>
+  .page-settings-grid {
+    display: grid;
+    gap: 20px;
+  }
+
+  .category-card {
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .category-header {
+    background: rgba(245,4,80,0.08);
+    padding: 16px 24px;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--pink);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .category-pages {
+    padding: 6px 0;
+  }
+
+  .page-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 0.2s ease;
+  }
+
+  .page-item:last-child {
+    border-bottom: none;
+  }
+
+  .page-item:hover {
+    background: rgba(245,4,80,0.03);
+  }
+
+  .page-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .page-name {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .page-key {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    background: var(--bg);
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  /* Toggle Switch */
+  .toggle-switch {
+    position: relative;
+    width: 52px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(148,148,204,0.2);
+    border-radius: 28px;
+    transition: all 0.3s ease;
+  }
+
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  .toggle-switch input:checked + .toggle-slider {
+    background: var(--pink);
+  }
+
+  .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+  }
+
+  .toggle-switch input:focus + .toggle-slider {
+    box-shadow: 0 0 0 3px rgba(245,4,80,0.2);
+  }
+
+  /* Status indicator */
+  .page-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .status-dot.enabled {
+    background: var(--success);
+    box-shadow: 0 0 8px rgba(0,214,127,0.5);
+  }
+
+  .status-dot.disabled {
+    background: var(--error);
+    box-shadow: 0 0 8px rgba(255,68,102,0.5);
+  }
+
+  /* Actions */
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    padding: 20px 24px;
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+  }
+
+  .quick-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .quick-actions button {
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+
+  .how-it-works {
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 24px;
+    margin-top: 24px;
+  }
+  .how-it-works h3 {
+    margin: 0 0 16px 0;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .how-it-works ul {
+    margin: 0;
+    padding-left: 20px;
+    line-height: 1.8;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .how-it-works strong {
+    color: var(--text);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="{{ url_for('index') }}">Dashboard</a>
+  <span class="breadcrumbs-separator">/</span>
+  <span class="breadcrumbs-current">Admin</span>
+</nav>
+
+<div class="admin-tabs" style="display:flex; gap:8px; margin-bottom:24px; padding:4px; background:var(--card); border-radius:12px; border:1px solid var(--border-subtle);">
+  <a href="{{ url_for('admin_users') }}" style="display:inline-flex; align-items:center; gap:8px; padding:12px 20px; border-radius:10px; font-size:14px; font-weight:600; text-decoration:none; color:var(--text-muted); transition:all 0.2s ease;">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+    </svg>
+    User Management
+  </a>
+  <a href="{{ url_for('admin_page_settings') }}" style="display:inline-flex; align-items:center; gap:8px; padding:12px 20px; border-radius:10px; font-size:14px; font-weight:600; text-decoration:none; background:var(--pink); color:white; box-shadow:0 2px 8px rgba(245,4,80,0.3);">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+    </svg>
+    Page Settings
+  </a>
+</div>
+
+<div class="card">
+  <h2 class="section-title">Page Visibility Settings</h2>
+  <p class="muted" style="margin-bottom: 24px;">
+    Enable or disable pages across the application. Disabled pages are hidden from navigation and blocked from direct access.
+  </p>
+
+  <div class="quick-actions">
+    <button type="button" class="btn" onclick="toggleAll(true)">Enable All</button>
+    <button type="button" class="btn" onclick="toggleAll(false)">Disable All</button>
+  </div>
+
+  <form method="post">
+    <div class="page-settings-grid">
+      {% for category, pages in pages_by_category.items() %}
+      <div class="category-card">
+        <div class="category-header">{{ category }}</div>
+        <div class="category-pages">
+          {% for page in pages %}
+          <div class="page-item">
+            <div class="page-info">
+              <div>
+                <div class="page-name">{{ page.page_name }}</div>
+                <div class="page-key">{{ page.page_key }}</div>
+              </div>
+            </div>
+            <div class="page-status">
+              <span class="status-dot {% if page.enabled %}enabled{% else %}disabled{% endif %}"></span>
+              <label class="toggle-switch">
+                <input type="checkbox" name="page_{{ page.page_key }}" {% if page.enabled %}checked{% endif %}>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-gradient">Save Changes</button>
+      <a href="{{ url_for('admin_users') }}" class="btn">Back to Admin</a>
+    </div>
+  </form>
+</div>
+
+<div class="how-it-works">
+  <h3>How It Works</h3>
+  <ul>
+    <li><strong>Enabled pages</strong> appear in the navigation sidebar and are accessible to all logged-in users.</li>
+    <li><strong>Disabled pages</strong> are hidden from navigation and display a "page disabled" message if accessed directly.</li>
+    <li>The Dashboard and Admin pages cannot be disabled to ensure basic functionality.</li>
+    <li>Changes take effect immediately for all users.</li>
+  </ul>
+</div>
+
+<script>
+function toggleAll(enable) {
+  document.querySelectorAll('.toggle-switch input').forEach(checkbox => {
+    checkbox.checked = enable;
+    // Update status dot
+    const statusDot = checkbox.closest('.page-item').querySelector('.status-dot');
+    if (statusDot) {
+      statusDot.classList.toggle('enabled', enable);
+      statusDot.classList.toggle('disabled', !enable);
+    }
+  });
+}
+
+// Update status dot when toggle changes
+document.querySelectorAll('.toggle-switch input').forEach(checkbox => {
+  checkbox.addEventListener('change', function() {
+    const statusDot = this.closest('.page-item').querySelector('.status-dot');
+    if (statusDot) {
+      statusDot.classList.toggle('enabled', this.checked);
+      statusDot.classList.toggle('disabled', !this.checked);
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -51,7 +51,7 @@ _DEFAULT_WLC_DASHBOARD_SETTINGS = {
     "username": "",
     "password": "",
     "secret": "",
-    "interval_sec": 300,
+    "interval_sec": 600,
     "last_poll_ts": None,
     "last_poll_status": "never",
     "last_poll_message": "",
@@ -297,7 +297,7 @@ def init_db():
               username TEXT,
               password TEXT,
               secret TEXT,
-              interval_sec INTEGER DEFAULT 300,
+              interval_sec INTEGER DEFAULT 600,
               updated TEXT,
               last_poll_ts TEXT,
               last_poll_status TEXT,
@@ -635,7 +635,46 @@ def init_db():
             """
         )
 
+        # Page visibility settings
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS page_settings(
+              page_key TEXT PRIMARY KEY,
+              page_name TEXT NOT NULL,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              category TEXT,
+              updated_at TEXT
+            )
+            """
+        )
+
+        # Device Inventory table
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS device_inventory(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              device TEXT UNIQUE,
+              device_type TEXT,
+              vendor TEXT,
+              model TEXT,
+              serial_number TEXT,
+              firmware_version TEXT,
+              hostname TEXT,
+              uptime TEXT,
+              last_scanned TEXT,
+              scan_status TEXT,
+              scan_error TEXT,
+              solarwinds_node_id TEXT,
+              extra_json TEXT
+            )
+            """
+        )
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_device_inv_device ON device_inventory(device)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_device_inv_vendor ON device_inventory(vendor)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_device_inv_model ON device_inventory(model)")
+
         _maybe_seed_change_logs(cx)
+        _init_page_settings(cx)
 
 
 def insert_job(job_id: str, tool: str, created: str, params: dict):
@@ -872,7 +911,7 @@ def load_wlc_dashboard_settings():
             data["username"] = row.get("username", "")
             data["password"] = _decrypt_secret(row.get("password"))
             data["secret"] = _decrypt_secret(row.get("secret"))
-            data["interval_sec"] = row.get("interval_sec", 300) or 300
+            data["interval_sec"] = row.get("interval_sec", 600) or 600
             data["last_poll_ts"] = row.get("last_poll_ts")
             data["last_poll_status"] = row.get("last_poll_status", "never")
             data["last_poll_message"] = row.get("last_poll_message", "")
@@ -926,7 +965,7 @@ def save_wlc_dashboard_settings(settings: dict):
                     payload.get("username", ""),
                     _encrypt_secret(payload.get("password")),
                     _encrypt_secret(payload.get("secret")),
-                    int(payload.get("interval_sec", 300) or 300),
+                    int(payload.get("interval_sec", 600) or 600),
                     datetime.now().isoformat(timespec="seconds"),
                     payload.get("last_poll_ts"),
                     payload.get("last_poll_status", "never"),
@@ -2593,6 +2632,437 @@ def update_cert_sync_status(*, status: str, message: str = "") -> bool:
                 "UPDATE cert_sync_settings SET last_sync_ts=?, last_sync_status=?, last_sync_message=? WHERE id=1",
                 (now, status, message),
             )
+            return True
+    except Exception:
+        return False
+
+
+# ====================== CUSTOMER DASHBOARD ======================
+
+def get_organizations_from_nodes(nodes: List[Dict]) -> List[Dict]:
+    """
+    Get unique organizations with device counts from SolarWinds nodes.
+    Returns list of {"name": str, "count": int} sorted by name.
+    """
+    org_counts: Dict[str, int] = {}
+    for node in nodes:
+        org = (node.get("organization") or "").strip()
+        if org:
+            org_counts[org] = org_counts.get(org, 0) + 1
+
+    return sorted(
+        [{"name": name, "count": count} for name, count in org_counts.items()],
+        key=lambda x: x["name"].lower()
+    )
+
+
+def map_wlc_hosts_to_organizations(nodes: List[Dict]) -> Dict[str, str]:
+    """
+    Map WLC hosts (IP or hostname) to organizations by matching against SolarWinds nodes.
+    Returns dict mapping host -> organization name.
+    """
+    host_to_org: Dict[str, str] = {}
+    for node in nodes:
+        ip = (node.get("ip_address") or "").strip()
+        caption = (node.get("caption") or "").strip()
+        org = (node.get("organization") or "").strip()
+        if org:
+            if ip:
+                host_to_org[ip] = org
+            if caption:
+                host_to_org[caption.lower()] = org
+                # Also map just the hostname part (before first dot)
+                hostname_part = caption.split(".")[0].lower()
+                host_to_org[hostname_part] = org
+    return host_to_org
+
+
+def fetch_customer_dashboard_metrics(
+    organization: str,
+    nodes: List[Dict],
+    wlc_details: Dict[str, Dict]
+) -> Dict:
+    """
+    Compute customer-specific metrics for the dashboard.
+
+    Args:
+        organization: The organization name to filter by
+        nodes: List of SolarWinds nodes
+        wlc_details: Dict from fetch_wlc_dashboard_latest_details()
+
+    Returns:
+        Dict with metrics including health_score, device counts, wireless stats
+    """
+    # Filter nodes for this organization
+    org_nodes = [n for n in nodes if (n.get("organization") or "").strip() == organization]
+
+    total_devices = len(org_nodes)
+    devices_up = sum(1 for n in org_nodes if (n.get("status") or "").lower() in ("up", "node up", "active", "ok"))
+    devices_down = total_devices - devices_up
+    device_availability = (devices_up / total_devices * 100) if total_devices > 0 else 100.0
+
+    # Map WLC hosts to orgs and find WLCs belonging to this org
+    host_to_org = map_wlc_hosts_to_organizations(nodes)
+
+    wlc_controllers = []
+    total_clients = 0
+    total_aps = 0
+
+    for host, details in wlc_details.items():
+        # Check if this WLC belongs to the organization
+        matched_org = host_to_org.get(host) or host_to_org.get(host.lower())
+        # Also try matching by just the hostname portion
+        host_short = host.split(".")[0].lower()
+        if not matched_org:
+            matched_org = host_to_org.get(host_short)
+
+        if matched_org == organization:
+            clients = details.get("total_clients", 0) or 0
+            aps = details.get("ap_count", 0) or 0
+            total_clients += clients
+            total_aps += aps
+            wlc_controllers.append({
+                "host": host,
+                "name": host,  # Could be enhanced with caption lookup
+                "clients": clients,
+                "aps": aps
+            })
+
+    # Calculate health score
+    # 60% device availability, 40% wireless (if we have APs, otherwise 100%)
+    wireless_score = 100 if total_aps > 0 or not wlc_controllers else 100
+    health_score = int(device_availability * 0.6 + wireless_score * 0.4)
+
+    if health_score >= 90:
+        health_status = "Healthy"
+    elif health_score >= 70:
+        health_status = "Warning"
+    else:
+        health_status = "Critical"
+
+    # Device type breakdown
+    device_types: Dict[str, Dict[str, int]] = {}
+    for node in org_nodes:
+        vendor = (node.get("vendor") or "Other").strip()
+        model = (node.get("model") or "").strip()
+
+        # Categorize device type
+        if "9800" in model or "wlc" in (node.get("caption") or "").lower():
+            dtype = "WLC"
+        elif "switch" in model.lower() or "catalyst" in model.lower():
+            dtype = "Switch"
+        elif "router" in model.lower() or "isr" in model.lower():
+            dtype = "Router"
+        elif "firewall" in model.lower() or "asa" in model.lower() or "palo" in vendor.lower():
+            dtype = "Firewall"
+        elif "aruba" in vendor.lower():
+            dtype = "Aruba"
+        else:
+            dtype = "Other"
+
+        if dtype not in device_types:
+            device_types[dtype] = {"type": dtype, "count": 0, "up": 0, "down": 0}
+
+        device_types[dtype]["count"] += 1
+        is_up = (node.get("status") or "").lower() in ("up", "node up", "active", "ok")
+        if is_up:
+            device_types[dtype]["up"] += 1
+        else:
+            device_types[dtype]["down"] += 1
+
+    return {
+        "organization": organization,
+        "total_devices": total_devices,
+        "devices_up": devices_up,
+        "devices_down": devices_down,
+        "device_availability": round(device_availability, 1),
+        "total_clients": total_clients,
+        "total_aps": total_aps,
+        "wlc_controllers": wlc_controllers,
+        "health_score": health_score,
+        "health_status": health_status,
+        "device_types": list(device_types.values())
+    }
+
+
+# ====================== PAGE VISIBILITY SETTINGS ======================
+
+# Default pages that can be toggled
+_DEFAULT_PAGES = [
+    # Main
+    {"key": "knowledge_base", "name": "Knowledge Base", "category": "Main"},
+    {"key": "jobs_center", "name": "Jobs Center", "category": "Main"},
+    # Config Tools
+    {"key": "tool_phrase_search", "name": "Interface Search", "category": "Config Tools"},
+    {"key": "tool_global_config", "name": "Global Config", "category": "Config Tools"},
+    {"key": "bulk_ssh", "name": "Bulk SSH Terminal", "category": "Config Tools"},
+    {"key": "audit_logs", "name": "Audit Logs", "category": "Config Tools"},
+    # WLC Tools
+    {"key": "wlc_dashboard", "name": "WLC Dashboard", "category": "WLC Tools"},
+    {"key": "wlc_inventory", "name": "AP Inventory", "category": "WLC Tools"},
+    {"key": "wlc_rf", "name": "RF Summary", "category": "WLC Tools"},
+    {"key": "wlc_summer_guest", "name": "Summer Guest", "category": "WLC Tools"},
+    # Infrastructure
+    {"key": "device_inventory", "name": "Device Inventory", "category": "Infrastructure"},
+    {"key": "solarwinds_nodes", "name": "SolarWinds Nodes", "category": "Infrastructure"},
+    {"key": "customer_dashboard", "name": "Customer Dashboard", "category": "Infrastructure"},
+    {"key": "topology_tool", "name": "Topology", "category": "Infrastructure"},
+    {"key": "changes_list", "name": "Change Windows", "category": "Infrastructure"},
+    # Certificates
+    {"key": "cert_tracker", "name": "Certificate Tracker", "category": "Certificates"},
+    {"key": "cert_converter", "name": "Cert Converter", "category": "Certificates"},
+    {"key": "ise_nodes", "name": "ISE Nodes", "category": "Certificates"},
+]
+
+
+def _init_page_settings(cx):
+    """Seed default page settings if they don't exist."""
+    for page in _DEFAULT_PAGES:
+        cx.execute(
+            """
+            INSERT OR IGNORE INTO page_settings (page_key, page_name, enabled, category)
+            VALUES (?, ?, 1, ?)
+            """,
+            (page["key"], page["name"], page["category"])
+        )
+
+
+def get_page_settings() -> List[Dict]:
+    """Get all page settings grouped by category."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.row_factory = sqlite3.Row
+            rows = cx.execute(
+                "SELECT page_key, page_name, enabled, category FROM page_settings ORDER BY category, page_name"
+            ).fetchall()
+            return [dict(row) for row in rows]
+    except Exception:
+        return []
+
+
+def is_page_enabled(page_key: str) -> bool:
+    """Check if a specific page is enabled."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute(
+                "SELECT enabled FROM page_settings WHERE page_key = ?",
+                (page_key,)
+            ).fetchone()
+            # If page not in settings, default to enabled
+            return row[0] == 1 if row else True
+    except Exception:
+        return True  # Default to enabled on error
+
+
+def get_enabled_pages() -> List[str]:
+    """Get list of enabled page keys for navigation filtering."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            rows = cx.execute(
+                "SELECT page_key FROM page_settings WHERE enabled = 1"
+            ).fetchall()
+            return [row[0] for row in rows]
+    except Exception:
+        # Return all pages as enabled on error
+        return [p["key"] for p in _DEFAULT_PAGES]
+
+
+def set_page_enabled(page_key: str, enabled: bool) -> bool:
+    """Enable or disable a page."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "UPDATE page_settings SET enabled = ?, updated_at = ? WHERE page_key = ?",
+                (1 if enabled else 0, datetime.now().isoformat(timespec="seconds"), page_key)
+            )
+            return True
+    except Exception:
+        return False
+
+
+def bulk_update_page_settings(settings: Dict[str, bool]) -> bool:
+    """Update multiple page settings at once. settings is {page_key: enabled}."""
+    try:
+        now = datetime.now().isoformat(timespec="seconds")
+        with _DB_LOCK, _conn() as cx:
+            for page_key, enabled in settings.items():
+                cx.execute(
+                    "UPDATE page_settings SET enabled = ?, updated_at = ? WHERE page_key = ?",
+                    (1 if enabled else 0, now, page_key)
+                )
+            return True
+    except Exception:
+        return False
+
+
+# ====================== Device Inventory Functions ======================
+
+def upsert_device_inventory(
+    device: str,
+    device_type: str,
+    vendor: str,
+    model: str,
+    serial_number: str,
+    firmware_version: str,
+    hostname: str = "",
+    uptime: str = "",
+    scan_status: str = "success",
+    scan_error: str = "",
+    solarwinds_node_id: str = "",
+    extra: Optional[dict] = None,
+) -> bool:
+    """Insert or update a device in the inventory."""
+    try:
+        now = datetime.now().isoformat(timespec="seconds")
+        extra_json = json.dumps(extra) if extra else None
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT INTO device_inventory(
+                    device, device_type, vendor, model, serial_number, firmware_version,
+                    hostname, uptime, last_scanned, scan_status, scan_error,
+                    solarwinds_node_id, extra_json
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(device) DO UPDATE SET
+                    device_type=excluded.device_type,
+                    vendor=excluded.vendor,
+                    model=excluded.model,
+                    serial_number=excluded.serial_number,
+                    firmware_version=excluded.firmware_version,
+                    hostname=excluded.hostname,
+                    uptime=excluded.uptime,
+                    last_scanned=excluded.last_scanned,
+                    scan_status=excluded.scan_status,
+                    scan_error=excluded.scan_error,
+                    solarwinds_node_id=excluded.solarwinds_node_id,
+                    extra_json=excluded.extra_json
+                """,
+                (device, device_type, vendor, model, serial_number, firmware_version,
+                 hostname, uptime, now, scan_status, scan_error, solarwinds_node_id, extra_json),
+            )
+            return True
+    except Exception:
+        return False
+
+
+def list_device_inventory(
+    vendor: Optional[str] = None,
+    model_filter: Optional[str] = None,
+    firmware_filter: Optional[str] = None,
+    limit: int = 500,
+) -> List[Dict]:
+    """List devices from inventory with optional filters."""
+    try:
+        with _conn() as cx:
+            cx.row_factory = sqlite3.Row
+            query = "SELECT * FROM device_inventory WHERE 1=1"
+            params = []
+
+            if vendor:
+                query += " AND vendor = ?"
+                params.append(vendor)
+            if model_filter:
+                query += " AND model LIKE ?"
+                params.append(f"%{model_filter}%")
+            if firmware_filter:
+                query += " AND firmware_version LIKE ?"
+                params.append(f"%{firmware_filter}%")
+
+            query += " ORDER BY vendor, hostname, device LIMIT ?"
+            params.append(limit)
+
+            rows = cx.execute(query, params).fetchall()
+            results = []
+            for row in rows:
+                d = dict(row)
+                if d.get("extra_json"):
+                    try:
+                        d["extra"] = json.loads(d["extra_json"])
+                    except Exception:
+                        d["extra"] = {}
+                else:
+                    d["extra"] = {}
+                results.append(d)
+            return results
+    except Exception:
+        return []
+
+
+def get_device_inventory(device: str) -> Optional[Dict]:
+    """Get a single device from inventory."""
+    try:
+        with _conn() as cx:
+            cx.row_factory = sqlite3.Row
+            row = cx.execute(
+                "SELECT * FROM device_inventory WHERE device = ?",
+                (device,)
+            ).fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            if d.get("extra_json"):
+                try:
+                    d["extra"] = json.loads(d["extra_json"])
+                except Exception:
+                    d["extra"] = {}
+            else:
+                d["extra"] = {}
+            return d
+    except Exception:
+        return None
+
+
+def delete_device_inventory(device: str) -> bool:
+    """Delete a device from inventory."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute("DELETE FROM device_inventory WHERE device = ?", (device,))
+            return True
+    except Exception:
+        return False
+
+
+def get_device_inventory_stats() -> Dict:
+    """Get summary statistics for device inventory."""
+    try:
+        with _conn() as cx:
+            total = cx.execute("SELECT COUNT(*) FROM device_inventory").fetchone()[0]
+
+            # Count by vendor
+            vendor_rows = cx.execute(
+                "SELECT vendor, COUNT(*) as cnt FROM device_inventory GROUP BY vendor ORDER BY cnt DESC"
+            ).fetchall()
+            by_vendor = {row[0]: row[1] for row in vendor_rows if row[0]}
+
+            # Count successful vs failed scans
+            success = cx.execute(
+                "SELECT COUNT(*) FROM device_inventory WHERE scan_status = 'success'"
+            ).fetchone()[0]
+            failed = cx.execute(
+                "SELECT COUNT(*) FROM device_inventory WHERE scan_status = 'failed'"
+            ).fetchone()[0]
+
+            # Get last scan time
+            last_scan = cx.execute(
+                "SELECT MAX(last_scanned) FROM device_inventory"
+            ).fetchone()[0]
+
+            return {
+                "total": total,
+                "by_vendor": by_vendor,
+                "success": success,
+                "failed": failed,
+                "last_scan": last_scan,
+            }
+    except Exception:
+        return {"total": 0, "by_vendor": {}, "success": 0, "failed": 0, "last_scan": None}
+
+
+def clear_device_inventory() -> bool:
+    """Clear all devices from inventory."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute("DELETE FROM device_inventory")
             return True
     except Exception:
         return False

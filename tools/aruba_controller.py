@@ -152,9 +152,23 @@ def get_aruba_ap_inventory(
                         # Split by multiple spaces
                         parts = re.split(r"\s{2,}", line)
                         if len(parts) >= 2:
+                            ap_name = parts[0] if parts else ""
+
+                            # Skip non-AP lines (Flags legend, repeated headers, etc.)
+                            # These appear mid-output in "show ap database long"
+                            if not ap_name:
+                                continue
+                            if "Flags:" in ap_name or "=" in ap_name:
+                                continue
+                            if ap_name.lower() == "name":
+                                continue
+                            # Skip lines that start with single char + " =" (legend entries like "B = Built-in")
+                            if re.match(r"^[A-Za-z0-9]{1,2}\s*[-=]", ap_name):
+                                continue
+
                             row = {
                                 "wlc": host,
-                                "ap_name": parts[0] if parts else "",
+                                "ap_name": ap_name,
                                 "group": parts[1] if len(parts) > 1 else "",
                                 "model": parts[2] if len(parts) > 2 else "",
                                 "ip": "",
@@ -210,3 +224,36 @@ def get_aruba_snapshots_parallel(
                 errors.append(f"{host}: {exc}")
 
     return results, errors
+
+
+def get_aruba_ap_inventory_many(
+    hosts: List[str],
+    username: str,
+    password: str,
+    secret: Optional[str] = None,
+    max_workers: int = 10,
+) -> Tuple[List[Dict], List[str]]:
+    """
+    Get AP inventory from multiple Aruba controllers in parallel.
+
+    Returns:
+        Tuple of (combined_ap_list, errors_list)
+    """
+    combined = []
+    errors = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(get_aruba_ap_inventory, h, username, password, secret): h
+            for h in hosts
+        }
+        for fut in as_completed(futures):
+            host = futures[fut]
+            try:
+                rows, host_errors = fut.result()
+                combined.extend(rows)
+                errors.extend(host_errors)
+            except Exception as exc:
+                errors.append(f"{host}: {exc}")
+
+    return combined, errors

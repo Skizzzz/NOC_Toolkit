@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Device Inventory{% endblock %}
+{% block head_extra %}
+<style>
+  .inv-stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));
+    gap:16px;
+    margin-bottom:28px;
+  }
+  .stat-card{
+    background:var(--card);
+    border:1px solid var(--border-subtle);
+    border-radius:14px;
+    padding:20px;
+    position:relative;
+    text-decoration:none;
+    color:inherit;
+    transition: all 0.2s ease;
+  }
+  .stat-card::before{
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:4px;
+    background:var(--pink);
+    border-radius:14px 14px 0 0;
+  }
+  .stat-card.cisco::before{background:#049fd9;}
+  .stat-card.aruba::before{background:#ff8300;}
+  .stat-card.dell::before{background:#007db8;}
+  .stat-card.juniper::before{background:#84bd00;}
+  .stat-card.hp::before{background:#0096d6;}
+  .stat-card:hover{transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,0.2); cursor:pointer;}
+  .stat-label{font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:8px;}
+  .stat-value{font-size:32px; font-weight:700; line-height:1; font-family:'Instrument Sans', sans-serif; letter-spacing:-0.02em;}
+
+  .filter-bar{
+    display:flex;
+    gap:12px;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .filter-bar input[type="text"], .filter-bar select{
+    padding:10px 14px;
+    border:1px solid var(--border-subtle);
+    border-radius:10px;
+    background:var(--bg);
+    color:var(--text);
+    font-size:13px;
+    transition: all 0.2s ease;
+  }
+  .filter-bar input[type="text"]:focus, .filter-bar select:focus{
+    outline:none;
+    border-color:var(--pink);
+    box-shadow: 0 0 0 3px rgba(245,4,80,0.15);
+  }
+  .filter-bar input[type="text"]{flex:1; min-width:180px;}
+
+  .inv-table{width:100%; border-collapse:separate; border-spacing:0; font-size:13px;}
+  .inv-table th, .inv-table td{
+    padding:12px 14px;
+    text-align:left;
+    vertical-align:middle;
+    border-bottom:1px solid var(--border-subtle);
+  }
+  .inv-table th{
+    background:var(--card);
+    font-weight:600;
+    white-space:nowrap;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--text-muted);
+    border-top:1px solid var(--border-subtle);
+  }
+  .inv-table th:first-child{border-radius:10px 0 0 0; border-left:1px solid var(--border-subtle);}
+  .inv-table th:last-child{border-radius:0 10px 0 0; border-right:1px solid var(--border-subtle);}
+  .inv-table tbody tr:hover{
+    background:rgba(245,4,80,0.04);
+  }
+  .inv-table tbody td{
+    border-left:1px solid transparent;
+    border-right:1px solid transparent;
+  }
+  .inv-table tbody tr:first-child td{border-top:none;}
+  .inv-table .status-up{color:var(--success); font-weight:600;}
+  .inv-table .status-down{color:var(--error); font-weight:600;}
+  .inv-table .status-unknown{color:var(--text-muted);}
+
+  .vendor-badge{
+    display:inline-block;
+    padding:4px 10px;
+    border-radius:999px;
+    font-size:10px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+  }
+  .vendor-badge.cisco{background:rgba(4,159,217,0.15); color:#049fd9;}
+  .vendor-badge.aruba{background:rgba(255,131,0,0.15); color:#ff8300;}
+  .vendor-badge.dell{background:rgba(0,125,184,0.15); color:#007db8;}
+  .vendor-badge.juniper{background:rgba(132,189,0,0.15); color:#84bd00;}
+  .vendor-badge.hp, .vendor-badge.hewlett{background:rgba(0,150,214,0.15); color:#0096d6;}
+  .vendor-badge.unknown{background:rgba(148,163,184,0.12); color:var(--text-muted);}
+
+  .org-badge{
+    display:inline-block;
+    padding:4px 10px;
+    border-radius:8px;
+    font-size:11px;
+    font-weight:500;
+    background:rgba(245,4,80,0.08);
+    color:var(--pink);
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:60px 24px;
+    color:var(--text-muted);
+  }
+  .empty-state h3{margin-bottom:10px; font-family:'Instrument Sans', sans-serif; font-size:18px; color:var(--text);}
+  .empty-state p{font-size:14px;}
+  .empty-state a{color:var(--pink);}
+
+  .source-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 12px;
+    border-radius:8px;
+    font-size:12px;
+    font-weight:600;
+    background:rgba(255,165,0,0.12);
+    color:#ff8c00;
+  }
+
+  .page-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+  .page-header h2{
+    margin:0;
+    font-family:'Instrument Sans', sans-serif;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:-0.02em;
+  }
+  .page-header p{
+    margin:6px 0 0;
+    font-size:14px;
+    color:var(--text-muted);
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Device Inventory</h2>
+    <p>Hardware models and firmware versions from SolarWinds</p>
+  </div>
+  <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+    <span class="source-badge">
+      <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
+      SolarWinds Data
+    </span>
+    <a href="{{ url_for('device_inventory_export', **request.args) }}" class="btn">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+      </svg>
+      Export CSV
+    </a>
+  </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="inv-stats">
+  <a href="{{ url_for('device_inventory') }}" class="stat-card">
+    <div class="stat-label">Total Devices</div>
+    <div class="stat-value">{{ stats.total }}</div>
+  </a>
+  {% for vendor, count in stats.by_vendor.items() | sort(attribute='1', reverse=true) %}
+  {% if loop.index <= 5 %}
+  <a href="{{ url_for('device_inventory', vendor=vendor) }}" class="stat-card {{ vendor|lower|replace(' ', '') }}">
+    <div class="stat-label">{{ vendor }}</div>
+    <div class="stat-value">{{ count }}</div>
+  </a>
+  {% endif %}
+  {% endfor %}
+</div>
+
+<!-- Filter Bar -->
+<div class="card" style="margin-bottom:16px; padding:16px;">
+  <form method="get" class="filter-bar">
+    <input type="text" name="search" placeholder="Search hostname, IP, model..." value="{{ filters.search }}">
+    <select name="vendor">
+      <option value="">All Vendors</option>
+      {% for v in vendor_options %}
+      <option value="{{ v }}" {% if filters.vendor == v %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    <select name="org">
+      <option value="">All Organizations</option>
+      {% for o in org_options %}
+      <option value="{{ o }}" {% if filters.org == o %}selected{% endif %}>{{ o }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="model" placeholder="Filter model..." value="{{ filters.model }}" style="width:150px; flex:0;">
+    <input type="text" name="version" placeholder="Filter version..." value="{{ filters.version }}" style="width:150px; flex:0;">
+    <button type="submit" class="btn">Filter</button>
+    {% if filters.search or filters.vendor or filters.model or filters.version or filters.org %}
+    <a href="{{ url_for('device_inventory') }}" class="btn">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Inventory Table -->
+<div class="card" style="overflow-x:auto;">
+  {% if devices %}
+  <table class="inv-table">
+    <thead>
+      <tr>
+        <th>Hostname</th>
+        <th>IP Address</th>
+        <th>Organization</th>
+        <th>Vendor</th>
+        <th>Model</th>
+        <th>Version</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in devices %}
+      <tr>
+        <td><strong>{{ device.caption or '-' }}</strong></td>
+        <td><code>{{ device.ip_address or device.ipaddress or '-' }}</code></td>
+        <td>
+          {% if device.organization %}
+          <span class="org-badge">{{ device.organization }}</span>
+          {% else %}
+          <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if device.vendor %}
+          <span class="vendor-badge {{ device.vendor|lower|replace(' ', '') }}">{{ device.vendor }}</span>
+          {% else %}
+          <span class="vendor-badge unknown">Unknown</span>
+          {% endif %}
+        </td>
+        <td>{{ device.model or '-' }}</td>
+        <td><strong>{{ device.version or '-' }}</strong></td>
+        <td>
+          {% set status = (device.status or '')|string|lower %}
+          {% if status == '1' or status == 'up' or 'up' in status %}
+          <span class="status-up">Up</span>
+          {% elif status == '2' or status == 'down' or 'down' in status %}
+          <span class="status-down">Down</span>
+          {% else %}
+          <span class="status-unknown">{{ device.status or 'Unknown' }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="margin:16px 0 0; font-size:12px;">
+    Showing {{ devices|length }} of {{ stats.total }} devices
+  </p>
+  {% else %}
+  <div class="empty-state">
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px; opacity:0.5;">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+      <path d="M21 12h-4m-3 0h-4m-3 0H3"/>
+      <path d="M12 21v-4m0-3v-4m0-3V3"/>
+    </svg>
+    <h3>No Devices Found</h3>
+    {% if filters.search or filters.vendor or filters.model or filters.version or filters.org %}
+    <p>No devices match your filter criteria. <a href="{{ url_for('device_inventory') }}">Clear filters</a></p>
+    {% else %}
+    <p>No devices were returned from SolarWinds. Check your SolarWinds connection settings.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

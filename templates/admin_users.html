@@ -1,19 +1,156 @@
 {% extends "base.html" %}
 {% block title %}User Management{% endblock %}
+{% block head_extra %}
+<style>
+  .kb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .kb-badge.FSR { background: rgba(0, 214, 127, 0.12); color: var(--success); }
+  .kb-badge.NOC { background: rgba(59, 139, 255, 0.12); color: var(--info); }
+  .kb-badge.Admin { background: rgba(255, 168, 38, 0.12); color: var(--warning); }
+  .kb-create-badge { background: rgba(245, 4, 80, 0.12); color: var(--pink); margin-left: 4px; }
+  .user-row { vertical-align: middle; }
+  .user-row td { padding: 14px 12px; }
+  .kb-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .kb-form select {
+    padding: 8px 12px;
+    font-size: 12px;
+    min-width: 90px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .kb-form select:focus {
+    outline: none;
+    border-color: var(--pink);
+  }
+  .kb-form button {
+    padding: 8px 14px;
+    font-size: 12px;
+    background: var(--pink);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .kb-form button:hover {
+    background: var(--pink-light);
+    transform: translateY(-1px);
+  }
+  .kb-form label { font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-muted); }
+  .kb-form input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--pink); }
+
+  .admin-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding: 4px;
+    background: var(--card);
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+  }
+  .admin-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+  }
+  .admin-tab:hover {
+    color: var(--text);
+    background: rgba(245, 4, 80, 0.05);
+  }
+  .admin-tab.active {
+    background: var(--pink);
+    color: white;
+    box-shadow: 0 2px 8px rgba(245, 4, 80, 0.3);
+  }
+
+  .create-user-form {
+    padding: 24px;
+    background: var(--bg);
+    border-radius: 14px;
+    border: 1px solid var(--border-subtle);
+  }
+
+  .permissions-card {
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 24px;
+    margin-top: 20px;
+  }
+  .permissions-card h3 {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    letter-spacing: -0.01em;
+  }
+  .permissions-list {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+  }
+  .permissions-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .permissions-list li:last-child {
+    border-bottom: none;
+  }
+</style>
+{% endblock %}
 {% block content %}
   <nav class="breadcrumbs">
     <a href="{{ url_for('index') }}">Dashboard</a>
     <span class="breadcrumbs-separator">/</span>
-    <span class="breadcrumbs-current">User Management</span>
+    <span class="breadcrumbs-current">Admin</span>
   </nav>
+
+  <div class="admin-tabs">
+    <a href="{{ url_for('admin_users') }}" class="admin-tab active">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+      </svg>
+      User Management
+    </a>
+    <a href="{{ url_for('admin_page_settings') }}" class="admin-tab">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+      </svg>
+      Page Settings
+    </a>
+  </div>
 
   <div class="card">
     <h2 class="section-title">User Management</h2>
     <p class="muted" style="margin-bottom:24px;">Create and manage user accounts (Superadmin only)</p>
 
-    <details open style="margin-bottom:24px;">
-      <summary style="cursor:pointer; font-weight:600; margin-bottom:16px;">Create New User</summary>
-      <form method="post" class="card" style="padding:20px; background:color-mix(in oklab, var(--card) 96%, transparent);">
+    <details open style="margin-bottom:28px;">
+      <summary style="cursor:pointer; font-weight:600; margin-bottom:18px; font-size:14px; color:var(--pink); text-transform:uppercase; letter-spacing:0.04em;">Create New User</summary>
+      <form method="post" class="create-user-form">
         <input type="hidden" name="action" value="create">
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
           <div class="field">
@@ -32,6 +169,22 @@
               <option value="superadmin">Superadmin</option>
             </select>
           </div>
+          <div class="field">
+            <label for="kb_access_level">KB Access Level</label>
+            <select id="kb_access_level" name="kb_access_level">
+              <option value="FSR" selected>FSR (View All)</option>
+              <option value="NOC">NOC (View NOC & Admin)</option>
+              <option value="Admin">Admin (View Admin Only)</option>
+            </select>
+            <small class="muted">What articles can this user view</small>
+          </div>
+          <div class="field">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" name="can_create_kb" style="width:18px; height:18px;">
+              <span>Can Create KB Articles</span>
+            </label>
+            <small class="muted">Allow user to create and edit knowledge base articles</small>
+          </div>
         </div>
         <button type="submit" class="btn btn-gradient" style="margin-top:16px;">Create User</button>
       </form>
@@ -43,21 +196,49 @@
           <th>ID</th>
           <th>Username</th>
           <th>Role</th>
+          <th>KB Permissions</th>
           <th>Created</th>
           <th>Last Login</th>
         </tr>
       </thead>
       <tbody>
         {% for user in users %}
-        <tr>
+        <tr class="user-row">
           <td>{{ user.id }}</td>
           <td>{{ user.username }}</td>
           <td><span class="badge {% if user.role == 'superadmin' %}error{% else %}neutral{% endif %}">{{ user.role }}</span></td>
-          <td>{{ user.created_at }}</td>
-          <td>{{ user.last_login or 'Never' }}</td>
+          <td>
+            <form method="post" class="kb-form">
+              <input type="hidden" name="action" value="update_kb">
+              <input type="hidden" name="user_id" value="{{ user.id }}">
+              <select name="kb_access_level">
+                <option value="FSR" {% if user.kb_access_level == 'FSR' %}selected{% endif %}>FSR</option>
+                <option value="NOC" {% if user.kb_access_level == 'NOC' %}selected{% endif %}>NOC</option>
+                <option value="Admin" {% if user.kb_access_level == 'Admin' %}selected{% endif %}>Admin</option>
+              </select>
+              <label>
+                <input type="checkbox" name="can_create_kb" {% if user.can_create_kb or user.role == 'superadmin' %}checked{% endif %} {% if user.role == 'superadmin' %}disabled title="Superadmins always have KB create permission"{% endif %}>
+                Create
+              </label>
+              <button type="submit" class="btn" style="padding:6px 10px;">Save</button>
+            </form>
+          </td>
+          <td>{{ user.created_at[:10] if user.created_at else '-' }}</td>
+          <td>{{ user.last_login[:10] if user.last_login else 'Never' }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <div class="permissions-card">
+    <h3>Knowledge Base Permission Levels</h3>
+    <p style="color:var(--text-muted); margin-bottom:18px; font-size:13px;">Understanding what each KB access level can see:</p>
+    <ul class="permissions-list">
+      <li><span class="kb-badge FSR">FSR</span> <span>Can view articles marked as FSR (all users can see)</span></li>
+      <li><span class="kb-badge NOC">NOC</span> <span>Can view FSR + NOC articles (NOC team level)</span></li>
+      <li><span class="kb-badge Admin">Admin</span> <span>Can view all articles including Admin-only content</span></li>
+    </ul>
+    <p style="color:var(--text-muted); margin-top:16px; font-size:13px; line-height:1.6;"><strong style="color:var(--text);">Note:</strong> Users with "Create" permission can create, edit, and delete any KB article. Superadmins automatically have create permission.</p>
   </div>
 {% endblock %}
