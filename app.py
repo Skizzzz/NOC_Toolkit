@@ -1463,6 +1463,7 @@ def _poll_solarwinds_once(settings: dict) -> tuple[list[dict], list[str]]:
                 "vendor": node.get("vendor") or "",
                 "model": node.get("model") or "",
                 "version": node.get("version") or "",
+                "hardware_version": node.get("hardware_version") or "",
                 "ip_address": node.get("ip_address") or "",
                 "status": node.get("status") or "",
                 "last_seen": node.get("last_seen") or "",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import List, Dict, Optional
 from urllib.parse import urlparse
 
@@ -12,10 +13,42 @@ class SolarWindsError(RuntimeError):
     pass
 
 
+def _extract_hardware_version(sys_desc: str, machine_type: str) -> str:
+    """
+    Extract hardware version from SysDescription or MachineType.
+
+    SysDescription often contains platform/hardware info like:
+    - "Cisco IOS Software, C2960 Software (C2960-LANBASEK9-M), Version 15.0(2)SE11"
+    - "Dell Networking OS10-Enterprise, Version 10.5.1.0"
+    - "Aruba JL253A 2930F-24G-4SFP Switch"
+
+    For now, extract any version-like patterns from hardware descriptions.
+    This field is primarily for manual enrichment via the UI.
+    """
+    if not sys_desc and not machine_type:
+        return ""
+
+    # Try to extract hardware revision from SysDescription
+    # Look for patterns like "REV A", "Rev. 01", "Hardware: 2.0"
+    hw_patterns = [
+        r'(?:REV\.?|Rev\.?|Hardware:?)\s*([A-Z0-9.]+)',
+        r'(?:HW|H/W):?\s*([A-Z0-9.]+)',
+    ]
+
+    for pattern in hw_patterns:
+        match = re.search(pattern, sys_desc, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+    # If no explicit hardware version found, return empty
+    # The field can be populated from the UI or via enrichment
+    return ""
+
+
 def _build_query_payload() -> Dict[str, str]:
     query = (
         "SELECT n.NodeID, n.Caption, n.Vendor, n.MachineType, n.IOSVersion, n.IPAddress, n.StatusDescription, n.LastSync, "
-        "n.CustomProperties.Organization AS Organization "
+        "n.SysDescription, n.CustomProperties.Organization AS Organization "
         "FROM Orion.Nodes n"
     )
     return {"query": query}
@@ -106,6 +139,10 @@ def fetch_nodes(
     items = data.get("results") or data.get("Results") or []
     nodes: List[Dict] = []
     for item in items:
+        # Extract hardware_version from SysDescription if available
+        # SysDescription often contains platform/hardware info (e.g., "Cisco IOS Software, C2960 Software...")
+        sys_desc = (item.get("SysDescription") or "").strip()
+        hardware_version = _extract_hardware_version(sys_desc, item.get("MachineType") or "")
         nodes.append(
             {
                 "node_id": item.get("NodeID"),
@@ -114,6 +151,7 @@ def fetch_nodes(
                 "vendor": (item.get("Vendor") or "").strip(),
                 "model": item.get("MachineType") or "",
                 "version": item.get("IOSVersion") or "",
+                "hardware_version": hardware_version,
                 "ip_address": item.get("IPAddress") or "",
                 "status": item.get("StatusDescription") or "",
                 "last_seen": item.get("LastSync") or "",

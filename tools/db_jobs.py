@@ -436,6 +436,16 @@ def init_db():
             cx.execute("ALTER TABLE solarwinds_nodes ADD COLUMN vendor TEXT")
         except Exception:
             pass
+        # US-018: Add hardware_version column for CVE analysis
+        try:
+            cx.execute("ALTER TABLE solarwinds_nodes ADD COLUMN hardware_version TEXT")
+        except Exception:
+            pass
+        # US-018: Add indexes for efficient CVE/inventory searches
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_solarwinds_vendor ON solarwinds_nodes(vendor)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_solarwinds_model ON solarwinds_nodes(model)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_solarwinds_version ON solarwinds_nodes(version)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_solarwinds_hw_version ON solarwinds_nodes(hardware_version)")
 
         cx.execute(
             """
@@ -1564,6 +1574,7 @@ def replace_solarwinds_nodes(nodes: List[Dict]) -> None:
                         node.get("vendor") or "",
                         node.get("model") or "",
                         node.get("version") or "",
+                        node.get("hardware_version") or "",
                         node.get("ip_address") or "",
                         node.get("status") or "",
                         node.get("last_seen") or "",
@@ -1572,8 +1583,8 @@ def replace_solarwinds_nodes(nodes: List[Dict]) -> None:
                 )
             cx.executemany(
                 """
-                INSERT INTO solarwinds_nodes(node_id, caption, organization, vendor, model, version, ip_address, status, last_seen, extra_json)
-                VALUES(?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO solarwinds_nodes(node_id, caption, organization, vendor, model, version, hardware_version, ip_address, status, last_seen, extra_json)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 rows,
             )
@@ -1586,7 +1597,7 @@ def fetch_solarwinds_nodes() -> List[Dict]:
     try:
         with _DB_LOCK, _conn() as cx:
             cur = cx.execute(
-                "SELECT node_id, caption, organization, vendor, model, version, ip_address, status, last_seen, extra_json FROM solarwinds_nodes ORDER BY caption"
+                "SELECT node_id, caption, organization, vendor, model, version, hardware_version, ip_address, status, last_seen, extra_json FROM solarwinds_nodes ORDER BY caption"
             )
             for row in cur.fetchall():
                 extra = {}
@@ -1602,6 +1613,7 @@ def fetch_solarwinds_nodes() -> List[Dict]:
                         "vendor": row["vendor"],
                         "model": row["model"],
                         "version": row["version"],
+                        "hardware_version": row["hardware_version"] or "",
                         "ip_address": row["ip_address"],
                         "status": row["status"],
                         "last_seen": row["last_seen"],
