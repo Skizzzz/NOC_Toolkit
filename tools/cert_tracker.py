@@ -12,7 +12,10 @@ import urllib3
 
 urllib3.disable_warnings()
 
-_CST_TZ = ZoneInfo("America/Chicago")
+def _get_app_tz() -> ZoneInfo:
+    """Get the configured application timezone."""
+    from tools.db_jobs import get_app_timezone_info
+    return get_app_timezone_info()
 
 
 def get_ise_version(ip: str, username: str, password: str, hostname: str = "") -> Optional[Dict]:
@@ -268,7 +271,7 @@ def get_days_until_expiry(expires_str: str) -> Optional[int]:
     from dateutil import parser
     try:
         exp_date = parser.parse(expires_str).replace(tzinfo=None)
-        now = datetime.now(_CST_TZ).replace(tzinfo=None)
+        now = datetime.now(_get_app_tz()).replace(tzinfo=None)
         delta = exp_date - now
         return delta.days
     except Exception:

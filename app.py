@@ -147,6 +147,7 @@ from tools.db_jobs import (
     load_app_settings,
     save_app_settings,
     get_app_timezone,
+    get_app_timezone_info,
     US_TIMEZONES,
 )
 
@@ -265,23 +266,30 @@ def _collect_aruba_snapshot(host, username, password, secret):
 
 
 def _format_cst(ts: Optional[str]) -> Optional[str]:
+    """Format timestamp in the configured application timezone."""
     if not ts:
         return None
     try:
         dt = datetime.fromisoformat(ts)
     except Exception:
         return ts
+    app_tz = get_app_timezone_info()
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_CST_TZ)
-    return dt.astimezone(_CST_TZ).strftime("%Y-%m-%d %I:%M %p CST")
+        dt = dt.replace(tzinfo=app_tz)
+    local_dt = dt.astimezone(app_tz)
+    # Get timezone abbreviation (e.g., CST, EST, PST)
+    tz_abbr = local_dt.strftime("%Z")
+    return local_dt.strftime(f"%Y-%m-%d %I:%M %p {tz_abbr}")
 
 
 def _parse_cst_datetime(value: str) -> datetime:
+    """Parse datetime string in the configured application timezone."""
+    app_tz = get_app_timezone_info()
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_CST_TZ)
+        dt = dt.replace(tzinfo=app_tz)
     else:
-        dt = dt.astimezone(_CST_TZ)
+        dt = dt.astimezone(app_tz)
     return dt
 
 
@@ -1104,11 +1112,12 @@ def _parse_daily_time_str(value: Optional[str]) -> tuple[int, int]:
 
 
 def _summer_timezone(settings: dict) -> ZoneInfo:
-    tz_name = settings.get("timezone") or "America/Chicago"
+    """Get timezone for summer guest scheduler, falling back to app timezone."""
+    tz_name = settings.get("timezone") or get_app_timezone()
     try:
         return ZoneInfo(tz_name)
     except Exception:
-        return _CST_TZ
+        return get_app_timezone_info()
 
 
 def _next_summer_run(settings: dict, *, base_dt: Optional[datetime] = None) -> datetime:
@@ -3124,7 +3133,8 @@ def changes_list():
             "message": item.get("message"),
             "scheduled_cst": _format_cst(item.get("scheduled")),
         })
-    return render_template("changes.html", changes=records)
+    app_tz = get_app_timezone()
+    return render_template("changes.html", changes=records, app_timezone=app_tz)
 
 
 @app.get("/changes/<change_id>")

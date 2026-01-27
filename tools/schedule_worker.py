@@ -17,14 +17,16 @@ from tools.db_jobs import (
     get_enabled_ise_nodes,
     insert_certificate,
     certificate_exists,
+    get_app_timezone_info,
 )
 from tools.template_engine import substitute_variables
 from tools.cert_tracker import pull_ise_certs
 
 logger = logging.getLogger(__name__)
 
-# Use America/Chicago timezone for consistency with app.py
-_CST_TZ = ZoneInfo("America/Chicago")
+def _get_app_tz() -> ZoneInfo:
+    """Get the configured application timezone."""
+    return get_app_timezone_info()
 
 
 class ScheduleWorker:
@@ -88,12 +90,13 @@ class ScheduleWorker:
         # Check if sync is due
         if last_sync_ts:
             try:
+                app_tz = _get_app_tz()
                 last_sync = datetime.fromisoformat(last_sync_ts)
                 # Ensure last_sync is timezone-aware for comparison
                 if last_sync.tzinfo is None:
-                    last_sync = last_sync.replace(tzinfo=_CST_TZ)
+                    last_sync = last_sync.replace(tzinfo=app_tz)
                 next_sync = last_sync + timedelta(hours=interval_hours)
-                if datetime.now(_CST_TZ) < next_sync:
+                if datetime.now(app_tz) < next_sync:
                     return  # Not due yet
             except (ValueError, TypeError):
                 pass  # Invalid timestamp, run sync
@@ -210,7 +213,7 @@ class ScheduleWorker:
         next_run = self._calculate_next_run(schedule)
 
         # Update schedule
-        last_run = datetime.now(_CST_TZ).isoformat(timespec="seconds")
+        last_run = datetime.now(_get_app_tz()).isoformat(timespec="seconds")
         update_bulk_ssh_schedule_run(
             schedule_id=schedule_id,
             last_run=last_run,
@@ -234,7 +237,8 @@ class ScheduleWorker:
             return ""
 
         # Use timezone-aware datetime for consistency with schedule creation
-        now = datetime.now(_CST_TZ)
+        app_tz = _get_app_tz()
+        now = datetime.now(app_tz)
 
         if schedule_type == "daily":
             # Run daily at specified time

@@ -196,8 +196,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added app_settings table with timezone field, created /admin/settings page with timezone dropdown (7 US timezones), added get_app_timezone() and get_app_timezone_info() helpers, updated admin tabs on all admin pages."
     },
     {
       "id": "US-012",
@@ -214,8 +214,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated all schedulers to use get_app_timezone_info() instead of hardcoded CST. Modified: app.py (_format_cst, _parse_cst_datetime, _summer_timezone, changes_list), schedule_worker.py (_get_app_tz), db_jobs.py (fetch_due_bulk_ssh_schedules), cert_tracker.py (get_days_until_expiry), changes.html (dynamic timezone display)."
     },
     {
       "id": "US-013",

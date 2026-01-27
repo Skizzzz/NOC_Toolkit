@@ -20,6 +20,7 @@ Started: Mon Jan 26 21:15:43 CST 2026
 - SolarWinds settings use in-memory cache (`_SOLAR_SETTINGS`) with lock, synced to DB on change
 - WLC/Aruba hosts auto-detected from SolarWinds nodes via hostname/vendor/model patterns
 - **IMPORTANT**: Database functions in `db_jobs.py` use `*,` to force keyword-only args - always call like `func(id, field=value)` not `func(id, {'field': value})`
+- App-wide timezone is stored in `app_settings` table; use `get_app_timezone()` for IANA string or `get_app_timezone_info()` for ZoneInfo
 ---
 
 ## 2026-01-26 21:30 - US-001
@@ -404,4 +405,61 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - KB access is hierarchical: Admin sees all, NOC sees NOC+FSR, FSR sees only FSR
   - Superadmins always have KB create permission (checked in `can_user_create_kb()`)
   - User passwords use werkzeug's pbkdf2:sha256 method, device passwords use Fernet encryption
+---
+
+## 2026-01-27 18:30 - US-011
+- **What was implemented**: Added Timezone Configuration to Admin Panel
+- **Changes made**:
+  1. Added `app_settings` table in `tools/db_jobs.py` with timezone field (default: America/Chicago)
+  2. Added helper functions: `get_app_timezone()`, `get_app_timezone_info()`, `load_app_settings()`, `save_app_settings()`
+  3. Added `US_TIMEZONES` constant with 7 common US timezones
+  4. Created `/admin/settings` route in `app.py` with timezone configuration form
+  5. Created `templates/admin_settings.html` with styled timezone dropdown and info cards
+  6. Updated admin tabs in `admin_users.html` and `admin_page_settings.html` to include App Settings tab
+- **Files changed**:
+  - `tools/db_jobs.py` - Added app_settings table schema and CRUD functions
+  - `app.py` - Added route, imported new functions
+  - `templates/admin_settings.html` - New template (created)
+  - `templates/admin_users.html` - Added App Settings tab
+  - `templates/admin_page_settings.html` - Added App Settings tab
+- **Verification**:
+  - Admin settings page loads correctly at `/admin/settings`
+  - Timezone dropdown shows all 7 US timezones
+  - Current timezone displays correctly (America/Chicago)
+  - Changing timezone saves to database and persists
+  - Flash message confirms save success
+  - All admin tabs navigate correctly between pages
+  - Syntax check passes on all modified files
+- **Learnings for future iterations**:
+  - App-wide settings use single-row table pattern with `id INTEGER PRIMARY KEY CHECK(id=1)`
+  - Helper functions `get_app_timezone()` returns IANA string, `get_app_timezone_info()` returns ZoneInfo object
+  - Admin panel uses tabbed navigation with consistent styling across pages
+  - Settings forms use upsert pattern with ON CONFLICT for idempotent saves
+---
+
+## 2026-01-27 20:00 - US-012
+- **What was implemented**: Integrated timezone setting into all scheduling systems
+- **Changes made**:
+  1. **app.py**: Updated `_format_cst()` and `_parse_cst_datetime()` to use `get_app_timezone_info()` instead of hardcoded `_CST_TZ`. Updated `_summer_timezone()` to fall back to app timezone. Added `app_timezone` to changes_list template context.
+  2. **tools/schedule_worker.py**: Replaced hardcoded `_CST_TZ` with `_get_app_tz()` helper that calls `get_app_timezone_info()`. Updated all datetime operations to use dynamic timezone.
+  3. **tools/db_jobs.py**: Updated `fetch_due_bulk_ssh_schedules()` to use `get_app_timezone_info()` instead of hardcoded `_CST_TZ`.
+  4. **tools/cert_tracker.py**: Replaced hardcoded `_CST_TZ` with `_get_app_tz()` helper for certificate expiry calculations.
+  5. **templates/changes.html**: Updated description to show configured timezone name dynamically.
+- **Files changed**:
+  - `app.py` - Updated timezone functions to use configured timezone
+  - `tools/schedule_worker.py` - Dynamic timezone for bulk SSH scheduling
+  - `tools/db_jobs.py` - Dynamic timezone for due schedule queries
+  - `tools/cert_tracker.py` - Dynamic timezone for cert expiry
+  - `templates/changes.html` - Dynamic timezone display
+- **Verification**:
+  - Syntax check passes on all modified files
+  - App imports and runs successfully
+  - Admin settings page allows changing timezone (tested America/New_York, America/Chicago)
+  - Changes page shows configured timezone name dynamically
+  - All scheduler functions now use `get_app_timezone_info()` for timezone-aware operations
+- **Learnings for future iterations**:
+  - When adding timezone support, replace hardcoded `_CST_TZ` with dynamic `get_app_timezone_info()` calls
+  - Use `_get_app_tz()` helper pattern in modules that need timezone but don't import db_jobs directly
+  - Template timezone display should receive timezone from route context, not hardcode values
+  - The `_format_cst` function name is now a misnomer (it formats in configured timezone) but kept for backwards compatibility
 ---

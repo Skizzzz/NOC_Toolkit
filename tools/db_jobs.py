@@ -2193,8 +2193,9 @@ def list_bulk_ssh_schedules() -> List[dict]:
 def fetch_due_bulk_ssh_schedules() -> List[dict]:
     """Fetch schedules that are due to run."""
     try:
-        # Use timezone-aware datetime for consistency with schedule creation
-        now = datetime.now(_CST_TZ).isoformat(timespec="seconds")
+        # Use configured app timezone for consistency with schedule creation
+        app_tz = get_app_timezone_info()
+        now = datetime.now(app_tz).isoformat(timespec="seconds")
         with _conn() as cx:
             rows = cx.execute(
                 """SELECT * FROM bulk_ssh_schedules
