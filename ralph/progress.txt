@@ -353,3 +353,55 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - AP filtering is implemented both in backend and frontend (hideAPToggle checkbox)
   - SolarWinds inventory matching uses IP address first, then caption (hostname)
 ---
+
+## 2026-01-27 17:00 - US-010
+- **What was implemented**: Audited Authentication and Admin Panel
+- **Issues found**: None - all functionality working correctly
+- **Verification completed**:
+  - Login page renders correctly with username/password form and theme toggle
+  - Login with admin/admin123 works, sets session (user_id, username, role)
+  - Welcome flash message displays on successful login
+  - Login failures are logged via `log_audit()` with action "login_failed"
+  - Logout clears session, logs action, displays flash message
+  - Admin Users panel (`/admin/users`):
+    - Create New User form with: username, password (min 8 chars), role dropdown (user/superadmin), KB access level (FSR/NOC/Admin), can_create_kb checkbox
+    - User table displays: ID, username, role badge, KB permissions with inline edit, created date, last login
+    - KB permissions inline form allows updating access level and create permission
+    - Superadmins have disabled create checkbox (always have permission)
+    - User creation correctly inserts to `users` table with password_hash (pbkdf2:sha256)
+  - Page Settings panel (`/admin/page-settings`):
+    - All pages grouped by category (Main, Config Tools, WLC Tools, Infrastructure, Certificates)
+    - Toggle switches with status dots (green=enabled, red=disabled)
+    - Enable All / Disable All buttons work
+    - Save Changes updates `page_settings` table via `bulk_update_page_settings()`
+    - `@require_page_enabled` decorator blocks access to disabled pages
+  - Profile page (`/profile`):
+    - Shows username and role (read-only)
+    - Password change form validates: current password, new password >= 8 chars, confirmation match
+    - Password change logged via `log_audit()`
+  - Knowledge Base (`/knowledge-base`):
+    - "New Article" button only visible to users with `can_create_kb` or superadmin role
+    - Articles filtered by user's `kb_access_level` (FSR < NOC < Admin hierarchy)
+    - Visibility badges display correctly (FSR green, NOC blue, Admin orange)
+    - Search and subject filter work correctly
+  - Audit Logging:
+    - Auth actions logged to `audit_log` SQLite table via `log_audit()` in security.py
+    - Config changes logged to `logs/changes.csv` via `_log_audit()` in app.py
+    - Audit Log Viewer at `/logs` shows CSV data with filtering, search, pagination, CSV export
+    - 15+ log entries displaying correctly with timestamps, users, tools, results
+- **Files changed**: None (no issues found)
+- **Code review findings**:
+  - `tools/security.py` - Core auth functions: encrypt/decrypt password, create_user, verify_user, change_password, log_audit, require_login/require_superadmin/require_kb_create/require_page_enabled decorators
+  - `tools/db_jobs.py` lines 2812-2916 - Page settings CRUD functions
+  - `app.py` lines 1729-1890 - Login/logout/profile/admin routes
+  - `app.py` lines 6360-6569 - KB article functions and routes
+  - Password hashing uses werkzeug pbkdf2:sha256
+  - Session stores user_id, username, role
+  - KB access levels: FSR (1) < NOC (2) < Admin (3)
+- **Learnings for future iterations**:
+  - Two audit systems: SQLite `audit_log` table (auth) and `logs/changes.csv` (config changes)
+  - Page visibility uses `page_settings` table with `@require_page_enabled` decorator
+  - KB access is hierarchical: Admin sees all, NOC sees NOC+FSR, FSR sees only FSR
+  - Superadmins always have KB create permission (checked in `can_user_create_kb()`)
+  - User passwords use werkzeug's pbkdf2:sha256 method, device passwords use Fernet encryption
+---
