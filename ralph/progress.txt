@@ -9,6 +9,10 @@ Started: Mon Jan 26 21:15:43 CST 2026
 - Threading uses daemon threads with wake events for responsive polling
 - Credentials are shared between Cisco and Aruba controllers
 - Auto-discovery pulls from SolarWinds nodes table
+- **IMPORTANT**: `security.py` uses project-local `noc_toolkit.db` for auth, while `db_jobs.py` uses `~/.noc_toolkit/noc_toolkit.db` for data
+- Bulk SSH uses ThreadPoolExecutor for parallel execution (default 10 workers)
+- Template variables use `{{variable_name}}` syntax, extracted via regex
+- Schedule credentials are Fernet-encrypted in database
 ---
 
 ## 2026-01-26 21:30 - US-001
@@ -31,4 +35,35 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - Check that new settings fields have corresponding DB columns and are in load/save functions
   - Test settings persistence by restarting app
   - The password hash format must match what `verify_user()` expects (werkzeug pbkdf2)
+---
+
+## 2026-01-26 22:15 - US-002
+- **What was implemented**: Audited Bulk SSH Tool and Templates
+- **Issues found**: None - all functionality working correctly
+- **Verification completed**:
+  - Template CRUD operations work (create, read, update, delete)
+  - Default templates seed correctly (10 common templates)
+  - Variable substitution syntax `{{variable}}` displays correctly
+  - Template categories (backup, monitoring, routing, troubleshooting) work
+  - Job history page renders correctly (empty state shown)
+  - Scheduled jobs page renders correctly
+  - Main execution page has all required fields:
+    - Device selection (paste list, from inventory)
+    - Authentication (username, password, enable secret)
+    - Command input with template dropdown
+    - Options (Show Commands/Config Mode, Device Type, Parallel Connections, Timeout)
+  - CSV export route exists and is properly implemented
+  - Results storage uses `bulk_ssh_jobs` and `bulk_ssh_results` tables
+- **Files changed**: None (no issues found)
+- **Code review findings**:
+  - BulkSSHJob class in `tools/bulk_ssh.py` uses ThreadPoolExecutor correctly
+  - Template engine in `tools/template_engine.py` properly extracts and substitutes variables
+  - Database layer in `tools/db_jobs.py` has proper CRUD functions with encryption
+  - Schedule worker in `tools/schedule_worker.py` checks every 60 seconds for due jobs
+  - Routes in `app.py` lines 5171-5608 handle all Bulk SSH operations
+- **Learnings for future iterations**:
+  - Bulk SSH templates are stored in `bulk_ssh_templates` table
+  - Job results stored in `bulk_ssh_jobs` (metadata) and `bulk_ssh_results` (per-device output)
+  - Schedule credentials are encrypted with Fernet before storage
+  - Email alerting for schedule failures is a placeholder (not implemented)
 ---
