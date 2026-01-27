@@ -108,8 +108,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "All functionality verified working - settings persistence (username, password, poll time, timezone, enable scheduler), timezone-aware scheduling with configurable IANA timezone, WLAN toggle/schedule logged to audit trail (wlc-summer-toggle, wlc_wlan_toggle, wlc_wlan_schedule), change windows integration for scheduled enable/disable. No issues found."
     },
     {
       "id": "US-007",

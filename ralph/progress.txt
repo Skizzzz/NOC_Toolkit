@@ -185,4 +185,59 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - Organization comes from CustomProperties.Organization in Orion
   - Node sync replaces all nodes (DELETE then INSERT pattern)
   - WLC/Aruba host detection uses specific naming patterns from organization
+- Summer Guest scheduler uses `_SUMMER_WAKE` threading.Event for immediate wake-up and waits up to 5 minutes between checks
+---
+
+## 2026-01-27 10:15 - US-006
+- **What was implemented**: Audited WLC Summer Guest Automation
+- **Issues found**: None - all functionality working correctly
+- **Verification completed**:
+  - Settings page at `/tools/wlc/summer-guest/settings`:
+    - Username, password, enable secret save correctly
+    - Password encrypted with Fernet before storage
+    - Profile names and WLAN IDs persist correctly
+    - Poll time (HH:MM format) saves correctly (tested 08:30)
+    - Timezone saves correctly (tested America/New_York)
+    - Enable scheduler checkbox persists correctly
+    - Validation results section displays connection test results
+    - "Run Now", "Save & Run", "Save Settings" buttons all work
+  - Monitor page at `/tools/wlc/summer-guest`:
+    - Status pill shows correct state (Never/OK/Partial/Error)
+    - Last poll and next poll timestamps display correctly
+    - Next poll shows in configured timezone with proper offset (e.g., "2026-01-28 08:30 AM EST")
+    - Targets section shows profile names, WLAN IDs, and auto prefix match
+    - Controller filter works for searching host cards
+    - Controller cards show hostname, status, and WLAN entries
+    - Enable/Disable action popover for immediate toggle
+    - Schedule CHG action popover for creating change windows
+    - Recent Polls expandable section shows poll history
+  - Scheduling integration:
+    - Changes created via `/tools/wlc/summer-guest/schedule` endpoint
+    - Uses change_windows table for scheduling enable/disable
+    - Supports auto-rollback option
+    - Change events logged: scheduled, started, completed, error
+    - Upcoming changes shown as "Scheduled CHG" badge on controller cards
+  - Audit logging verified:
+    - WLAN toggle actions logged as `wlc_wlan_toggle` to audit trail
+    - WLAN schedule actions logged as `wlc_wlan_schedule` to audit trail
+    - Change execution logged via `wlc-summer-toggle` tool in changes.csv
+  - Timezone-aware scheduling:
+    - `_summer_timezone()` returns ZoneInfo from configurable timezone
+    - `_next_summer_run()` calculates next poll in configured timezone
+    - `_summer_worker_loop()` uses configured timezone for scheduling
+    - Poll timestamps stored and displayed in CST format
+- **Files changed**: None (no issues found)
+- **Code review findings**:
+  - Summer Guest scheduler in `app.py` (`_summer_worker_loop`) uses daemon thread
+  - Settings stored in `wlc_summer_settings` table with JSON columns for lists
+  - Poll samples stored in `wlc_summer_samples` table with cleanup after 30 days
+  - WLC hosts auto-populated from SolarWinds (hostname contains "wc01", vendor "Cisco", model "9800")
+  - WLAN state changes via `set_wlan_state()` in `tools/wlc_summer_guest.py`
+  - Uses netmiko IOS-XE connection for CLI commands
+- **Learnings for future iterations**:
+  - Summer Guest has its own configurable timezone (separate from other schedulers)
+  - `_SUMMER_WAKE.set()` triggers immediate poll when settings change
+  - Scheduler waits up to 5 minutes (300s) between checks when no poll is due
+  - Auto prefix match "Summer*" catches all profiles starting with "Summer"
+  - WLAN toggle uses: `wlan <profile_name> <wlan_id>`, `no shutdown`/`shutdown`, `write memory`
 ---
