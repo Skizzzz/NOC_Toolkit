@@ -5838,15 +5838,14 @@ def cert_edit(cert_id):
         return redirect(url_for('cert_tracker'))
 
     if request.method == "POST":
-        updates = {
-            'issued_to': request.form.get('issued_to', ''),
-            'issued_by': request.form.get('issued_by', ''),
-            'used_by': request.form.get('used_by', ''),
-            'notes': request.form.get('notes', ''),
-            'devices': request.form.get('devices', ''),
-            'updated': datetime.now(_CST_TZ).strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        update_certificate(cert_id, updates)
+        update_certificate(
+            cert_id,
+            issued_to=request.form.get('issued_to', ''),
+            issued_by=request.form.get('issued_by', ''),
+            used_by=request.form.get('used_by', ''),
+            notes=request.form.get('notes', ''),
+            devices=request.form.get('devices', ''),
+        )
         flash("Certificate updated successfully.", "success")
         return redirect(url_for('cert_tracker'))
 
@@ -6067,14 +6066,13 @@ def ise_node_add():
         flash("All fields are required.", "error")
         return redirect(url_for('ise_nodes'))
 
-    node_data = {
-        'hostname': hostname,
-        'ip': ip,
-        'username': username,
-        'password': password,
-        'enabled': 1,
-    }
-    insert_ise_node(node_data)
+    insert_ise_node(
+        hostname=hostname,
+        ip=ip,
+        username=username,
+        password=password,
+        enabled=True,
+    )
     flash(f"ISE node '{hostname}' added successfully.", "success")
     return redirect(url_for('ise_nodes'))
 
@@ -6089,19 +6087,16 @@ def ise_node_edit(node_id):
         return redirect(url_for('ise_nodes'))
 
     if request.method == "POST":
-        updates = {
-            'hostname': request.form.get('hostname', '').strip(),
-            'ip': request.form.get('ip', '').strip(),
-            'username': request.form.get('username', '').strip(),
-            'enabled': 1 if request.form.get('enabled') else 0,
-        }
-
         # Only update password if provided
         new_password = request.form.get('password', '')
-        if new_password:
-            updates['password'] = new_password
-
-        update_ise_node(node_id, updates)
+        update_ise_node(
+            node_id,
+            hostname=request.form.get('hostname', '').strip(),
+            ip=request.form.get('ip', '').strip(),
+            username=request.form.get('username', '').strip(),
+            enabled=bool(request.form.get('enabled')),
+            password=new_password if new_password else None,
+        )
         flash("ISE node updated successfully.", "success")
         return redirect(url_for('ise_nodes'))
 
@@ -6132,8 +6127,8 @@ def ise_node_toggle(node_id):
     """Toggle an ISE node enabled/disabled."""
     node = get_ise_node(node_id)
     if node:
-        new_status = 0 if node.get('enabled') else 1
-        update_ise_node(node_id, {'enabled': new_status})
+        new_status = not node.get('enabled')
+        update_ise_node(node_id, enabled=new_status)
         status_text = "enabled" if new_status else "disabled"
         flash(f"ISE node '{node.get('hostname', 'Unknown')}' {status_text}.", "success")
     else:

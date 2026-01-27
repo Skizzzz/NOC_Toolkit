@@ -19,6 +19,7 @@ Started: Mon Jan 26 21:15:43 CST 2026
 - SolarWinds API uses SWIS REST endpoint on port 17778 (`/SolarWinds/InformationService/v3/Json/Query`)
 - SolarWinds settings use in-memory cache (`_SOLAR_SETTINGS`) with lock, synced to DB on change
 - WLC/Aruba hosts auto-detected from SolarWinds nodes via hostname/vendor/model patterns
+- **IMPORTANT**: Database functions in `db_jobs.py` use `*,` to force keyword-only args - always call like `func(id, field=value)` not `func(id, {'field': value})`
 ---
 
 ## 2026-01-26 21:30 - US-001
@@ -240,4 +241,38 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - Scheduler waits up to 5 minutes (300s) between checks when no poll is due
   - Auto prefix match "Summer*" catches all profiles starting with "Summer"
   - WLAN toggle uses: `wlan <profile_name> <wlan_id>`, `no shutdown`/`shutdown`, `write memory`
+---
+
+## 2026-01-27 12:00 - US-007
+- **What was implemented**: Audited Certificate Tracker and ISE Sync
+- **Issues found and fixed**:
+  1. **FIXED: `ise_node_add` route passing dict instead of keyword args** - `insert_ise_node(node_data)` was passing a dict, but function expects keyword args
+     - Changed to `insert_ise_node(hostname=..., ip=..., username=..., password=..., enabled=True)`
+  2. **FIXED: `cert_edit` route passing dict instead of keyword args** - `update_certificate(cert_id, updates)` was passing dict
+     - Changed to `update_certificate(cert_id, issued_to=..., issued_by=..., used_by=..., notes=..., devices=...)`
+  3. **FIXED: `ise_node_edit` route passing dict instead of keyword args** - `update_ise_node(node_id, updates)` was passing dict
+     - Changed to `update_ise_node(node_id, hostname=..., ip=..., username=..., enabled=..., password=...)`
+  4. **FIXED: `ise_node_toggle` route passing dict instead of keyword args** - `update_ise_node(node_id, {'enabled': new_status})`
+     - Changed to `update_ise_node(node_id, enabled=new_status)`
+- **Files changed**:
+  - `app.py` - Fixed 4 function calls to use keyword arguments instead of dicts
+- **Verification**:
+  - Certificate Tracker page loads correctly with stats cards and filter bar
+  - ISE Nodes page loads correctly with auto-sync settings
+  - Add ISE Node form works - creates node in database
+  - Enable/Disable toggle works correctly
+  - Delete node works with confirmation dialog
+  - All routes pass syntax check
+- **Code review findings**:
+  - Certificate upload extracts CN, expiration, serial via OpenSSL subprocess calls
+  - ISE cert sync uses REST API: `https://{ip}/api/v1/certs/system-certificate/{hostname}`
+  - ISE version fetch uses ERS API on port 9060
+  - Scheduled sync runs via ScheduleWorker daemon thread every 60 seconds
+  - Duplicate detection uses certificate serial number
+  - Password encryption uses Fernet cipher
+- **Learnings for future iterations**:
+  - Database functions use `*,` to force keyword-only arguments - always use `func(id, field=value)` not `func(id, {'field': value})`
+  - Certificate expiry status classes: exp-expired, exp-critical, exp-warning, exp-caution, exp-ok, exp-unknown
+  - ISE cert API returns: friendlyName, expirationDate, issuedTo, issuedBy, usedBy, serialNumberDecimalFormat
+  - Auto-sync settings stored in `cert_sync_settings` table (single row with id=1)
 ---
