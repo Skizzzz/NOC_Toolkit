@@ -697,6 +697,46 @@ def init_db():
         cx.execute("CREATE INDEX IF NOT EXISTS idx_device_inv_vendor ON device_inventory(vendor)")
         cx.execute("CREATE INDEX IF NOT EXISTS idx_device_inv_model ON device_inventory(model)")
 
+        # AP Inventory table - auto-updated from WLC polling
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ap_inventory(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              ap_name TEXT,
+              ap_ip TEXT,
+              ap_model TEXT,
+              ap_mac TEXT,
+              ap_location TEXT,
+              ap_state TEXT,
+              slots TEXT,
+              country TEXT,
+              wlc_host TEXT,
+              first_seen TEXT,
+              last_seen TEXT
+            )
+            """
+        )
+        # Unique constraint on (ap_mac, wlc_host) to prevent duplicates
+        cx.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ap_inv_mac_wlc ON ap_inventory(ap_mac, wlc_host)")
+        # Index on last_seen for efficient cleanup queries
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_ap_inv_last_seen ON ap_inventory(last_seen)")
+        # Additional indexes for common queries
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_ap_inv_name ON ap_inventory(ap_name)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_ap_inv_wlc ON ap_inventory(wlc_host)")
+        cx.execute("CREATE INDEX IF NOT EXISTS idx_ap_inv_model ON ap_inventory(ap_model)")
+
+        # AP Inventory settings table
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ap_inventory_settings(
+              id INTEGER PRIMARY KEY CHECK(id=1),
+              enabled INTEGER DEFAULT 1,
+              cleanup_days INTEGER DEFAULT 5,
+              updated_at TEXT
+            )
+            """
+        )
+
         _maybe_seed_change_logs(cx)
         _init_page_settings(cx)
 
@@ -3167,6 +3207,310 @@ def clear_device_inventory() -> bool:
     try:
         with _DB_LOCK, _conn() as cx:
             cx.execute("DELETE FROM device_inventory")
+            return True
+    except Exception:
+        return False
+
+
+# ====================== AP Inventory Functions ======================
+
+_DEFAULT_AP_INVENTORY_SETTINGS = {
+    "enabled": True,
+    "cleanup_days": 5,
+    "updated_at": None,
+}
+
+
+def load_ap_inventory_settings() -> Dict:
+    """Load AP inventory settings from the database."""
+    settings = dict(_DEFAULT_AP_INVENTORY_SETTINGS)
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute(
+                "SELECT enabled, cleanup_days, updated_at FROM ap_inventory_settings WHERE id=1"
+            ).fetchone()
+            if row:
+                settings["enabled"] = bool(row[0])
+                settings["cleanup_days"] = row[1] or 5
+                settings["updated_at"] = row[2]
+    except Exception:
+        pass
+    return settings
+
+
+def save_ap_inventory_settings(*, enabled: bool = True, cleanup_days: int = 5) -> bool:
+    """Save AP inventory settings to the database."""
+    try:
+        now = datetime.now().isoformat(timespec="seconds")
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT INTO ap_inventory_settings(id, enabled, cleanup_days, updated_at)
+                VALUES(1, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  enabled=excluded.enabled,
+                  cleanup_days=excluded.cleanup_days,
+                  updated_at=excluded.updated_at
+                """,
+                (1 if enabled else 0, cleanup_days, now)
+            )
+            return True
+    except Exception:
+        return False
+
+
+def upsert_ap_inventory(
+    *,
+    ap_name: str,
+    ap_ip: str = "",
+    ap_model: str = "",
+    ap_mac: str,
+    ap_location: str = "",
+    ap_state: str = "",
+    slots: str = "",
+    country: str = "",
+    wlc_host: str,
+) -> bool:
+    """
+    Insert or update an AP in the inventory.
+    Uses (ap_mac, wlc_host) as unique key.
+    - New APs get first_seen = now, last_seen = now
+    - Existing APs get last_seen = now (first_seen preserved)
+    """
+    try:
+        now = datetime.now().isoformat(timespec="seconds")
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT INTO ap_inventory(
+                    ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state,
+                    slots, country, wlc_host, first_seen, last_seen
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(ap_mac, wlc_host) DO UPDATE SET
+                    ap_name=excluded.ap_name,
+                    ap_ip=excluded.ap_ip,
+                    ap_model=excluded.ap_model,
+                    ap_location=excluded.ap_location,
+                    ap_state=excluded.ap_state,
+                    slots=excluded.slots,
+                    country=excluded.country,
+                    last_seen=excluded.last_seen
+                """,
+                (ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state,
+                 slots, country, wlc_host, now, now),
+            )
+            return True
+    except Exception:
+        return False
+
+
+def upsert_ap_inventory_bulk(aps: List[Dict], wlc_host: str) -> int:
+    """
+    Bulk insert/update APs in the inventory.
+    Each dict in aps should have: ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state, slots, country
+    Returns the number of APs successfully upserted.
+    """
+    if not aps:
+        return 0
+    count = 0
+    try:
+        now = datetime.now().isoformat(timespec="seconds")
+        rows = []
+        for ap in aps:
+            if not ap.get("ap_mac"):
+                continue
+            rows.append((
+                ap.get("ap_name", ""),
+                ap.get("ap_ip", ""),
+                ap.get("ap_model", ""),
+                ap.get("ap_mac", ""),
+                ap.get("ap_location", ""),
+                ap.get("ap_state", ""),
+                ap.get("slots", ""),
+                ap.get("country", ""),
+                wlc_host,
+                now,
+                now,
+            ))
+        if not rows:
+            return 0
+        with _DB_LOCK, _conn() as cx:
+            cx.executemany(
+                """
+                INSERT INTO ap_inventory(
+                    ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state,
+                    slots, country, wlc_host, first_seen, last_seen
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(ap_mac, wlc_host) DO UPDATE SET
+                    ap_name=excluded.ap_name,
+                    ap_ip=excluded.ap_ip,
+                    ap_model=excluded.ap_model,
+                    ap_location=excluded.ap_location,
+                    ap_state=excluded.ap_state,
+                    slots=excluded.slots,
+                    country=excluded.country,
+                    last_seen=excluded.last_seen
+                """,
+                rows,
+            )
+            count = len(rows)
+    except Exception:
+        pass
+    return count
+
+
+def list_ap_inventory(
+    *,
+    wlc_host: Optional[str] = None,
+    ap_name_filter: Optional[str] = None,
+    ap_model_filter: Optional[str] = None,
+    ap_location_filter: Optional[str] = None,
+    limit: int = 5000,
+) -> List[Dict]:
+    """List APs from inventory with optional filters."""
+    try:
+        with _conn() as cx:
+            cx.row_factory = sqlite3.Row
+            query = "SELECT * FROM ap_inventory WHERE 1=1"
+            params: List = []
+
+            if wlc_host:
+                query += " AND wlc_host = ?"
+                params.append(wlc_host)
+            if ap_name_filter:
+                query += " AND ap_name LIKE ?"
+                params.append(f"%{ap_name_filter}%")
+            if ap_model_filter:
+                query += " AND ap_model LIKE ?"
+                params.append(f"%{ap_model_filter}%")
+            if ap_location_filter:
+                query += " AND ap_location LIKE ?"
+                params.append(f"%{ap_location_filter}%")
+
+            query += " ORDER BY wlc_host, ap_name LIMIT ?"
+            params.append(limit)
+
+            rows = cx.execute(query, params).fetchall()
+            return [dict(row) for row in rows]
+    except Exception:
+        return []
+
+
+def get_ap_inventory(ap_mac: str, wlc_host: str) -> Optional[Dict]:
+    """Get a single AP from inventory by MAC and WLC host."""
+    try:
+        with _conn() as cx:
+            cx.row_factory = sqlite3.Row
+            row = cx.execute(
+                "SELECT * FROM ap_inventory WHERE ap_mac = ? AND wlc_host = ?",
+                (ap_mac, wlc_host)
+            ).fetchone()
+            if not row:
+                return None
+            return dict(row)
+    except Exception:
+        return None
+
+
+def delete_ap_inventory(ap_mac: str, wlc_host: str) -> bool:
+    """Delete an AP from inventory by MAC and WLC host."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                "DELETE FROM ap_inventory WHERE ap_mac = ? AND wlc_host = ?",
+                (ap_mac, wlc_host)
+            )
+            return True
+    except Exception:
+        return False
+
+
+def cleanup_stale_ap_inventory(days: int = 5) -> int:
+    """
+    Remove AP records where last_seen < (now - days).
+    Returns the number of APs removed.
+    Protects against clock issues by only removing APs seen at least once before today.
+    """
+    if days < 1:
+        return 0
+    try:
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+        # Also require first_seen to be different from last_seen or older than today
+        # to protect newly added APs from being removed due to clock issues
+        today_start = datetime.now().replace(hour=0, minute=0, second=0).isoformat(timespec="seconds")
+        with _DB_LOCK, _conn() as cx:
+            # Count for return value
+            cur = cx.execute(
+                "SELECT COUNT(*) FROM ap_inventory WHERE last_seen < ? AND first_seen < ?",
+                (cutoff, today_start)
+            )
+            count = cur.fetchone()[0]
+            if count > 0:
+                cx.execute(
+                    "DELETE FROM ap_inventory WHERE last_seen < ? AND first_seen < ?",
+                    (cutoff, today_start)
+                )
+            return count
+    except Exception:
+        return 0
+
+
+def get_ap_inventory_stats() -> Dict:
+    """Get summary statistics for AP inventory."""
+    try:
+        with _conn() as cx:
+            total = cx.execute("SELECT COUNT(*) FROM ap_inventory").fetchone()[0]
+
+            # Count by WLC host
+            wlc_rows = cx.execute(
+                "SELECT wlc_host, COUNT(*) as cnt FROM ap_inventory GROUP BY wlc_host ORDER BY cnt DESC"
+            ).fetchall()
+            by_wlc = {row[0]: row[1] for row in wlc_rows if row[0]}
+
+            # Count by model
+            model_rows = cx.execute(
+                "SELECT ap_model, COUNT(*) as cnt FROM ap_inventory GROUP BY ap_model ORDER BY cnt DESC LIMIT 20"
+            ).fetchall()
+            by_model = {row[0]: row[1] for row in model_rows if row[0]}
+
+            # Count by state
+            state_rows = cx.execute(
+                "SELECT ap_state, COUNT(*) as cnt FROM ap_inventory GROUP BY ap_state ORDER BY cnt DESC"
+            ).fetchall()
+            by_state = {row[0]: row[1] for row in state_rows if row[0]}
+
+            # Get unique WLC hosts
+            wlc_hosts = list(by_wlc.keys())
+
+            # Get last seen time
+            last_seen = cx.execute(
+                "SELECT MAX(last_seen) FROM ap_inventory"
+            ).fetchone()[0]
+
+            return {
+                "total": total,
+                "by_wlc": by_wlc,
+                "by_model": by_model,
+                "by_state": by_state,
+                "wlc_hosts": wlc_hosts,
+                "last_seen": last_seen,
+            }
+    except Exception:
+        return {
+            "total": 0,
+            "by_wlc": {},
+            "by_model": {},
+            "by_state": {},
+            "wlc_hosts": [],
+            "last_seen": None,
+        }
+
+
+def clear_ap_inventory() -> bool:
+    """Clear all APs from inventory."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            cx.execute("DELETE FROM ap_inventory")
             return True
     except Exception:
         return False
