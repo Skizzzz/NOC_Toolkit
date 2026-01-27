@@ -463,3 +463,58 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - Template timezone display should receive timezone from route context, not hardcode values
   - The `_format_cst` function name is now a misnomer (it formats in configured timezone) but kept for backwards compatibility
 ---
+
+## 2026-01-27 21:00 - US-013
+- **What was implemented**: Created Auto-Updating AP Inventory Database Schema
+- **Changes made**:
+  1. Added `ap_inventory` table in `init_db()` with fields: ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state, slots, country, wlc_host, first_seen, last_seen
+  2. Added unique index `idx_ap_inv_mac_wlc` on (ap_mac, wlc_host) to prevent duplicates
+  3. Added index `idx_ap_inv_last_seen` for efficient cleanup queries
+  4. Added additional indexes for common queries: ap_name, wlc_host, ap_model
+  5. Created `ap_inventory_settings` table with enabled, cleanup_days, updated_at fields
+  6. Added CRUD functions:
+     - `load_ap_inventory_settings()` / `save_ap_inventory_settings()` - settings management
+     - `upsert_ap_inventory()` - insert/update single AP
+     - `upsert_ap_inventory_bulk()` - bulk insert/update APs (for polling)
+     - `list_ap_inventory()` - list with optional filters
+     - `get_ap_inventory()` - get single AP by MAC + WLC host
+     - `delete_ap_inventory()` - delete single AP
+     - `cleanup_stale_ap_inventory()` - remove APs not seen for N days
+     - `get_ap_inventory_stats()` - summary statistics
+     - `clear_ap_inventory()` - clear all APs
+- **Files changed**:
+  - `tools/db_jobs.py` - Added table schema and CRUD functions
+- **Verification**:
+  - Syntax check passes on all Python files
+  - Schema follows existing patterns (single-row settings with CHECK(id=1), upsert with ON CONFLICT)
+  - Functions use `_DB_LOCK` for thread safety
+  - Cleanup function protects newly-added APs from clock issues
+- **Learnings for future iterations**:
+  - AP inventory uses (ap_mac, wlc_host) as unique key to allow same AP MAC on different controllers
+  - Bulk upsert uses `executemany()` for efficiency
+  - Cleanup protection: only removes APs where both last_seen AND first_seen are older than cutoff, preventing deletion of newly-added APs due to clock sync issues
+  - Settings follow single-row pattern with `id INTEGER PRIMARY KEY CHECK(id=1)`
+---
+
+## 2026-01-27 22:30 - US-014
+- **What was implemented**: Implemented AP Inventory Polling During Dashboard Updates
+- **Changes made**:
+  1. **app.py**: Modified `_collect_wlc_snapshot()` to include `ap_details` in result, added `_parse_cisco_ap_summary()` to parse AP details from `show ap summary` output
+  2. **app.py**: Modified `_dashboard_poll_once()` to collect `ap_details` from snapshots and store using `upsert_ap_inventory_bulk()`
+  3. **app.py**: Added import for `upsert_ap_inventory_bulk` from `tools/db_jobs.py`
+  4. **tools/aruba_controller.py**: Modified `get_aruba_snapshot()` to include `ap_details`, added `_parse_aruba_ap_database()` parser
+- **Files changed**:
+  - `app.py` - Added AP detail collection and storage in dashboard polling
+  - `tools/aruba_controller.py` - Added AP detail parsing for Aruba controllers
+- **Verification**:
+  - Python syntax check passes on all modified files
+  - App imports successfully
+  - Data flow: snapshot → ap_details → upsert_ap_inventory_bulk
+  - Cisco AP fields mapped: ap_name, ap_ip, ap_model, ap_mac (Ethernet MAC), ap_location, ap_state, slots, country
+  - Aruba AP fields mapped: ap_name, ap_ip, ap_model, ap_mac (or pseudo-MAC from name hash), ap_state
+- **Learnings for future iterations**:
+  - Cisco 9800 `show ap summary` includes Ethernet MAC which is used for deduplication
+  - Aruba `show ap database long` may not include MAC in standard columns, so a pseudo-MAC is generated from AP name hash for deduplication
+  - AP inventory updates happen automatically during each WLC dashboard poll cycle
+  - The parsing functions reuse the same output that's already fetched for AP count, avoiding extra SSH commands
+---

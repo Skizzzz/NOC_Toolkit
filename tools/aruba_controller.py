@@ -20,13 +20,13 @@ def get_aruba_snapshot(
     secret: Optional[str] = None,
 ) -> Tuple[Dict, List[str]]:
     """
-    Collect client count and AP count from an Aruba controller.
+    Collect client count, AP count, and AP details from an Aruba controller.
 
     Returns:
         Tuple of (result_dict, errors_list)
-        result_dict: {"host": str, "total_clients": int|None, "ap_count": int|None}
+        result_dict: {"host": str, "total_clients": int|None, "ap_count": int|None, "ap_details": list}
     """
-    result = {"host": host, "total_clients": None, "ap_count": None}
+    result = {"host": host, "total_clients": None, "ap_count": None, "ap_details": []}
     errors = []
 
     try:
@@ -52,12 +52,14 @@ def get_aruba_snapshot(
             except Exception as exc:
                 errors.append(f"{host}: client count failed ({exc})")
 
-            # Get AP count
+            # Get AP count and details
             try:
                 # Disable paging first to get full output
                 conn.send_command("no paging", read_timeout=10)
-                # "show ap database" lists all APs, "Total APs:XXX" at bottom
-                ap_out = conn.send_command("show ap database", read_timeout=90)
+                # Try "show ap database long" first for more details including MAC
+                ap_out = conn.send_command("show ap database long", read_timeout=120)
+                if not ap_out:
+                    ap_out = conn.send_command("show ap database", read_timeout=90)
                 if ap_out:
                     # Look for "Total APs:XXX" at the bottom of output
                     total_match = re.search(r"Total\s+APs?\s*:\s*(\d+)", ap_out or "", re.I)
@@ -65,6 +67,10 @@ def get_aruba_snapshot(
                         result["ap_count"] = int(total_match.group(1))
                     else:
                         errors.append(f"{host}: Total APs not found in ap database output")
+
+                    # Parse AP details from the output
+                    ap_details = _parse_aruba_ap_database(ap_out)
+                    result["ap_details"] = ap_details
                 else:
                     errors.append(f"{host}: AP database empty")
             except Exception as exc:
@@ -74,6 +80,107 @@ def get_aruba_snapshot(
         errors.append(f"{host}: connection failed ({exc})")
 
     return result, errors
+
+
+def _parse_aruba_ap_database(output: str) -> List[Dict]:
+    """
+    Parse 'show ap database long' or 'show ap database' output from Aruba controller.
+    Returns list of dicts with: ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state, slots, country
+    """
+    rows = []
+    if not output:
+        return rows
+
+    lines = output.splitlines()
+
+    # Find header line
+    header_idx = -1
+    for i, line in enumerate(lines):
+        # Look for header containing Name and IP/Address
+        if "Name" in line and ("IP" in line or "Address" in line):
+            header_idx = i
+            break
+
+    if header_idx < 0:
+        return rows
+
+    # Parse header to get column positions
+    header_line = lines[header_idx]
+    cols = re.split(r"\s{2,}", header_line.strip())
+    col_index = {c.strip(): idx for idx, c in enumerate(cols)}
+
+    # MAC address pattern
+    mac_pattern = re.compile(r"([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}")
+    ip_pattern = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
+
+    # Parse data lines
+    for line in lines[header_idx + 1:]:
+        line = line.strip()
+        if not line or line.startswith("-") or line.startswith("="):
+            continue
+        if "Total APs" in line:
+            break
+
+        # Split by multiple spaces
+        parts = re.split(r"\s{2,}", line)
+        if len(parts) < 2:
+            continue
+
+        ap_name = parts[0] if parts else ""
+
+        # Skip non-AP lines (Flags legend, repeated headers, etc.)
+        if not ap_name:
+            continue
+        if "Flags:" in ap_name or "=" in ap_name:
+            continue
+        if ap_name.lower() == "name":
+            continue
+        # Skip lines that start with single char + " =" (legend entries like "B = Built-in")
+        if re.match(r"^[A-Za-z0-9]{1,2}\s*[-=]", ap_name):
+            continue
+
+        row = {
+            "ap_name": ap_name,
+            "ap_ip": "",
+            "ap_model": parts[2] if len(parts) > 2 else "",  # Usually "AP Type" column
+            "ap_mac": "",
+            "ap_location": "",
+            "ap_state": "",
+            "slots": "",
+            "country": "",
+        }
+
+        # Try to find IP address in parts
+        for p in parts:
+            if ip_pattern.match(p):
+                row["ap_ip"] = p
+                break
+
+        # Try to find MAC address in parts
+        for p in parts:
+            if mac_pattern.search(p):
+                mac_match = mac_pattern.search(p)
+                if mac_match:
+                    row["ap_mac"] = mac_match.group(0)
+                    break
+
+        # If no MAC found, generate a pseudo-MAC from AP name for deduplication
+        # This ensures we can still track APs without MAC
+        if not row["ap_mac"] and ap_name:
+            # Use a hash of AP name as pseudo-MAC for uniqueness
+            import hashlib
+            hash_val = hashlib.md5(ap_name.encode()).hexdigest()[:12]
+            row["ap_mac"] = ":".join(hash_val[i:i+2] for i in range(0, 12, 2))
+
+        # Look for status
+        for p in parts:
+            if p.lower() in ("up", "down", "active", "standby"):
+                row["ap_state"] = p
+                break
+
+        rows.append(row)
+
+    return rows
 
 
 def get_aruba_client_count(

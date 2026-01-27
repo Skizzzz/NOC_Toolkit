@@ -26,7 +26,7 @@ from tools.global_config import (
 )
 from tools.push_config import push_config_lines, show_run_full, show_run_interfaces
 
-from tools.wlc_inventory import get_ap_inventory_many, make_ap_csv
+from tools.wlc_inventory import get_ap_inventory_many, get_ap_inventory, make_ap_csv
 from tools.aruba_controller import get_aruba_ap_inventory_many
 from tools.device_inventory import collect_device_inventory_many, make_inventory_csv
 
@@ -149,6 +149,8 @@ from tools.db_jobs import (
     get_app_timezone,
     get_app_timezone_info,
     US_TIMEZONES,
+    # AP Inventory functions
+    upsert_ap_inventory_bulk,
 )
 
 from tools.cert_tracker import (
@@ -220,7 +222,7 @@ _UTC_TZ = ZoneInfo("UTC")
 
 
 def _collect_wlc_snapshot(host, username, password, secret):
-    result = {"host": host, "total_clients": None, "ap_count": None}
+    result = {"host": host, "total_clients": None, "ap_count": None, "ap_details": []}
     errors = []
     try:
         with ios_xe_connection(
@@ -243,20 +245,88 @@ def _collect_wlc_snapshot(host, username, password, secret):
                 errors.append(f"{host}: wireless summary failed ({exc})")
 
             try:
-                ap_out = conn.send_command("show ap summary | include Number", read_timeout=180)
+                ap_out = conn.send_command("show ap summary", read_timeout=180)
                 ap_match = re.search(r"Number of APs:\s*(\d+)", ap_out or "", re.I)
-                if not ap_match:
-                    ap_out = conn.send_command("show ap summary", read_timeout=180)
-                    ap_match = re.search(r"Number of APs:\s*(\d+)", ap_out or "", re.I)
                 if ap_match:
                     result["ap_count"] = int(ap_match.group(1))
                 else:
                     errors.append(f"{host}: AP count not found in summary")
+
+                # Parse AP details from the same output
+                if ap_out:
+                    ap_details = _parse_cisco_ap_summary(ap_out)
+                    result["ap_details"] = ap_details
             except Exception as exc:
                 errors.append(f"{host}: ap summary failed ({exc})")
     except Exception as exc:
         errors.append(f"{host}: {exc}")
     return result, errors
+
+
+def _parse_cisco_ap_summary(output: str) -> List[Dict]:
+    """
+    Parse 'show ap summary' output from Cisco 9800 WLC.
+    Returns list of dicts with: ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state, slots, country
+    """
+    rows: List[Dict] = []
+    lines = [line.rstrip() for line in output.splitlines() if line.strip()]
+
+    # Find header line containing "AP Name"
+    header_idx = -1
+    for i, line in enumerate(lines):
+        if "AP Name" in line and ("IP Address" in line or "IP" in line):
+            header_idx = i
+            break
+    if header_idx == -1:
+        for i, line in enumerate(lines):
+            if "AP Name" in line and "AP Model" in line:
+                header_idx = i
+                break
+    if header_idx == -1:
+        return rows
+
+    header_line = lines[header_idx]
+    cols = re.split(r"\s{2,}", header_line.strip())
+    col_index = {c.strip(): idx for idx, c in enumerate(cols)}
+
+    def pick(row_tokens: List[str], names: Tuple[str, ...]) -> str:
+        for n in names:
+            if n in col_index and col_index[n] < len(row_tokens):
+                return row_tokens[col_index[n]].strip()
+        return ""
+
+    # Data lines after header
+    data_start = header_idx + 1
+    if data_start < len(lines) and set(lines[data_start].replace(" ", "")) in (set("-"), set("=")):
+        data_start += 1
+
+    for line in lines[data_start:]:
+        if not re.search(r"\S", line):
+            continue
+        # Stop at summary line
+        if "Number of APs" in line:
+            break
+        toks = re.split(r"\s{2,}", line.strip())
+        if len(toks) < 2:
+            continue
+
+        ap_name = pick(toks, ("AP Name",))
+        if not ap_name:
+            ap_name = toks[0].strip()
+
+        row = {
+            "ap_name": ap_name,
+            "ap_ip": pick(toks, ("IP Address", "IP")),
+            "ap_model": pick(toks, ("AP Model", "Model")),
+            "ap_mac": pick(toks, ("Ethernet MAC", "Ether MAC")),
+            "ap_location": pick(toks, ("Location", "Site", "Tag")),
+            "ap_state": pick(toks, ("State", "Status")),
+            "slots": pick(toks, ("Slots",)),
+            "country": pick(toks, ("Country",)),
+        }
+        rows.append(row)
+
+    return rows
 
 
 def _collect_aruba_snapshot(host, username, password, secret):
@@ -1567,6 +1637,7 @@ def _dashboard_poll_once(settings: dict):
 
     totals_by_host: Dict[str, int] = {h: 0 for h in all_hosts}
     ap_counts: Dict[str, int] = {h: 0 for h in all_hosts}
+    ap_details_by_host: Dict[str, List[Dict]] = {h: [] for h in all_hosts}
     controller_types: Dict[str, str] = {}
     errors: list[str] = []
     host_status: Dict[str, Dict] = {}
@@ -1621,6 +1692,11 @@ def _dashboard_poll_once(settings: dict):
                 if host_status[host]["message"] == "Clients OK":
                     host_status[host]["message"] = "AP inventory failed"
 
+            # Collect AP details for inventory
+            ap_details = snapshot.get("ap_details") or []
+            if ap_details:
+                ap_details_by_host[host] = ap_details
+
             for err in host_errors or []:
                 errors.append(err)
                 if host_status.get(host):
@@ -1646,6 +1722,15 @@ def _dashboard_poll_once(settings: dict):
         })
 
     insert_wlc_dashboard_samples(timestamp, metrics)
+
+    # Update AP inventory with collected details
+    for host in all_hosts:
+        ap_details = ap_details_by_host.get(host, [])
+        if ap_details:
+            try:
+                upsert_ap_inventory_bulk(ap_details, wlc_host=host)
+            except Exception as exc:
+                errors.append(f"{host}: AP inventory update failed ({exc})")
 
     errors = list(dict.fromkeys(errors))
 

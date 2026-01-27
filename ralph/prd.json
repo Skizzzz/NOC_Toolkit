@@ -229,8 +229,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created ap_inventory table with all required fields (ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state, slots, country, wlc_host, first_seen, last_seen). Added unique index on (ap_mac, wlc_host), index on last_seen. Created ap_inventory_settings table. Added CRUD functions: load/save_ap_inventory_settings, upsert_ap_inventory, upsert_ap_inventory_bulk, list_ap_inventory, get_ap_inventory, delete_ap_inventory, cleanup_stale_ap_inventory, get_ap_inventory_stats, clear_ap_inventory."
     },
     {
       "id": "US-014",
@@ -245,8 +245,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extended _collect_wlc_snapshot() and get_aruba_snapshot() to collect AP details. Added _parse_cisco_ap_summary() and _parse_aruba_ap_database() parsers. Modified _dashboard_poll_once() to call upsert_ap_inventory_bulk() for each host. Cisco uses ether_mac from 'show ap summary'. Aruba generates pseudo-MAC from AP name hash when MAC not available."
     },
     {
       "id": "US-015",
