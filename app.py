@@ -5244,6 +5244,94 @@ def solarwinds_inventory_export():
     )
 
 
+@app.get("/tools/solarwinds/inventory/export-summary")
+@require_login
+@require_page_enabled("solarwinds_nodes")
+def solarwinds_inventory_export_summary():
+    """Export SolarWinds inventory aggregation summary as CSV (counts per version)."""
+    import io
+    import csv as csv_module
+
+    nodes = fetch_solarwinds_nodes()
+
+    # Get filters from query params (same as inventory page)
+    vendor_filter = request.args.getlist("vendor")
+    model_filter = request.args.getlist("model")
+    version_filter = request.args.getlist("version")
+    search_filter = request.args.get("search", "").strip().lower()
+    hw_version_filter = request.args.get("hw_version", "").strip().lower()
+    version_search = request.args.get("version_search", "").strip()
+
+    # Apply filters
+    filtered = nodes
+    if vendor_filter:
+        vendor_lower = [v.lower() for v in vendor_filter]
+        filtered = [n for n in filtered if (n.get("vendor") or "").lower() in vendor_lower]
+    if model_filter:
+        model_lower = [m.lower() for m in model_filter]
+        filtered = [n for n in filtered if (n.get("model") or "").lower() in model_lower]
+    if version_filter:
+        version_lower = [v.lower() for v in version_filter]
+        filtered = [n for n in filtered if (n.get("version") or "").lower() in version_lower]
+    if version_search:
+        filtered = [n for n in filtered if _match_version_pattern(n.get("version") or "", version_search)]
+    if search_filter:
+        filtered = [n for n in filtered if (
+            search_filter in (n.get("caption") or "").lower() or
+            search_filter in (n.get("ip_address") or "").lower() or
+            search_filter in (n.get("model") or "").lower() or
+            search_filter in (n.get("vendor") or "").lower() or
+            search_filter in (n.get("version") or "").lower()
+        )]
+    if hw_version_filter:
+        filtered = [n for n in filtered if hw_version_filter in (n.get("hardware_version") or "").lower()]
+
+    # Build vendor -> model -> version hierarchy for aggregation
+    hierarchy = {}
+    for n in filtered:
+        vendor = n.get("vendor") or "Unknown"
+        model = n.get("model") or "Unknown"
+        version = n.get("version") or "Unknown"
+        if vendor not in hierarchy:
+            hierarchy[vendor] = {"count": 0, "models": {}}
+        hierarchy[vendor]["count"] += 1
+        if model not in hierarchy[vendor]["models"]:
+            hierarchy[vendor]["models"][model] = {"count": 0, "versions": {}}
+        hierarchy[vendor]["models"][model]["count"] += 1
+        if version not in hierarchy[vendor]["models"][model]["versions"]:
+            hierarchy[vendor]["models"][model]["versions"][version] = 0
+        hierarchy[vendor]["models"][model]["versions"][version] += 1
+
+    # Generate CSV with hierarchical aggregation
+    buf = io.StringIO()
+    fields = ["Vendor", "Vendor_Count", "Model", "Model_Count", "Software_Version", "Version_Count"]
+    writer = csv_module.DictWriter(buf, fieldnames=fields, lineterminator="\n")
+    writer.writeheader()
+
+    # Sort and write rows
+    for vendor in sorted(hierarchy.keys(), key=lambda v: hierarchy[v]["count"], reverse=True):
+        vendor_data = hierarchy[vendor]
+        for model in sorted(vendor_data["models"].keys(), key=lambda m: vendor_data["models"][m]["count"], reverse=True):
+            model_data = vendor_data["models"][model]
+            for version, count in sorted(model_data["versions"].items(), key=lambda x: x[1], reverse=True):
+                writer.writerow({
+                    "Vendor": vendor,
+                    "Vendor_Count": vendor_data["count"],
+                    "Model": model,
+                    "Model_Count": model_data["count"],
+                    "Software_Version": version,
+                    "Version_Count": count,
+                })
+
+    timestamp = datetime.now(get_app_timezone_info()).strftime("%Y-%m-%d")
+
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=solarwinds_inventory_summary_{timestamp}.csv"},
+    )
+
+
 @app.get("/api/solarwinds/nodes")
 @require_login
 def api_solarwinds_nodes():
