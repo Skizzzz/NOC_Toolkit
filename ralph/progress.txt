@@ -1,0 +1,34 @@
+# Ralph Progress Log
+Started: Mon Jan 26 21:15:43 CST 2026
+
+## Codebase Patterns
+- WLC Dashboard data is stored in `~/.noc_toolkit/noc_toolkit.db` (not project-local db)
+- Passwords are encrypted using Fernet cipher stored in `wlc_dashboard.key`
+- Settings save/load functions use INSERT...ON CONFLICT for upsert pattern
+- Database migrations use try/except around ALTER TABLE to handle existing columns
+- Threading uses daemon threads with wake events for responsive polling
+- Credentials are shared between Cisco and Aruba controllers
+- Auto-discovery pulls from SolarWinds nodes table
+---
+
+## 2026-01-26 21:30 - US-001
+- **What was implemented**: Audited WLC Dashboard and Polling System
+- **Issues found and fixed**:
+  1. **FIXED: Aruba settings not persisted to database** - `aruba_hosts` and `aruba_enabled` were defined in defaults but never saved/loaded from DB
+     - Added migration to create `aruba_hosts_json` and `aruba_enabled` columns
+     - Updated `load_wlc_dashboard_settings()` to read Aruba settings
+     - Updated `save_wlc_dashboard_settings()` to write Aruba settings
+  2. **FIXED: Duplicate code block** - Removed duplicate `poll_summary` loading (lines 931-938 had same block twice)
+- **Files changed**:
+  - `tools/db_jobs.py` - Added Aruba column migrations, fixed load/save functions
+- **Verification**:
+  - Settings page displays both Cisco 9800 (104) and Aruba 72XX (26) controllers
+  - Polling interval displays correctly (5 minutes)
+  - Time range buttons work (24h, 3d, 7d, 30d)
+  - Stat cards render correctly (Total Clients, Access Points, Polling Status)
+  - Aruba settings now persist in database (`aruba_hosts_json`, `aruba_enabled` columns verified)
+- **Learnings for future iterations**:
+  - Check that new settings fields have corresponding DB columns and are in load/save functions
+  - Test settings persistence by restarting app
+  - The password hash format must match what `verify_user()` expects (werkzeug pbkdf2)
+---

@@ -339,6 +339,15 @@ def init_db():
             cx.execute("ALTER TABLE wlc_dashboard_settings ADD COLUMN poll_summary_json TEXT")
         except Exception:
             pass
+        # Migration: Add Aruba controller settings columns
+        try:
+            cx.execute("ALTER TABLE wlc_dashboard_settings ADD COLUMN aruba_hosts_json TEXT")
+        except Exception:
+            pass
+        try:
+            cx.execute("ALTER TABLE wlc_dashboard_settings ADD COLUMN aruba_enabled INTEGER DEFAULT 0")
+        except Exception:
+            pass
 
         cx.execute(
             """
@@ -923,10 +932,12 @@ def load_wlc_dashboard_settings():
                 data["poll_summary"] = json.loads(row.get("poll_summary_json") or "null")
             except Exception:
                 data["poll_summary"] = None
+            # Load Aruba controller settings
             try:
-                data["poll_summary"] = json.loads(row.get("poll_summary_json") or "null")
+                data["aruba_hosts"] = json.loads(row.get("aruba_hosts_json") or "[]")
             except Exception:
-                data["poll_summary"] = None
+                data["aruba_hosts"] = []
+            data["aruba_enabled"] = bool(row.get("aruba_enabled"))
     except Exception:
         pass
     return data
@@ -938,12 +949,13 @@ def save_wlc_dashboard_settings(settings: dict):
     hosts_json = json.dumps(payload.get("hosts") or [])
     validation_json = json.dumps(payload.get("validation") or [])
     poll_summary_json = json.dumps(payload.get("poll_summary"))
+    aruba_hosts_json = json.dumps(payload.get("aruba_hosts") or [])
     try:
         with _DB_LOCK, _conn() as cx:
             cx.execute(
                 """
-                INSERT INTO wlc_dashboard_settings(id, enabled, hosts_json, username, password, secret, interval_sec, updated, last_poll_ts, last_poll_status, last_poll_message, validation_json, poll_summary_json)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO wlc_dashboard_settings(id, enabled, hosts_json, username, password, secret, interval_sec, updated, last_poll_ts, last_poll_status, last_poll_message, validation_json, poll_summary_json, aruba_hosts_json, aruba_enabled)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET
                   enabled=excluded.enabled,
                   hosts_json=excluded.hosts_json,
@@ -956,7 +968,9 @@ def save_wlc_dashboard_settings(settings: dict):
                   last_poll_status=excluded.last_poll_status,
                   last_poll_message=excluded.last_poll_message,
                   validation_json=excluded.validation_json,
-                  poll_summary_json=excluded.poll_summary_json
+                  poll_summary_json=excluded.poll_summary_json,
+                  aruba_hosts_json=excluded.aruba_hosts_json,
+                  aruba_enabled=excluded.aruba_enabled
                 """,
                 (
                     1,
@@ -972,6 +986,8 @@ def save_wlc_dashboard_settings(settings: dict):
                     payload.get("last_poll_message", ""),
                     validation_json,
                     poll_summary_json,
+                    aruba_hosts_json,
+                    1 if payload.get("aruba_enabled") else 0,
                 ),
             )
     except Exception:
