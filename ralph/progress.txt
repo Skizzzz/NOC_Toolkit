@@ -16,6 +16,9 @@ Started: Mon Jan 26 21:15:43 CST 2026
 - **IMPORTANT**: Always use `_CST_TZ = ZoneInfo("America/Chicago")` for timezone-aware datetime in scheduling code
 - Change statuses: scheduled, running, completed, failed, rollback-running, rolled-back, rollback-failed
 - Change scheduler runs every 30 seconds; uses `_CHANGE_WAKE.set()` for immediate wake-up
+- SolarWinds API uses SWIS REST endpoint on port 17778 (`/SolarWinds/InformationService/v3/Json/Query`)
+- SolarWinds settings use in-memory cache (`_SOLAR_SETTINGS`) with lock, synced to DB on change
+- WLC/Aruba hosts auto-detected from SolarWinds nodes via hostname/vendor/model patterns
 ---
 
 ## 2026-01-26 21:30 - US-001
@@ -137,4 +140,49 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - Scheduler uses UTC for storage, CST for display (via `_format_cst()` helper)
   - Background CLI jobs use `_start_background_cli_job()` which spawns daemon threads
   - Job completion signals `_CHANGE_WAKE.set()` to wake scheduler immediately
+---
+
+## 2026-01-27 08:30 - US-005
+- **What was implemented**: Audited SolarWinds Integration
+- **Issues found**: None - all functionality working correctly
+- **Verification completed**:
+  - Settings page at `/tools/solarwinds/nodes/settings`:
+    - Base URL saves correctly (using SWIS API port 17774)
+    - Username persists correctly (supports domain\user format)
+    - Password encrypts with Fernet before storage, shown as masked placeholder on reload
+    - SSL verification checkbox works correctly
+    - "Save Settings" and "Save & Poll" buttons function correctly
+  - Connection/poll validation:
+    - Auto-port upgrade to SWIS port 17778 works for standard HTTPS
+    - API endpoint discovery tries multiple paths (/SolarWinds/InformationService, /Orion/InformationService, etc.)
+    - Error messages are descriptive (connection failed, 404, invalid JSON)
+  - Node sync verified (17028 nodes fetched):
+    - All expected fields populated: node_id, caption, organization, vendor, model, version, ip_address, status, last_seen
+    - Organization mapping via CustomProperties.Organization query
+    - Vendor auto-detection from MachineType or caption when not provided
+    - Extra JSON stored for raw node data
+  - Nodes display page at `/tools/solarwinds/nodes`:
+    - All fields render correctly in table
+    - Client-side filtering works (tested filtering by vendor "cisco" - 9105 matches)
+    - Pagination works (100 rows per page)
+    - Last poll timestamp and status displayed
+    - Links to settings and changes pages
+  - Integration points verified:
+    - WLC hosts auto-derived from SolarWinds nodes (hostname contains "wc01", vendor "cisco", model "9800")
+    - Aruba hosts auto-derived (hostname starts with "wc0", vendor starts with "aruba")
+    - Summer guest hosts sync from same WLC detection
+    - API endpoint `/api/solarwinds/nodes` returns filtered nodes for bulk SSH inventory search
+- **Files changed**: None (no issues found)
+- **Code review findings**:
+  - SolarWinds API client in `tools/solarwinds.py` with robust endpoint discovery
+  - Database functions in `tools/db_jobs.py` lines 1412-1561
+  - Settings use in-memory cache with lock (`_SOLAR_SETTINGS_LOCK`) plus DB persistence
+  - Poll timestamp uses CST timezone (`datetime.now(_CST_TZ)`)
+  - Routes require superadmin for settings, login for viewing nodes
+- **Learnings for future iterations**:
+  - SolarWinds settings cached in `_SOLAR_SETTINGS` dict with lock protection
+  - API uses SWIS (SolarWinds Information Service) REST API on port 17778
+  - Organization comes from CustomProperties.Organization in Orion
+  - Node sync replaces all nodes (DELETE then INSERT pattern)
+  - WLC/Aruba host detection uses specific naming patterns from organization
 ---
