@@ -73,8 +73,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added missing CSS status classes (scheduled, running, rollback-running, rolled-back, rollback-failed). All functionality verified: change creation, scheduled execution, rollback, status transitions, audit trail."
     },
     {
       "id": "US-005",

@@ -14,6 +14,8 @@ Started: Mon Jan 26 21:15:43 CST 2026
 - Template variables use `{{variable_name}}` syntax, extracted via regex
 - Schedule credentials are Fernet-encrypted in database
 - **IMPORTANT**: Always use `_CST_TZ = ZoneInfo("America/Chicago")` for timezone-aware datetime in scheduling code
+- Change statuses: scheduled, running, completed, failed, rollback-running, rolled-back, rollback-failed
+- Change scheduler runs every 30 seconds; uses `_CHANGE_WAKE.set()` for immediate wake-up
 ---
 
 ## 2026-01-26 21:30 - US-001
@@ -100,4 +102,39 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - Schedule types are: once, daily, weekly (NOT cron expressions)
   - Email alerting is not implemented (placeholder only)
   - Schedule worker checks every 60 seconds via daemon thread
+---
+
+## 2026-01-27 07:00 - US-004
+- **What was implemented**: Audited Change Management Workflow
+- **Issues found and fixed**:
+  1. **FIXED: Missing CSS status classes** - `changes.html` only had styles for `pending`, `completed`, `failed`, `cancelled`, but actual statuses are: `scheduled`, `running`, `rollback-running`, `rolled-back`, `rollback-failed`
+     - Added `.status-scheduled` (accent/blue color)
+     - Added `.status-running` (info/blue color)
+     - Added `.status-rollback-running` (warning/yellow color)
+     - Added `.status-rolled-back` (success/green color)
+     - Added `.status-rollback-failed` (error/red color)
+- **Files changed**:
+  - `templates/changes.html` - Added missing CSS status badge classes
+- **Verification**:
+  - Change window creation with scheduled datetime works
+  - Change scheduler loop runs every 30 seconds via daemon thread
+  - "Start Now" button triggers immediate execution
+  - Status transitions work: scheduled → running → completed/failed
+  - Rollback triggers correctly with status: → rollback-running → rolled-back/rollback-failed
+  - Timeline shows all change events (created, started, completed, error, rollback-start, rollback-complete)
+  - Apply Job Logs and Rollback Job Logs sections display correctly
+  - Audit Log link filters correctly by change number
+- **Code review findings**:
+  - Change scheduler in `app.py` (`_change_scheduler_loop`) runs every 30 seconds
+  - Uses `_CHANGE_WAKE` threading.Event for manual wake-up on schedule creation
+  - Changes stored in `change_windows` table, events in `change_events` table
+  - Credentials encrypted with Fernet before storage via `_encode_change_payload()`
+  - Status transitions: scheduled → running → completed/failed, then optionally → rollback-running → rolled-back/rollback-failed
+  - Changes created via `/actions/schedule` endpoint (from Interface Search or Global Config tools)
+  - Also created via `/tools/wlc/summer-guest/schedule` for WLC Summer Guest automation
+- **Learnings for future iterations**:
+  - Change statuses: scheduled, running, completed, failed, rollback-running, rolled-back, rollback-failed
+  - Scheduler uses UTC for storage, CST for display (via `_format_cst()` helper)
+  - Background CLI jobs use `_start_background_cli_job()` which spawns daemon threads
+  - Job completion signals `_CHANGE_WAKE.set()` to wake scheduler immediately
 ---
