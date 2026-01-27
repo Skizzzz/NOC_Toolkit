@@ -5016,6 +5016,156 @@ def solarwinds_nodes():
     return render_template("solarwinds_nodes.html", settings=settings, nodes=nodes)
 
 
+@app.get("/tools/solarwinds/inventory")
+@require_login
+@require_page_enabled("solarwinds_nodes")
+def solarwinds_inventory():
+    """SolarWinds Hardware/Software Inventory Dashboard for CVE assessment."""
+    nodes = fetch_solarwinds_nodes()
+    settings = _get_solar_settings()
+
+    # Get filters from query params
+    vendor_filter = request.args.getlist("vendor")  # Multi-select
+    model_filter = request.args.getlist("model")  # Multi-select
+    version_filter = request.args.getlist("version")  # Multi-select
+    search_filter = request.args.get("search", "").strip().lower()
+    hw_version_filter = request.args.get("hw_version", "").strip().lower()
+
+    # Build aggregations BEFORE filtering (for charts)
+    vendor_counts = {}
+    version_counts = {}
+    model_counts = {}
+    for n in nodes:
+        vendor = n.get("vendor") or "Unknown"
+        version = n.get("version") or "Unknown"
+        model = n.get("model") or "Unknown"
+        vendor_counts[vendor] = vendor_counts.get(vendor, 0) + 1
+        version_counts[version] = version_counts.get(version, 0) + 1
+        model_counts[model] = model_counts.get(model, 0) + 1
+
+    # Get unique values for multi-select dropdowns (before filtering)
+    vendor_options = sorted(vendor_counts.keys())
+    model_options = sorted(model_counts.keys())
+    version_options = sorted(version_counts.keys())
+
+    # Apply filters
+    filtered = nodes
+    if vendor_filter:
+        vendor_lower = [v.lower() for v in vendor_filter]
+        filtered = [n for n in filtered if (n.get("vendor") or "").lower() in vendor_lower]
+    if model_filter:
+        model_lower = [m.lower() for m in model_filter]
+        filtered = [n for n in filtered if (n.get("model") or "").lower() in model_lower]
+    if version_filter:
+        version_lower = [v.lower() for v in version_filter]
+        filtered = [n for n in filtered if (n.get("version") or "").lower() in version_lower]
+    if search_filter:
+        filtered = [n for n in filtered if (
+            search_filter in (n.get("caption") or "").lower() or
+            search_filter in (n.get("ip_address") or "").lower() or
+            search_filter in (n.get("model") or "").lower() or
+            search_filter in (n.get("vendor") or "").lower() or
+            search_filter in (n.get("version") or "").lower()
+        )]
+    if hw_version_filter:
+        filtered = [n for n in filtered if hw_version_filter in (n.get("hardware_version") or "").lower()]
+
+    # Build filtered stats for display
+    filtered_vendor_counts = {}
+    filtered_version_counts = {}
+    filtered_model_counts = {}
+    for n in filtered:
+        vendor = n.get("vendor") or "Unknown"
+        version = n.get("version") or "Unknown"
+        model = n.get("model") or "Unknown"
+        filtered_vendor_counts[vendor] = filtered_vendor_counts.get(vendor, 0) + 1
+        filtered_version_counts[version] = filtered_version_counts.get(version, 0) + 1
+        filtered_model_counts[model] = filtered_model_counts.get(model, 0) + 1
+
+    # Sort counts by value descending for display
+    top_vendors = sorted(filtered_vendor_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    top_versions = sorted(filtered_version_counts.items(), key=lambda x: x[1], reverse=True)[:15]
+    top_models = sorted(filtered_model_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+
+    return render_template(
+        "solarwinds_inventory.html",
+        nodes=filtered,
+        total_count=len(nodes),
+        filtered_count=len(filtered),
+        settings=settings,
+        vendor_counts=top_vendors,
+        version_counts=top_versions,
+        model_counts=top_models,
+        vendor_options=vendor_options,
+        model_options=model_options,
+        version_options=version_options,
+        filters={
+            "vendor": vendor_filter,
+            "model": model_filter,
+            "version": version_filter,
+            "search": search_filter,
+            "hw_version": hw_version_filter,
+        },
+    )
+
+
+@app.get("/tools/solarwinds/inventory/export")
+@require_login
+@require_page_enabled("solarwinds_nodes")
+def solarwinds_inventory_export():
+    """Export SolarWinds inventory as CSV with filters applied."""
+    import io
+    import csv as csv_module
+
+    nodes = fetch_solarwinds_nodes()
+
+    # Get filters from query params (same as inventory page)
+    vendor_filter = request.args.getlist("vendor")
+    model_filter = request.args.getlist("model")
+    version_filter = request.args.getlist("version")
+    search_filter = request.args.get("search", "").strip().lower()
+    hw_version_filter = request.args.get("hw_version", "").strip().lower()
+
+    # Apply filters
+    filtered = nodes
+    if vendor_filter:
+        vendor_lower = [v.lower() for v in vendor_filter]
+        filtered = [n for n in filtered if (n.get("vendor") or "").lower() in vendor_lower]
+    if model_filter:
+        model_lower = [m.lower() for m in model_filter]
+        filtered = [n for n in filtered if (n.get("model") or "").lower() in model_lower]
+    if version_filter:
+        version_lower = [v.lower() for v in version_filter]
+        filtered = [n for n in filtered if (n.get("version") or "").lower() in version_lower]
+    if search_filter:
+        filtered = [n for n in filtered if (
+            search_filter in (n.get("caption") or "").lower() or
+            search_filter in (n.get("ip_address") or "").lower() or
+            search_filter in (n.get("model") or "").lower() or
+            search_filter in (n.get("vendor") or "").lower() or
+            search_filter in (n.get("version") or "").lower()
+        )]
+    if hw_version_filter:
+        filtered = [n for n in filtered if hw_version_filter in (n.get("hardware_version") or "").lower()]
+
+    # Generate CSV
+    buf = io.StringIO()
+    fields = ["caption", "ip_address", "organization", "vendor", "model", "version", "hardware_version"]
+    writer = csv_module.DictWriter(buf, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
+    writer.writeheader()
+    for n in filtered:
+        row = {k: n.get(k) or "" for k in fields}
+        writer.writerow(row)
+
+    timestamp = datetime.now(get_app_timezone_info()).strftime("%Y-%m-%d")
+
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=solarwinds_inventory_{timestamp}.csv"},
+    )
+
+
 @app.get("/api/solarwinds/nodes")
 @require_login
 def api_solarwinds_nodes():

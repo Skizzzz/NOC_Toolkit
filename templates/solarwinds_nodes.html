@@ -178,6 +178,12 @@
     <span class="breadcrumbs-current">SolarWinds Nodes</span>
   </nav>
 
+  <div class="nav-pills" style="display:flex; gap:8px; margin-bottom:24px;">
+    <a href="{{ url_for('solarwinds_nodes') }}" style="padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; background:var(--accent); color:#fff; border:1px solid var(--accent);">Nodes</a>
+    <a href="{{ url_for('solarwinds_inventory') }}" style="padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; color:var(--text); background:var(--card); border:1px solid var(--border); transition:all 0.2s ease;">Inventory</a>
+    <a href="{{ url_for('solarwinds_nodes_settings') }}" style="padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; color:var(--text); background:var(--card); border:1px solid var(--border); transition:all 0.2s ease;">Settings</a>
+  </div>
+
   <div class="page-header">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
       <div style="flex:1;">
