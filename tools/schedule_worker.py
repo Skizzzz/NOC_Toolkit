@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from tools.bulk_ssh import BulkSSHJob
 from tools.db_jobs import (
@@ -21,6 +22,9 @@ from tools.template_engine import substitute_variables
 from tools.cert_tracker import pull_ise_certs
 
 logger = logging.getLogger(__name__)
+
+# Use America/Chicago timezone for consistency with app.py
+_CST_TZ = ZoneInfo("America/Chicago")
 
 
 class ScheduleWorker:
@@ -85,8 +89,11 @@ class ScheduleWorker:
         if last_sync_ts:
             try:
                 last_sync = datetime.fromisoformat(last_sync_ts)
+                # Ensure last_sync is timezone-aware for comparison
+                if last_sync.tzinfo is None:
+                    last_sync = last_sync.replace(tzinfo=_CST_TZ)
                 next_sync = last_sync + timedelta(hours=interval_hours)
-                if datetime.now() < next_sync:
+                if datetime.now(_CST_TZ) < next_sync:
                     return  # Not due yet
             except (ValueError, TypeError):
                 pass  # Invalid timestamp, run sync
@@ -203,7 +210,7 @@ class ScheduleWorker:
         next_run = self._calculate_next_run(schedule)
 
         # Update schedule
-        last_run = datetime.now().isoformat(timespec="seconds")
+        last_run = datetime.now(_CST_TZ).isoformat(timespec="seconds")
         update_bulk_ssh_schedule_run(
             schedule_id=schedule_id,
             last_run=last_run,
@@ -226,7 +233,8 @@ class ScheduleWorker:
             # One-time schedules don't repeat
             return ""
 
-        now = datetime.now()
+        # Use timezone-aware datetime for consistency with schedule creation
+        now = datetime.now(_CST_TZ)
 
         if schedule_type == "daily":
             # Run daily at specified time

@@ -158,6 +158,102 @@
     font-size:13px;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   }
+
+  /* Modal styles */
+  .modal-overlay{
+    position:fixed;
+    top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.6);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:1000;
+    padding:20px;
+  }
+  .modal-overlay.active{
+    display:flex;
+  }
+  .modal{
+    background:var(--card);
+    border-radius:16px;
+    width:100%;
+    max-width:600px;
+    max-height:90vh;
+    overflow-y:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,0.4);
+  }
+  .modal-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:20px 24px;
+    border-bottom:1px solid var(--border);
+  }
+  .modal-header h3{margin:0; font-size:18px;}
+  .modal-close{
+    background:none;
+    border:none;
+    color:var(--muted);
+    cursor:pointer;
+    padding:4px;
+  }
+  .modal-close:hover{color:var(--text);}
+  .modal-body{padding:24px;}
+  .modal-footer{
+    padding:16px 24px;
+    border-top:1px solid var(--border);
+    display:flex;
+    justify-content:flex-end;
+    gap:12px;
+  }
+  .field{margin-bottom:16px;}
+  .field label{
+    display:block;
+    margin-bottom:6px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--text);
+  }
+  .field input, .field textarea, .field select{
+    width:100%;
+    padding:10px 14px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--bg);
+    color:var(--text);
+    font-size:14px;
+  }
+  .field textarea{
+    font-family:'Monaco', monospace;
+    resize:vertical;
+    min-height:100px;
+  }
+  .field-row{display:flex; gap:12px;}
+  .field-row .field{flex:1;}
+  .schedule-type-options{
+    display:flex;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .schedule-type-option{
+    flex:1;
+    padding:12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    text-align:center;
+    cursor:pointer;
+    transition:all 0.15s ease;
+  }
+  .schedule-type-option:hover{
+    border-color:var(--accent);
+  }
+  .schedule-type-option.selected{
+    background:var(--accent);
+    color:white;
+    border-color:var(--accent);
+  }
+  .schedule-config{display:none;}
+  .schedule-config.active{display:block;}
 </style>
 {% endblock %}
 {% block content %}
@@ -175,8 +271,14 @@
         <h2>Scheduled Jobs</h2>
         <p>Automated bulk SSH jobs that run on a schedule. Background worker checks every 60 seconds.</p>
       </div>
-      <div>
-        <a href="{{ url_for('bulk_ssh') }}" class="btn btn-primary">
+      <div style="display:flex; gap:12px;">
+        <button onclick="openCreateModal()" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+          </svg>
+          Create Schedule
+        </button>
+        <a href="{{ url_for('bulk_ssh') }}" class="btn">
           <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
           </svg>
@@ -279,12 +381,179 @@
       </svg>
       <h3>No Scheduled Jobs</h3>
       <p>Scheduled jobs will run automatically in the background. Create jobs from the main Bulk SSH page.</p>
-      <a href="{{ url_for('bulk_ssh') }}" class="btn btn-primary">
+      <button onclick="openCreateModal()" class="btn btn-primary">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
         </svg>
         Create Schedule
-      </a>
+      </button>
     </div>
   {% endif %}
+
+  <!-- Create Schedule Modal -->
+  <div id="createModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Create Scheduled Job</h3>
+        <button class="modal-close" onclick="closeCreateModal()">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+      <form method="post" action="{{ url_for('bulk_ssh_schedule_create') }}">
+        <div class="modal-body">
+          <div class="field">
+            <label>Schedule Name *</label>
+            <input type="text" name="name" required placeholder="e.g., Daily Backup Check">
+          </div>
+          <div class="field">
+            <label>Description</label>
+            <input type="text" name="description" placeholder="Optional description">
+          </div>
+          <div class="field">
+            <label>Device List * (one per line)</label>
+            <textarea name="device_list" required placeholder="192.168.1.1&#10;switch-core-01&#10;router-edge-02"></textarea>
+          </div>
+          <div class="field">
+            <label>Command *</label>
+            <textarea name="command" required placeholder="show version&#10;show interfaces status"></textarea>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Username *</label>
+              <input type="text" name="username" required>
+            </div>
+            <div class="field">
+              <label>Password *</label>
+              <input type="password" name="password" required>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Enable Secret</label>
+              <input type="password" name="secret" placeholder="Optional">
+            </div>
+            <div class="field">
+              <label>Device Type</label>
+              <select name="device_type">
+                <option value="cisco_ios">Cisco IOS</option>
+                <option value="cisco_xe">Cisco IOS-XE</option>
+                <option value="cisco_nxos">Cisco NX-OS</option>
+                <option value="aruba_os">Aruba OS</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Schedule Type</label>
+            <div class="schedule-type-options">
+              <div class="schedule-type-option selected" data-type="once" onclick="selectScheduleType('once')">
+                <strong>One-time</strong><br>
+                <small>Run once at date/time</small>
+              </div>
+              <div class="schedule-type-option" data-type="daily" onclick="selectScheduleType('daily')">
+                <strong>Daily</strong><br>
+                <small>Run every day</small>
+              </div>
+              <div class="schedule-type-option" data-type="weekly" onclick="selectScheduleType('weekly')">
+                <strong>Weekly</strong><br>
+                <small>Run on specific day</small>
+              </div>
+            </div>
+            <input type="hidden" name="schedule_type" id="scheduleType" value="once">
+          </div>
+
+          <!-- One-time config -->
+          <div id="config-once" class="schedule-config active">
+            <div class="field-row">
+              <div class="field">
+                <label>Run Date</label>
+                <input type="date" name="run_date">
+              </div>
+              <div class="field">
+                <label>Run Time</label>
+                <input type="time" name="run_time" value="12:00">
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily config -->
+          <div id="config-daily" class="schedule-config">
+            <div class="field">
+              <label>Run Time (Daily)</label>
+              <input type="time" name="daily_time" value="06:00">
+            </div>
+          </div>
+
+          <!-- Weekly config -->
+          <div id="config-weekly" class="schedule-config">
+            <div class="field-row">
+              <div class="field">
+                <label>Day of Week</label>
+                <select name="day_of_week">
+                  <option value="0">Monday</option>
+                  <option value="1">Tuesday</option>
+                  <option value="2">Wednesday</option>
+                  <option value="3">Thursday</option>
+                  <option value="4">Friday</option>
+                  <option value="5">Saturday</option>
+                  <option value="6">Sunday</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Run Time</label>
+                <input type="time" name="weekly_time" value="06:00">
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" name="alert_on_failure" style="width:auto;">
+              Alert on failure
+            </label>
+          </div>
+          <div class="field">
+            <label>Alert Email</label>
+            <input type="email" name="alert_email" placeholder="Optional email for alerts">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeCreateModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Schedule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function openCreateModal() {
+      document.getElementById('createModal').classList.add('active');
+    }
+    function closeCreateModal() {
+      document.getElementById('createModal').classList.remove('active');
+    }
+    function selectScheduleType(type) {
+      // Update selected state
+      document.querySelectorAll('.schedule-type-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.type === type);
+      });
+      // Update hidden field
+      document.getElementById('scheduleType').value = type;
+      // Show correct config
+      document.querySelectorAll('.schedule-config').forEach(cfg => {
+        cfg.classList.remove('active');
+      });
+      document.getElementById('config-' + type).classList.add('active');
+    }
+    // Close modal on overlay click
+    document.getElementById('createModal').addEventListener('click', function(e) {
+      if (e.target === this) closeCreateModal();
+    });
+    // Close modal on escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeCreateModal();
+    });
+  </script>
 {% endblock %}

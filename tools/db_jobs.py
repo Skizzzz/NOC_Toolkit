@@ -8,6 +8,10 @@ import base64
 import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+# Use America/Chicago timezone for consistency with app.py and schedule_worker.py
+_CST_TZ = ZoneInfo("America/Chicago")
 from typing import Optional, Iterable, List, Dict, Union
 
 try:
@@ -2178,7 +2182,8 @@ def list_bulk_ssh_schedules() -> List[dict]:
 def fetch_due_bulk_ssh_schedules() -> List[dict]:
     """Fetch schedules that are due to run."""
     try:
-        now = datetime.now().isoformat(timespec="seconds")
+        # Use timezone-aware datetime for consistency with schedule creation
+        now = datetime.now(_CST_TZ).isoformat(timespec="seconds")
         with _conn() as cx:
             rows = cx.execute(
                 """SELECT * FROM bulk_ssh_schedules
