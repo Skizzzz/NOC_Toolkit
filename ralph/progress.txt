@@ -307,3 +307,49 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - Scan endpoint accepts hosts (comma/newline), credentials, device_type, max_workers
   - No UI for manual scanning currently - would need to add if required
 ---
+
+## 2026-01-27 15:30 - US-009
+- **What was implemented**: Audited Topology Builder
+- **Issues found**: None - all functionality working correctly
+- **Verification completed**:
+  - Topology Builder page (`/tools/topology`) renders correctly with three tabs:
+    - Single Device: Device selector with SolarWinds datalist, credentials, device type dropdown
+    - Organization: Organization selector with SolarWinds orgs, credentials, device type
+    - Bulk Discovery: Device list textarea, credentials, device type (Cisco/Dell only)
+  - Graph View page (`/tools/topology/graph`) renders correctly:
+    - Cytoscape.js with dagre layout for hierarchical top-down visualization
+    - Graph controls: Fit, Reset Zoom, Layout Refresh, Center Selected
+    - Stats bar showing node/edge counts
+    - Legend showing Root Device (purple), Network Device (green), Expanded Node (gray)
+    - View toggle between Graph View and Table View
+    - Node selection panel with details and "Discover Neighbors" button
+  - CDP/LLDP neighbor collection:
+    - `parse_cdp_detail()` parses "show cdp neighbors detail" output
+    - `parse_lldp_detail()` parses "show lldp neighbors detail" output
+    - `_merge_neighbors()` combines CDP and LLDP findings intelligently
+    - `annotate_with_inventory()` enriches neighbors with SolarWinds metadata
+  - Multi-vendor support verified:
+    - Cisco IOS/XE: cisco_ios, cisco_xe device types
+    - Dell: dell_os10, dell_force10, dell_powerconnect device types
+    - Auto-detection tries Cisco first, then Dell variants
+  - Device type auto-detection:
+    - `_build_device_type_candidates()` builds ordered list of device types to try
+    - Uses vendor hint from SolarWinds or manual mode selection
+    - Graceful fallback on connection failures
+  - CSV export functionality verified via `/tools/topology/export`
+  - API endpoint `/api/topology/discover` for dynamic graph expansion
+- **Files changed**: None (no issues found)
+- **Code review findings**:
+  - `tools/topology.py` - Core CDP/LLDP parsing and neighbor merging logic
+  - Routes in `app.py` lines 2442-2841 handle all topology operations
+  - Cytoscape.js 3.26.0 with dagre 2.5.0 extension for graph visualization
+  - Hierarchy detection based on device naming (cs/core, mor, tor, ds/dist, ag/agg, as/access)
+  - Access Points (AP*) are filtered out from graph visualization
+  - No persistent database storage - topology data is transient, calculated on-demand
+- **Learnings for future iterations**:
+  - Topology data is ephemeral - discovered on-demand, not stored in database
+  - CDP/LLDP parsing uses regex patterns for flexibility across vendor outputs
+  - Graph expansion uses POST to `/api/topology/discover` with stored credentials
+  - AP filtering is implemented both in backend and frontend (hideAPToggle checkbox)
+  - SolarWinds inventory matching uses IP address first, then caption (hostname)
+---
