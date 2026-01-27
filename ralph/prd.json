@@ -54,8 +54,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixed timezone mismatch in schedule_worker.py and db_jobs.py. Added schedule creation UI modal. Verified one-time, daily, weekly schedules work. Enable/disable toggle verified. Note: System supports once/daily/weekly (not cron expressions)."
     },
     {
       "id": "US-004",

@@ -13,6 +13,7 @@ Started: Mon Jan 26 21:15:43 CST 2026
 - Bulk SSH uses ThreadPoolExecutor for parallel execution (default 10 workers)
 - Template variables use `{{variable_name}}` syntax, extracted via regex
 - Schedule credentials are Fernet-encrypted in database
+- **IMPORTANT**: Always use `_CST_TZ = ZoneInfo("America/Chicago")` for timezone-aware datetime in scheduling code
 ---
 
 ## 2026-01-26 21:30 - US-001
@@ -66,4 +67,37 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - Job results stored in `bulk_ssh_jobs` (metadata) and `bulk_ssh_results` (per-device output)
   - Schedule credentials are encrypted with Fernet before storage
   - Email alerting for schedule failures is a placeholder (not implemented)
+---
+
+## 2026-01-27 01:00 - US-003
+- **What was implemented**: Audited Bulk SSH Scheduling System
+- **Issues found and fixed**:
+  1. **FIXED: Timezone mismatch in schedule_worker.py** - `_calculate_next_run()` used naive `datetime.now()` while schedule creation used `datetime.now(_CST_TZ)`. This caused inconsistent timezone handling.
+     - Added `ZoneInfo` import and `_CST_TZ = ZoneInfo("America/Chicago")` constant
+     - Updated `_calculate_next_run()` to use `datetime.now(_CST_TZ)`
+     - Updated `last_run` timestamp to use `datetime.now(_CST_TZ)`
+     - Fixed ISE cert sync to handle timezone-aware datetime comparisons
+  2. **FIXED: Timezone mismatch in db_jobs.py** - `fetch_due_bulk_ssh_schedules()` used naive `datetime.now()`
+     - Added `ZoneInfo` import and `_CST_TZ` constant
+     - Updated `fetch_due_bulk_ssh_schedules()` to use `datetime.now(_CST_TZ)`
+  3. **ADDED: Missing schedule creation UI** - No UI existed for creating scheduled jobs
+     - Added "Create Schedule" button to page header
+     - Added modal form with all required fields (name, devices, command, credentials)
+     - Schedule type selector (one-time, daily, weekly) with dynamic config sections
+     - Alert on failure checkbox and email field
+- **Files changed**:
+  - `tools/schedule_worker.py` - Timezone fixes, ZoneInfo import
+  - `tools/db_jobs.py` - Timezone fix for fetch_due_bulk_ssh_schedules
+  - `templates/bulk_ssh_schedules.html` - Added create modal, CSS, JavaScript
+- **Verification**:
+  - Schedule creation works (tested one-time schedule)
+  - Schedule type switching works (one-time, daily, weekly)
+  - next_run shows correct timezone offset (-06:00 for CST)
+  - Enable/disable toggle works correctly
+  - Schedule shows in list with all metadata (type, next_run, last_run, command)
+- **Learnings for future iterations**:
+  - Always use timezone-aware datetime for scheduling (use `_CST_TZ` constant)
+  - Schedule types are: once, daily, weekly (NOT cron expressions)
+  - Email alerting is not implemented (placeholder only)
+  - Schedule worker checks every 60 seconds via daemon thread
 ---
