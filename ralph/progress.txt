@@ -276,3 +276,34 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - ISE cert API returns: friendlyName, expirationDate, issuedTo, issuedBy, usedBy, serialNumberDecimalFormat
   - Auto-sync settings stored in `cert_sync_settings` table (single row with id=1)
 ---
+
+## 2026-01-27 14:10 - US-008
+- **What was implemented**: Audited Device Inventory Tool
+- **Issues found**: None - all functionality working correctly
+- **Verification completed**:
+  - Device Inventory page (`/tools/device-inventory`) displays SolarWinds data correctly
+  - Stats cards showing: Total 17028, Cisco 9105, Dell 3149, Unknown 2664, Net-SNMP 728, Tripp Lite 339
+  - Filter bar works: search, vendor dropdown, organization dropdown, model/version text filters
+  - "Clear" button appears when filters are active
+  - Device table renders correctly with columns: Hostname, IP, Organization, Vendor, Model, Version, Status
+  - Vendor color badges work (Cisco blue, Aruba orange, Dell blue)
+  - Status indicators work (Up green, Down red)
+  - CSV export downloads correctly with filtered data, filename format: `device_inventory_YYYYMMDD_HHMMSS.csv`
+  - Device scanning code supports: Cisco IOS, IOS-XE, NX-OS, Aruba AOS, Dell OS10/Force10/PowerConnect
+  - Database CRUD operations verified (insert/update/get/delete)
+  - Delete endpoint requires superadmin role (correctly implemented)
+  - SolarWinds node linking via `solarwinds_node_id` field in schema
+- **Files changed**: None (no issues found)
+- **Code review findings**:
+  - `tools/device_inventory.py` - Device scanning with ThreadPoolExecutor (max 50 workers)
+  - `tools/db_jobs.py` - Device inventory CRUD with proper ON CONFLICT upsert
+  - `tools/netmiko_helpers.py` - Connection context managers for IOS, IOS-XE, Aruba AOS
+  - Routes in `app.py` lines 4632-4861 handle display, scan, export, delete, API
+  - Page primarily displays SolarWinds data; scan/delete are for locally-scanned devices
+- **Learnings for future iterations**:
+  - Device Inventory has dual data sources: SolarWinds (display) and local scans (enrichment)
+  - Local scan results stored in `device_inventory` table, SolarWinds data in `solarwinds_nodes` table
+  - Export uses SolarWinds data with current filters applied
+  - Scan endpoint accepts hosts (comma/newline), credentials, device_type, max_workers
+  - No UI for manual scanning currently - would need to add if required
+---

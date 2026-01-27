@@ -126,8 +126,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixed 4 API call bugs where routes passed dicts instead of keyword args to insert_ise_node(), update_certificate(), update_ise_node(). All functionality verified working - cert upload/parsing, expiration calculations, ISE node CRUD, scheduled sync, delete."
     },
     {
       "id": "US-008",
@@ -144,8 +144,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "All functionality verified working - SolarWinds data display (17028 nodes), vendor filtering, search, CSV export, device scanning for Cisco IOS/IOS-XE/NX-OS/Aruba/Dell, database CRUD operations, superadmin delete restriction. No issues found."
     },
     {
       "id": "US-009",
