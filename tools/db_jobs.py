@@ -661,6 +661,17 @@ def init_db():
             """
         )
 
+        # App-wide settings (timezone, etc.)
+        cx.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_settings(
+              id INTEGER PRIMARY KEY CHECK(id=1),
+              timezone TEXT DEFAULT 'America/Chicago',
+              updated_at TEXT
+            )
+            """
+        )
+
         # Device Inventory table
         cx.execute(
             """
@@ -2911,6 +2922,77 @@ def bulk_update_page_settings(settings: Dict[str, bool]) -> bool:
                     "UPDATE page_settings SET enabled = ?, updated_at = ? WHERE page_key = ?",
                     (1 if enabled else 0, now, page_key)
                 )
+            return True
+    except Exception:
+        return False
+
+
+# ====================== App Settings Functions ======================
+
+# Default timezone for the application
+_DEFAULT_APP_TIMEZONE = "America/Chicago"
+
+# Common US timezones for the dropdown
+US_TIMEZONES = [
+    ("America/New_York", "Eastern (ET)"),
+    ("America/Chicago", "Central (CT)"),
+    ("America/Denver", "Mountain (MT)"),
+    ("America/Phoenix", "Arizona (MST - no DST)"),
+    ("America/Los_Angeles", "Pacific (PT)"),
+    ("America/Anchorage", "Alaska (AKT)"),
+    ("Pacific/Honolulu", "Hawaii (HST)"),
+]
+
+
+def get_app_timezone() -> str:
+    """Get the configured application timezone. Returns IANA timezone string."""
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT timezone FROM app_settings WHERE id=1").fetchone()
+            if row and row[0]:
+                return row[0]
+    except Exception:
+        pass
+    return _DEFAULT_APP_TIMEZONE
+
+
+def get_app_timezone_info() -> ZoneInfo:
+    """Get the configured application timezone as a ZoneInfo object."""
+    return ZoneInfo(get_app_timezone())
+
+
+def load_app_settings() -> Dict:
+    """Load all app settings from the database."""
+    settings = {
+        "timezone": _DEFAULT_APP_TIMEZONE,
+        "updated_at": None,
+    }
+    try:
+        with _DB_LOCK, _conn() as cx:
+            row = cx.execute("SELECT timezone, updated_at FROM app_settings WHERE id=1").fetchone()
+            if row:
+                settings["timezone"] = row[0] or _DEFAULT_APP_TIMEZONE
+                settings["updated_at"] = row[1]
+    except Exception:
+        pass
+    return settings
+
+
+def save_app_settings(*, timezone: str) -> bool:
+    """Save app settings to the database."""
+    try:
+        now = datetime.now().isoformat(timespec="seconds")
+        with _DB_LOCK, _conn() as cx:
+            cx.execute(
+                """
+                INSERT INTO app_settings(id, timezone, updated_at)
+                VALUES(1, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  timezone=excluded.timezone,
+                  updated_at=excluded.updated_at
+                """,
+                (timezone, now)
+            )
             return True
     except Exception:
         return False

@@ -143,6 +143,11 @@ from tools.db_jobs import (
     get_page_settings,
     get_enabled_pages,
     bulk_update_page_settings,
+    # App settings functions
+    load_app_settings,
+    save_app_settings,
+    get_app_timezone,
+    US_TIMEZONES,
 )
 
 from tools.cert_tracker import (
@@ -1888,6 +1893,31 @@ def admin_page_settings():
         pages_by_category[cat].append(page)
 
     return render_template("admin_page_settings.html", pages_by_category=pages_by_category)
+
+
+@app.route("/admin/settings", methods=["GET", "POST"])
+@require_superadmin
+def admin_settings():
+    """Application-wide settings (superadmin only)."""
+    if request.method == "POST":
+        new_timezone = request.form.get("timezone", "America/Chicago")
+
+        # Validate timezone is in our allowed list
+        valid_timezones = [tz[0] for tz in US_TIMEZONES]
+        if new_timezone not in valid_timezones:
+            flash("Invalid timezone selected.", "error")
+            return redirect(url_for("admin_settings"))
+
+        if save_app_settings(timezone=new_timezone):
+            log_audit(session["username"], "app_settings_update", resource=f"timezone={new_timezone}", user_id=session["user_id"])
+            flash("Application settings updated successfully.", "success")
+        else:
+            flash("Failed to update application settings.", "error")
+
+        return redirect(url_for("admin_settings"))
+
+    settings = load_app_settings()
+    return render_template("admin_settings.html", settings=settings, timezones=US_TIMEZONES)
 
 
 # ====================== HOME ======================
