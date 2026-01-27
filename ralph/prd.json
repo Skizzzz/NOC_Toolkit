@@ -260,8 +260,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Modified cleanup_stale_ap_inventory() to return list of removed APs. Added cleanup call after AP inventory updates in _dashboard_poll_once(). Each removed AP is logged via log_audit() with ap_inventory_cleanup action, including AP name, MAC, model, WLC host, and last seen timestamp. Clock issue protection preserved from US-013."
     },
     {
       "id": "US-016",
@@ -279,8 +279,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /tools/wlc/ap-inventory route and ap_inventory.html template. Features: stats cards by WLC, filters for name/WLC/model/location, table with all fields (name, IP, model, MAC, location, state, WLC host, first_seen, last_seen), model distribution summary, navigation pills linking to Dashboard/Settings, CSV export route. Added AP Inventory button to WLC dashboard header."
     },
     {
       "id": "US-017",
@@ -295,8 +295,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CSV export was fully implemented in US-016. Verified: Export CSV button in header, all fields exported (AP Name, IP, Model, MAC, Location, State, Slots, Country, WLC Host, First Seen, Last Seen), filters passed via request.args, filename format ap_inventory_YYYY-MM-DD.csv verified."
     },
     {
       "id": "US-018",

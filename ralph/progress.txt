@@ -518,3 +518,73 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - AP inventory updates happen automatically during each WLC dashboard poll cycle
   - The parsing functions reuse the same output that's already fetched for AP count, avoiding extra SSH commands
 ---
+
+## 2026-01-27 23:30 - US-015
+- **What was implemented**: Implemented AP Inventory Cleanup (5-Day Stale Removal)
+- **Changes made**:
+  1. **tools/db_jobs.py**: Modified `cleanup_stale_ap_inventory()` to return `Tuple[int, List[Dict]]` instead of just `int`. Now retrieves AP details (ap_name, ap_mac, ap_model, wlc_host, last_seen) before deletion for audit logging. Added `Tuple` to typing imports.
+  2. **app.py**: Added `cleanup_stale_ap_inventory` to imports from db_jobs. Added cleanup call after AP inventory updates in `_dashboard_poll_once()`. Each removed AP is logged via `log_audit()` with action `ap_inventory_cleanup`.
+- **Files changed**:
+  - `tools/db_jobs.py` - Modified cleanup function to return removed AP details
+  - `app.py` - Added cleanup call with audit logging
+- **Verification**:
+  - Python syntax check passes on all modified files
+  - App imports successfully
+  - Cleanup runs after each AP inventory update during dashboard polling
+  - Removed APs are logged with: action "ap_inventory_cleanup", user "system", resource "{ap_name} ({ap_mac})", details "WLC: {wlc_host} | Model: {ap_model} | Last seen: {last_seen}"
+- **Learnings for future iterations**:
+  - Cleanup function already had clock protection (requires first_seen < today_start) from US-013
+  - Audit logging uses `log_audit()` from `tools/security.py` which writes to SQLite `audit_log` table
+  - System-triggered actions use "system" as the username for audit purposes
+---
+
+## 2026-01-27 - US-016
+- **What was implemented**: Created AP Inventory Dashboard Page
+- **Changes made**:
+  1. Added imports for `list_ap_inventory` and `get_ap_inventory_stats` from db_jobs
+  2. Created `/tools/wlc/ap-inventory` route in app.py with filter parameters (wlc, name, model, location)
+  3. Created `/tools/wlc/ap-inventory/export` route for CSV export with filtered results
+  4. Created `templates/ap_inventory.html` with:
+     - Navigation pills (Dashboard, AP Inventory, Settings)
+     - Stats cards showing total APs and counts per WLC controller
+     - Filter bar with search, WLC dropdown, model and location filters
+     - Table displaying all AP fields: name, IP, model, MAC, location, state, WLC host, first_seen, last_seen
+     - Model distribution summary section
+     - Empty state with helpful message and link to WLC Dashboard Settings
+  5. Added "AP Inventory" button to WLC dashboard header linking to new page
+- **Files changed**:
+  - `app.py` - Added route and CSV export
+  - `templates/ap_inventory.html` - New template
+  - `templates/wlc_dashboard.html` - Added AP Inventory button
+- **Verification**:
+  - Python syntax check passes
+  - Flask app imports successfully with routes registered
+  - Page renders correctly in browser with all elements
+  - Navigation from WLC Dashboard to AP Inventory works
+  - Filter form and empty state display correctly
+- **Learnings for future iterations**:
+  - AP Inventory page shares `wlc_dashboard` page permission (uses `@require_page_enabled("wlc_dashboard")`)
+  - Navigation pills provide consistent nav between Dashboard/AP Inventory/Settings
+  - CSV export applies current filters to exported data
+  - Stats cards link directly to filtered views (click WLC name to filter by that WLC)
+---
+
+## 2026-01-27 - US-017
+- **What was implemented**: Verified AP Inventory CSV Export functionality (already implemented in US-016)
+- **Verification completed**:
+  - CSV export button visible in AP Inventory page header
+  - Clicking "Export CSV" downloads file with correct filename format: `ap_inventory_2026-01-27.csv`
+  - CSV headers include all required fields: AP Name, IP Address, Model, MAC Address, Location, State, Slots, Country, WLC Host, First Seen, Last Seen
+  - Export URL passes `**request.args` to include current filters
+  - Typecheck passes
+  - Browser verification complete
+- **Files changed**: None (functionality was already implemented in US-016)
+- **Code review findings**:
+  - Export route at `/tools/wlc/ap-inventory/export` (app.py:5142-5195)
+  - Uses `list_ap_inventory()` with filter parameters from query string
+  - Filename generated with `datetime.now().strftime('%Y-%m-%d')` for YYYY-MM-DD format
+  - Response returns CSV with proper mimetype and Content-Disposition header
+- **Learnings for future iterations**:
+  - When implementing a feature page, include CSV export in the same story to avoid creating separate stories for tightly-coupled functionality
+  - CSV export was properly designed to accept the same filter parameters as the display route
+---
