@@ -361,6 +361,239 @@
     color:var(--accent);
     font-weight:600;
   }
+
+  /* Version Search Box */
+  .version-search-box{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:20px;
+  }
+  .version-search-box h3{
+    margin:0 0 12px 0;
+    font-size:14px;
+    font-weight:600;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .version-search-box h3 svg{
+    width:18px;
+    height:18px;
+    color:var(--accent);
+  }
+  .version-search-row{
+    display:flex;
+    gap:12px;
+    align-items:flex-end;
+    flex-wrap:wrap;
+  }
+  .version-search-row .search-field{
+    flex:1;
+    min-width:300px;
+  }
+  .version-search-row input{
+    width:100%;
+    padding:12px 16px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:var(--bg);
+    color:var(--text);
+    font-size:14px;
+    font-family:monospace;
+  }
+  .version-search-row input:focus{
+    outline:none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
+  }
+  .version-search-row .btn{
+    padding:12px 24px;
+  }
+  .search-hint{
+    font-size:11px;
+    color:var(--muted);
+    margin-top:8px;
+  }
+  .search-hint code{
+    background:var(--bg);
+    padding:2px 6px;
+    border-radius:4px;
+    font-size:10px;
+  }
+
+  /* Hierarchy View */
+  .hierarchy-panel{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:20px;
+  }
+  .hierarchy-panel h3{
+    margin:0 0 16px 0;
+    font-size:14px;
+    font-weight:600;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .hierarchy-panel h3 svg{
+    width:18px;
+    height:18px;
+    color:var(--accent);
+  }
+  .hierarchy-tree{
+    font-size:13px;
+  }
+  .hierarchy-vendor{
+    margin-bottom:12px;
+  }
+  .hierarchy-vendor-header{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 12px;
+    background: color-mix(in oklab, var(--accent) 6%, transparent);
+    border:1px solid color-mix(in oklab, var(--accent) 15%, var(--border));
+    border-radius:8px;
+    cursor:pointer;
+    transition: all 0.15s ease;
+  }
+  .hierarchy-vendor-header:hover{
+    background: color-mix(in oklab, var(--accent) 12%, transparent);
+  }
+  .hierarchy-vendor-header .vendor-name{
+    font-weight:600;
+    flex:1;
+  }
+  .hierarchy-vendor-header .vendor-count{
+    font-weight:700;
+    color:var(--accent);
+    font-family:'Instrument Sans', sans-serif;
+  }
+  .hierarchy-vendor-header .toggle-icon{
+    width:16px;
+    height:16px;
+    transition: transform 0.2s ease;
+    color:var(--muted);
+  }
+  .hierarchy-vendor.collapsed .toggle-icon{
+    transform: rotate(-90deg);
+  }
+  .hierarchy-models{
+    margin-left:20px;
+    border-left:2px solid var(--border);
+    padding-left:16px;
+    margin-top:8px;
+    overflow:hidden;
+    transition: max-height 0.3s ease;
+  }
+  .hierarchy-vendor.collapsed .hierarchy-models{
+    max-height:0 !important;
+    margin-top:0;
+    padding-top:0;
+  }
+  .hierarchy-model{
+    margin-bottom:8px;
+  }
+  .hierarchy-model-header{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    background:var(--bg);
+    border-radius:6px;
+    cursor:pointer;
+    transition: all 0.15s ease;
+  }
+  .hierarchy-model-header:hover{
+    background: color-mix(in oklab, var(--accent) 8%, var(--bg));
+  }
+  .hierarchy-model-header .model-name{
+    font-weight:500;
+    flex:1;
+  }
+  .hierarchy-model-header .model-count{
+    font-weight:600;
+    color:var(--accent);
+    font-size:12px;
+  }
+  .hierarchy-versions{
+    margin-left:16px;
+    padding-left:12px;
+    border-left:1px dashed var(--border);
+    margin-top:6px;
+    overflow:hidden;
+    transition: max-height 0.3s ease;
+  }
+  .hierarchy-model.collapsed .hierarchy-versions{
+    max-height:0 !important;
+    margin-top:0;
+  }
+  .hierarchy-version{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 10px;
+    border-radius:4px;
+    transition: all 0.15s ease;
+    cursor:pointer;
+  }
+  .hierarchy-version:hover{
+    background: color-mix(in oklab, var(--accent) 8%, transparent);
+  }
+  .hierarchy-version .version-name{
+    font-family:monospace;
+    font-size:12px;
+    flex:1;
+  }
+  .hierarchy-version .version-count{
+    font-weight:600;
+    color:var(--accent);
+    font-size:12px;
+    min-width:40px;
+    text-align:right;
+  }
+  .hierarchy-version .view-btn{
+    font-size:10px;
+    padding:3px 8px;
+    background:var(--accent);
+    color:#fff;
+    border-radius:4px;
+    text-decoration:none;
+    opacity:0;
+    transition: opacity 0.15s ease;
+  }
+  .hierarchy-version:hover .view-btn{
+    opacity:1;
+  }
+  .hierarchy-empty{
+    text-align:center;
+    padding:24px;
+    color:var(--muted);
+    font-size:13px;
+  }
+  .hierarchy-toggle-all{
+    display:flex;
+    gap:8px;
+    margin-bottom:12px;
+  }
+  .hierarchy-toggle-all button{
+    font-size:11px;
+    padding:6px 12px;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:6px;
+    color:var(--text);
+    cursor:pointer;
+    transition: all 0.15s ease;
+  }
+  .hierarchy-toggle-all button:hover{
+    border-color:var(--accent);
+    background: color-mix(in oklab, var(--accent) 8%, var(--bg));
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -448,6 +681,107 @@
   </div>
 </div>
 
+<!-- Version Search Box -->
+<form method="get" class="version-search-box" id="versionSearchForm">
+  <h3>
+    <svg viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+    </svg>
+    Version Search (CVE Assessment)
+  </h3>
+  <div class="version-search-row">
+    <div class="search-field">
+      <input type="text" id="version_search" name="version_search"
+             placeholder="Search versions: 15.*, IOS-XE 17.*, re:^16\.[3-9].*"
+             value="{{ filters.version_search }}">
+      <div class="search-hint">
+        Supports: plain text, wildcards (<code>*</code>), or regex (<code>re:pattern</code>).
+        Examples: <code>15.2*</code> matches 15.2.x, <code>re:^17\\.([3-9]|1[0-2])</code> for IOS-XE 17.3-17.12
+      </div>
+    </div>
+    <!-- Preserve existing filters -->
+    {% for v in filters.vendor %}<input type="hidden" name="vendor" value="{{ v }}">{% endfor %}
+    {% for m in filters.model %}<input type="hidden" name="model" value="{{ m }}">{% endfor %}
+    {% for v in filters.version %}<input type="hidden" name="version" value="{{ v }}">{% endfor %}
+    {% if filters.search %}<input type="hidden" name="search" value="{{ filters.search }}">{% endif %}
+    {% if filters.hw_version %}<input type="hidden" name="hw_version" value="{{ filters.hw_version }}">{% endif %}
+    <button type="submit" class="btn primary">Search Versions</button>
+    {% if filters.version_search %}
+    <a href="{{ url_for('solarwinds_inventory', vendor=filters.vendor, model=filters.model, version=filters.version, search=filters.search, hw_version=filters.hw_version) }}" class="btn">Clear Search</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Hierarchy View: Vendor → Model → Version -->
+<div class="hierarchy-panel">
+  <h3>
+    <svg viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/>
+    </svg>
+    Version Aggregation (Vendor &rarr; Model &rarr; Version)
+  </h3>
+  {% if hierarchy %}
+  <div class="hierarchy-toggle-all">
+    <button type="button" onclick="expandAllHierarchy()">Expand All</button>
+    <button type="button" onclick="collapseAllHierarchy()">Collapse All</button>
+  </div>
+  <div class="hierarchy-tree">
+    {% for vendor in hierarchy[:15] %}
+    <div class="hierarchy-vendor collapsed" data-vendor="{{ vendor.name }}">
+      <div class="hierarchy-vendor-header" onclick="toggleVendor(this.parentElement)">
+        <svg class="toggle-icon" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+        </svg>
+        <span class="vendor-name">{{ vendor.name }}</span>
+        <span class="vendor-count">{{ vendor.count }} devices</span>
+      </div>
+      <div class="hierarchy-models" style="max-height:0;">
+        {% for model in vendor.models[:20] %}
+        <div class="hierarchy-model collapsed" data-model="{{ model.name }}">
+          <div class="hierarchy-model-header" onclick="toggleModel(this.parentElement)">
+            <svg class="toggle-icon" viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;">
+              <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+            <span class="model-name">{{ model.name }}</span>
+            <span class="model-count">{{ model.count }}</span>
+          </div>
+          <div class="hierarchy-versions" style="max-height:0;">
+            {% for version, count in model.versions[:15] %}
+            <div class="hierarchy-version" onclick="filterByVersion('{{ vendor.name }}', '{{ model.name }}', '{{ version }}')">
+              <span class="version-name">{{ version }}</span>
+              <span class="version-count">{{ count }}</span>
+              <span class="view-btn">View Devices</span>
+            </div>
+            {% endfor %}
+            {% if model.versions|length > 15 %}
+            <div class="hierarchy-version" style="color:var(--muted);cursor:default;">
+              <span class="version-name">... and {{ model.versions|length - 15 }} more versions</span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        {% if vendor.models|length > 20 %}
+        <div style="padding:8px 10px;color:var(--muted);font-size:12px;">
+          ... and {{ vendor.models|length - 20 }} more models
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% if hierarchy|length > 15 %}
+    <div style="text-align:center;padding:12px;color:var(--muted);font-size:12px;">
+      Showing top 15 vendors of {{ hierarchy|length }} total. Use filters to narrow results.
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="hierarchy-empty">
+    <p>No inventory data to display. Configure SolarWinds and sync nodes to see aggregated data.</p>
+  </div>
+  {% endif %}
+</div>
+
 <!-- Filter Panel -->
 <form method="get" class="filter-panel" id="filterForm">
   <h3>
@@ -457,7 +791,7 @@
     Filter Inventory
   </h3>
 
-  {% if filters.vendor or filters.model or filters.version or filters.search or filters.hw_version %}
+  {% if filters.vendor or filters.model or filters.version or filters.search or filters.hw_version or filters.version_search %}
   <div class="selected-filters">
     {% for v in filters.vendor %}
     <span class="filter-tag">
@@ -477,6 +811,12 @@
       <span class="tag-value">{{ v }}</span>
     </span>
     {% endfor %}
+    {% if filters.version_search %}
+    <span class="filter-tag">
+      <span class="tag-label">Ver Search:</span>
+      <span class="tag-value">{{ filters.version_search }}</span>
+    </span>
+    {% endif %}
     {% if filters.search %}
     <span class="filter-tag">
       <span class="tag-label">Search:</span>
@@ -529,7 +869,7 @@
 
   <div class="filter-actions">
     <button type="submit" class="btn primary">Apply Filters</button>
-    {% if filters.vendor or filters.model or filters.version or filters.search or filters.hw_version %}
+    {% if filters.vendor or filters.model or filters.version or filters.search or filters.hw_version or filters.version_search %}
     <a href="{{ url_for('solarwinds_inventory') }}" class="btn">Clear All</a>
     {% endif %}
     <span style="margin-left:auto; font-size:12px; color:var(--muted);">
@@ -730,6 +1070,89 @@ function addFilter(type, value) {
     }
   }
   form.submit();
+}
+
+// Hierarchy view toggle functions
+function toggleVendor(el) {
+  el.classList.toggle('collapsed');
+  var models = el.querySelector('.hierarchy-models');
+  if (models) {
+    if (el.classList.contains('collapsed')) {
+      models.style.maxHeight = '0';
+    } else {
+      models.style.maxHeight = models.scrollHeight + 'px';
+      // Also account for potential nested expanded content
+      setTimeout(function() {
+        models.style.maxHeight = models.scrollHeight + 'px';
+      }, 50);
+    }
+  }
+}
+
+function toggleModel(el) {
+  el.classList.toggle('collapsed');
+  var versions = el.querySelector('.hierarchy-versions');
+  if (versions) {
+    if (el.classList.contains('collapsed')) {
+      versions.style.maxHeight = '0';
+    } else {
+      versions.style.maxHeight = versions.scrollHeight + 'px';
+    }
+    // Update parent container height
+    var parentModels = el.closest('.hierarchy-models');
+    if (parentModels) {
+      setTimeout(function() {
+        parentModels.style.maxHeight = parentModels.scrollHeight + 'px';
+      }, 50);
+    }
+  }
+}
+
+function expandAllHierarchy() {
+  var vendors = document.querySelectorAll('.hierarchy-vendor');
+  vendors.forEach(function(vendor) {
+    vendor.classList.remove('collapsed');
+    var models = vendor.querySelector('.hierarchy-models');
+    if (models) {
+      models.style.maxHeight = 'none';
+    }
+  });
+  var modelDivs = document.querySelectorAll('.hierarchy-model');
+  modelDivs.forEach(function(model) {
+    model.classList.remove('collapsed');
+    var versions = model.querySelector('.hierarchy-versions');
+    if (versions) {
+      versions.style.maxHeight = 'none';
+    }
+  });
+}
+
+function collapseAllHierarchy() {
+  var vendors = document.querySelectorAll('.hierarchy-vendor');
+  vendors.forEach(function(vendor) {
+    vendor.classList.add('collapsed');
+    var models = vendor.querySelector('.hierarchy-models');
+    if (models) {
+      models.style.maxHeight = '0';
+    }
+  });
+  var modelDivs = document.querySelectorAll('.hierarchy-model');
+  modelDivs.forEach(function(model) {
+    model.classList.add('collapsed');
+    var versions = model.querySelector('.hierarchy-versions');
+    if (versions) {
+      versions.style.maxHeight = '0';
+    }
+  });
+}
+
+function filterByVersion(vendor, model, version) {
+  // Build URL with filters to show devices matching this specific combination
+  var params = new URLSearchParams();
+  params.append('vendor', vendor);
+  params.append('model', model);
+  params.append('version', version);
+  window.location.href = '{{ url_for("solarwinds_inventory") }}?' + params.toString();
 }
 </script>
 {% endblock %}

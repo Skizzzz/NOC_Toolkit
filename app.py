@@ -5016,6 +5016,40 @@ def solarwinds_nodes():
     return render_template("solarwinds_nodes.html", settings=settings, nodes=nodes)
 
 
+def _match_version_pattern(version: str, pattern: str) -> bool:
+    """Match version string against pattern with wildcard (*) or regex support.
+
+    Supports:
+    - Plain text: exact substring match (case-insensitive)
+    - Wildcards: * matches any characters (e.g., "15.*" matches "15.2.3", "15.10.1")
+    - Regex: if pattern starts with "re:" it's treated as regex (e.g., "re:^15\\.([2-5])")
+    """
+    if not version:
+        return False
+    version_lower = version.lower()
+    pattern_lower = pattern.lower()
+
+    # Regex mode
+    if pattern_lower.startswith("re:"):
+        try:
+            regex_pattern = pattern[3:]  # Keep original case for regex
+            return bool(re.search(regex_pattern, version, re.IGNORECASE))
+        except re.error:
+            return False
+
+    # Wildcard mode (convert * to regex .*)
+    if "*" in pattern:
+        # Escape special regex chars except *, then convert * to .*
+        escaped = re.escape(pattern_lower).replace(r"\*", ".*")
+        try:
+            return bool(re.match(f"^{escaped}$", version_lower))
+        except re.error:
+            return False
+
+    # Plain substring match
+    return pattern_lower in version_lower
+
+
 @app.get("/tools/solarwinds/inventory")
 @require_login
 @require_page_enabled("solarwinds_nodes")
@@ -5030,6 +5064,7 @@ def solarwinds_inventory():
     version_filter = request.args.getlist("version")  # Multi-select
     search_filter = request.args.get("search", "").strip().lower()
     hw_version_filter = request.args.get("hw_version", "").strip().lower()
+    version_search = request.args.get("version_search", "").strip()  # Wildcard/regex search
 
     # Build aggregations BEFORE filtering (for charts)
     vendor_counts = {}
@@ -5059,6 +5094,9 @@ def solarwinds_inventory():
     if version_filter:
         version_lower = [v.lower() for v in version_filter]
         filtered = [n for n in filtered if (n.get("version") or "").lower() in version_lower]
+    if version_search:
+        # Apply wildcard/regex version search
+        filtered = [n for n in filtered if _match_version_pattern(n.get("version") or "", version_search)]
     if search_filter:
         filtered = [n for n in filtered if (
             search_filter in (n.get("caption") or "").lower() or
@@ -5082,6 +5120,41 @@ def solarwinds_inventory():
         filtered_version_counts[version] = filtered_version_counts.get(version, 0) + 1
         filtered_model_counts[model] = filtered_model_counts.get(model, 0) + 1
 
+    # Build vendor -> model -> version hierarchy for filtered results
+    hierarchy = {}
+    for n in filtered:
+        vendor = n.get("vendor") or "Unknown"
+        model = n.get("model") or "Unknown"
+        version = n.get("version") or "Unknown"
+        if vendor not in hierarchy:
+            hierarchy[vendor] = {"count": 0, "models": {}}
+        hierarchy[vendor]["count"] += 1
+        if model not in hierarchy[vendor]["models"]:
+            hierarchy[vendor]["models"][model] = {"count": 0, "versions": {}}
+        hierarchy[vendor]["models"][model]["count"] += 1
+        if version not in hierarchy[vendor]["models"][model]["versions"]:
+            hierarchy[vendor]["models"][model]["versions"][version] = 0
+        hierarchy[vendor]["models"][model]["versions"][version] += 1
+
+    # Sort hierarchy for display
+    sorted_hierarchy = []
+    for vendor in sorted(hierarchy.keys(), key=lambda v: hierarchy[v]["count"], reverse=True):
+        vendor_data = hierarchy[vendor]
+        models_list = []
+        for model in sorted(vendor_data["models"].keys(), key=lambda m: vendor_data["models"][m]["count"], reverse=True):
+            model_data = vendor_data["models"][model]
+            versions_list = sorted(model_data["versions"].items(), key=lambda x: x[1], reverse=True)
+            models_list.append({
+                "name": model,
+                "count": model_data["count"],
+                "versions": versions_list
+            })
+        sorted_hierarchy.append({
+            "name": vendor,
+            "count": vendor_data["count"],
+            "models": models_list
+        })
+
     # Sort counts by value descending for display
     top_vendors = sorted(filtered_vendor_counts.items(), key=lambda x: x[1], reverse=True)[:10]
     top_versions = sorted(filtered_version_counts.items(), key=lambda x: x[1], reverse=True)[:15]
@@ -5099,12 +5172,14 @@ def solarwinds_inventory():
         vendor_options=vendor_options,
         model_options=model_options,
         version_options=version_options,
+        hierarchy=sorted_hierarchy,
         filters={
             "vendor": vendor_filter,
             "model": model_filter,
             "version": version_filter,
             "search": search_filter,
             "hw_version": hw_version_filter,
+            "version_search": version_search,
         },
     )
 
@@ -5125,6 +5200,7 @@ def solarwinds_inventory_export():
     version_filter = request.args.getlist("version")
     search_filter = request.args.get("search", "").strip().lower()
     hw_version_filter = request.args.get("hw_version", "").strip().lower()
+    version_search = request.args.get("version_search", "").strip()
 
     # Apply filters
     filtered = nodes
@@ -5137,6 +5213,8 @@ def solarwinds_inventory_export():
     if version_filter:
         version_lower = [v.lower() for v in version_filter]
         filtered = [n for n in filtered if (n.get("version") or "").lower() in version_lower]
+    if version_search:
+        filtered = [n for n in filtered if _match_version_pattern(n.get("version") or "", version_search)]
     if search_filter:
         filtered = [n for n in filtered if (
             search_filter in (n.get("caption") or "").lower() or
