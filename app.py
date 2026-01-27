@@ -151,6 +151,7 @@ from tools.db_jobs import (
     US_TIMEZONES,
     # AP Inventory functions
     upsert_ap_inventory_bulk,
+    cleanup_stale_ap_inventory,
 )
 
 from tools.cert_tracker import (
@@ -1731,6 +1732,21 @@ def _dashboard_poll_once(settings: dict):
                 upsert_ap_inventory_bulk(ap_details, wlc_host=host)
             except Exception as exc:
                 errors.append(f"{host}: AP inventory update failed ({exc})")
+
+    # Cleanup stale APs (not seen for 5+ days) and log removals for audit
+    try:
+        removed_count, removed_aps = cleanup_stale_ap_inventory(days=5)
+        if removed_count > 0:
+            # Log removed APs for audit purposes
+            for ap in removed_aps:
+                log_audit(
+                    "system",
+                    "ap_inventory_cleanup",
+                    resource=f"{ap['ap_name']} ({ap['ap_mac']})",
+                    details=f"WLC: {ap['wlc_host']} | Model: {ap['ap_model']} | Last seen: {ap['last_seen']}",
+                )
+    except Exception as exc:
+        errors.append(f"AP inventory cleanup failed ({exc})")
 
     errors = list(dict.fromkeys(errors))
 

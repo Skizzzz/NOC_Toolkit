@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 # Use America/Chicago timezone for consistency with app.py and schedule_worker.py
 _CST_TZ = ZoneInfo("America/Chicago")
-from typing import Optional, Iterable, List, Dict, Union
+from typing import Optional, Iterable, List, Dict, Union, Tuple
 
 try:
     from cryptography.fernet import Fernet
@@ -3425,34 +3425,46 @@ def delete_ap_inventory(ap_mac: str, wlc_host: str) -> bool:
         return False
 
 
-def cleanup_stale_ap_inventory(days: int = 5) -> int:
+def cleanup_stale_ap_inventory(days: int = 5) -> Tuple[int, List[Dict]]:
     """
     Remove AP records where last_seen < (now - days).
-    Returns the number of APs removed.
+    Returns a tuple: (count of APs removed, list of removed AP dicts).
     Protects against clock issues by only removing APs seen at least once before today.
     """
     if days < 1:
-        return 0
+        return 0, []
     try:
         cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
         # Also require first_seen to be different from last_seen or older than today
         # to protect newly added APs from being removed due to clock issues
         today_start = datetime.now().replace(hour=0, minute=0, second=0).isoformat(timespec="seconds")
         with _DB_LOCK, _conn() as cx:
-            # Count for return value
+            # Get stale APs before deleting (for audit logging)
             cur = cx.execute(
-                "SELECT COUNT(*) FROM ap_inventory WHERE last_seen < ? AND first_seen < ?",
+                """SELECT ap_name, ap_mac, ap_model, wlc_host, last_seen
+                   FROM ap_inventory
+                   WHERE last_seen < ? AND first_seen < ?""",
                 (cutoff, today_start)
             )
-            count = cur.fetchone()[0]
+            removed_aps = [
+                {
+                    "ap_name": row[0],
+                    "ap_mac": row[1],
+                    "ap_model": row[2],
+                    "wlc_host": row[3],
+                    "last_seen": row[4]
+                }
+                for row in cur.fetchall()
+            ]
+            count = len(removed_aps)
             if count > 0:
                 cx.execute(
                     "DELETE FROM ap_inventory WHERE last_seen < ? AND first_seen < ?",
                     (cutoff, today_start)
                 )
-            return count
+            return count, removed_aps
     except Exception:
-        return 0
+        return 0, []
 
 
 def get_ap_inventory_stats() -> Dict:
