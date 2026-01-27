@@ -152,6 +152,8 @@ from tools.db_jobs import (
     # AP Inventory functions
     upsert_ap_inventory_bulk,
     cleanup_stale_ap_inventory,
+    list_ap_inventory,
+    get_ap_inventory_stats,
 )
 
 from tools.cert_tracker import (
@@ -5095,6 +5097,101 @@ def wlc_dashboard():
         selected_range=selected,
         interval_minutes=interval_minutes,
         host_details=host_details,
+    )
+
+
+@app.get("/tools/wlc/ap-inventory")
+@require_login
+@require_page_enabled("wlc_dashboard")
+def wlc_ap_inventory():
+    """Display auto-updating AP inventory collected during WLC polling."""
+    # Get filter parameters
+    wlc_filter = request.args.get("wlc", "").strip()
+    name_filter = request.args.get("name", "").strip()
+    model_filter = request.args.get("model", "").strip()
+    location_filter = request.args.get("location", "").strip()
+
+    # Load AP inventory with filters
+    aps = list_ap_inventory(
+        wlc_host=wlc_filter if wlc_filter else None,
+        ap_name_filter=name_filter if name_filter else None,
+        ap_model_filter=model_filter if model_filter else None,
+        ap_location_filter=location_filter if location_filter else None,
+    )
+
+    # Get stats for summary cards
+    stats = get_ap_inventory_stats()
+
+    # Build filter options for dropdowns
+    filters = {
+        "wlc": wlc_filter,
+        "name": name_filter,
+        "model": model_filter,
+        "location": location_filter,
+    }
+
+    return render_template(
+        "ap_inventory.html",
+        aps=aps,
+        stats=stats,
+        filters=filters,
+        wlc_options=stats.get("wlc_hosts", []),
+    )
+
+
+@app.get("/tools/wlc/ap-inventory/export")
+@require_login
+@require_page_enabled("wlc_dashboard")
+def wlc_ap_inventory_export():
+    """Export AP inventory to CSV with current filters applied."""
+    import io
+    import csv
+    from datetime import datetime
+
+    # Get filter parameters (same as display route)
+    wlc_filter = request.args.get("wlc", "").strip()
+    name_filter = request.args.get("name", "").strip()
+    model_filter = request.args.get("model", "").strip()
+    location_filter = request.args.get("location", "").strip()
+
+    # Load AP inventory with filters
+    aps = list_ap_inventory(
+        wlc_host=wlc_filter if wlc_filter else None,
+        ap_name_filter=name_filter if name_filter else None,
+        ap_model_filter=model_filter if model_filter else None,
+        ap_location_filter=location_filter if location_filter else None,
+    )
+
+    # Build CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "AP Name", "IP Address", "Model", "MAC Address", "Location",
+        "State", "Slots", "Country", "WLC Host", "First Seen", "Last Seen"
+    ])
+
+    for ap in aps:
+        writer.writerow([
+            ap.get("ap_name", ""),
+            ap.get("ap_ip", ""),
+            ap.get("ap_model", ""),
+            ap.get("ap_mac", ""),
+            ap.get("ap_location", ""),
+            ap.get("ap_state", ""),
+            ap.get("slots", ""),
+            ap.get("country", ""),
+            ap.get("wlc_host", ""),
+            ap.get("first_seen", ""),
+            ap.get("last_seen", ""),
+        ])
+
+    # Generate filename with date
+    filename = f"ap_inventory_{datetime.now().strftime('%Y-%m-%d')}.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 

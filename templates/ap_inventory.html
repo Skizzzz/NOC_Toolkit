@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block title %}AP Inventory{% endblock %}
+{% block head_extra %}
+<style>
+  .inv-stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));
+    gap:16px;
+    margin-bottom:28px;
+  }
+  .stat-card{
+    background:var(--card);
+    border:1px solid var(--border-subtle);
+    border-radius:14px;
+    padding:20px;
+    position:relative;
+    text-decoration:none;
+    color:inherit;
+    transition: all 0.2s ease;
+  }
+  .stat-card::before{
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:4px;
+    background:var(--pink);
+    border-radius:14px 14px 0 0;
+  }
+  .stat-card.cisco::before{background:#049fd9;}
+  .stat-card.aruba::before{background:#ff8300;}
+  .stat-card.online::before{background:var(--success);}
+  .stat-card.offline::before{background:var(--error);}
+  .stat-card:hover{transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,0.2); cursor:pointer;}
+  .stat-label{font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:8px;}
+  .stat-value{font-size:32px; font-weight:700; line-height:1; font-family:'Instrument Sans', sans-serif; letter-spacing:-0.02em;}
+  .stat-subtitle{font-size:11px; color:var(--text-muted); margin-top:8px;}
+
+  .filter-bar{
+    display:flex;
+    gap:12px;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .filter-bar input[type="text"], .filter-bar select{
+    padding:10px 14px;
+    border:1px solid var(--border-subtle);
+    border-radius:10px;
+    background:var(--bg);
+    color:var(--text);
+    font-size:13px;
+    transition: all 0.2s ease;
+  }
+  .filter-bar input[type="text"]:focus, .filter-bar select:focus{
+    outline:none;
+    border-color:var(--pink);
+    box-shadow: 0 0 0 3px rgba(245,4,80,0.15);
+  }
+  .filter-bar input[type="text"]{flex:1; min-width:180px;}
+
+  .inv-table{width:100%; border-collapse:separate; border-spacing:0; font-size:13px;}
+  .inv-table th, .inv-table td{
+    padding:12px 14px;
+    text-align:left;
+    vertical-align:middle;
+    border-bottom:1px solid var(--border-subtle);
+  }
+  .inv-table th{
+    background:var(--card);
+    font-weight:600;
+    white-space:nowrap;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--text-muted);
+    border-top:1px solid var(--border-subtle);
+  }
+  .inv-table th:first-child{border-radius:10px 0 0 0; border-left:1px solid var(--border-subtle);}
+  .inv-table th:last-child{border-radius:0 10px 0 0; border-right:1px solid var(--border-subtle);}
+  .inv-table tbody tr:hover{
+    background:rgba(245,4,80,0.04);
+  }
+  .inv-table tbody td{
+    border-left:1px solid transparent;
+    border-right:1px solid transparent;
+  }
+  .inv-table tbody tr:first-child td{border-top:none;}
+
+  .status-online{color:var(--success); font-weight:600;}
+  .status-offline{color:var(--error); font-weight:600;}
+  .status-unknown{color:var(--text-muted);}
+
+  .wlc-badge{
+    display:inline-block;
+    padding:4px 10px;
+    border-radius:999px;
+    font-size:10px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+    background:rgba(4,159,217,0.15);
+    color:#049fd9;
+  }
+
+  .model-badge{
+    display:inline-block;
+    padding:4px 10px;
+    border-radius:8px;
+    font-size:11px;
+    font-weight:500;
+    background:rgba(245,4,80,0.08);
+    color:var(--pink);
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:60px 24px;
+    color:var(--text-muted);
+  }
+  .empty-state h3{margin-bottom:10px; font-family:'Instrument Sans', sans-serif; font-size:18px; color:var(--text);}
+  .empty-state p{font-size:14px;}
+  .empty-state a{color:var(--pink);}
+
+  .source-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 12px;
+    border-radius:8px;
+    font-size:12px;
+    font-weight:600;
+    background:rgba(4,159,217,0.12);
+    color:#049fd9;
+  }
+
+  .page-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+  .page-header h2{
+    margin:0;
+    font-family:'Instrument Sans', sans-serif;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:-0.02em;
+  }
+  .page-header p{
+    margin:6px 0 0;
+    font-size:14px;
+    color:var(--text-muted);
+  }
+
+  .timestamp{
+    font-size:11px;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+
+  .nav-pills{
+    display:flex;
+    gap:8px;
+    margin-bottom:24px;
+  }
+  .nav-pills a{
+    padding:8px 16px;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:500;
+    color:var(--text-muted);
+    text-decoration:none;
+    transition: all 0.2s ease;
+    border:1px solid transparent;
+  }
+  .nav-pills a:hover{
+    background:var(--card);
+    color:var(--text);
+  }
+  .nav-pills a.active{
+    background:var(--pink);
+    color:#fff;
+    border-color:var(--pink);
+  }
+</style>
+{% endblock %}
+{% block content %}
+<!-- Navigation Pills -->
+<div class="nav-pills">
+  <a href="{{ url_for('wlc_dashboard') }}">Dashboard</a>
+  <a href="{{ url_for('wlc_ap_inventory') }}" class="active">AP Inventory</a>
+  <a href="{{ url_for('wlc_dashboard_settings') }}">Settings</a>
+</div>
+
+<div class="page-header">
+  <div>
+    <h2>AP Inventory</h2>
+    <p>Auto-updating access point inventory collected during WLC polling</p>
+  </div>
+  <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+    <span class="source-badge">
+      <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
+      Auto-Updated
+    </span>
+    <a href="{{ url_for('wlc_ap_inventory_export', **request.args) }}" class="btn">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+      </svg>
+      Export CSV
+    </a>
+  </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="inv-stats">
+  <a href="{{ url_for('wlc_ap_inventory') }}" class="stat-card">
+    <div class="stat-label">Total APs</div>
+    <div class="stat-value">{{ stats.total }}</div>
+    {% if stats.last_seen %}
+    <div class="stat-subtitle">Last updated: {{ stats.last_seen[:16] if stats.last_seen else 'Never' }}</div>
+    {% endif %}
+  </a>
+  {% for wlc, count in stats.by_wlc.items() | sort(attribute='1', reverse=true) %}
+  {% if loop.index <= 4 %}
+  <a href="{{ url_for('wlc_ap_inventory', wlc=wlc) }}" class="stat-card cisco">
+    <div class="stat-label">{{ wlc }}</div>
+    <div class="stat-value">{{ count }}</div>
+  </a>
+  {% endif %}
+  {% endfor %}
+</div>
+
+<!-- Filter Bar -->
+<div class="card" style="margin-bottom:16px; padding:16px;">
+  <form method="get" class="filter-bar">
+    <input type="text" name="name" placeholder="Search AP name..." value="{{ filters.name }}">
+    <select name="wlc">
+      <option value="">All WLC Controllers</option>
+      {% for wlc in wlc_options %}
+      <option value="{{ wlc }}" {% if filters.wlc == wlc %}selected{% endif %}>{{ wlc }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="model" placeholder="Filter model..." value="{{ filters.model }}" style="width:150px; flex:0;">
+    <input type="text" name="location" placeholder="Filter location..." value="{{ filters.location }}" style="width:150px; flex:0;">
+    <button type="submit" class="btn">Filter</button>
+    {% if filters.name or filters.wlc or filters.model or filters.location %}
+    <a href="{{ url_for('wlc_ap_inventory') }}" class="btn">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- AP Inventory Table -->
+<div class="card" style="overflow-x:auto;">
+  {% if aps %}
+  <table class="inv-table">
+    <thead>
+      <tr>
+        <th>AP Name</th>
+        <th>IP Address</th>
+        <th>Model</th>
+        <th>MAC Address</th>
+        <th>Location</th>
+        <th>State</th>
+        <th>WLC Host</th>
+        <th>First Seen</th>
+        <th>Last Seen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ap in aps %}
+      <tr>
+        <td><strong>{{ ap.ap_name or '-' }}</strong></td>
+        <td><code>{{ ap.ap_ip or '-' }}</code></td>
+        <td>
+          {% if ap.ap_model %}
+          <span class="model-badge">{{ ap.ap_model }}</span>
+          {% else %}
+          <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td><code style="font-size:11px;">{{ ap.ap_mac or '-' }}</code></td>
+        <td>{{ ap.ap_location or '-' }}</td>
+        <td>
+          {% set state = (ap.ap_state or '')|string|lower %}
+          {% if state in ['registered', 'run', 'online', 'up'] or 'run' in state %}
+          <span class="status-online">{{ ap.ap_state }}</span>
+          {% elif state in ['offline', 'down', 'disconnected'] %}
+          <span class="status-offline">{{ ap.ap_state }}</span>
+          {% else %}
+          <span class="status-unknown">{{ ap.ap_state or 'Unknown' }}</span>
+          {% endif %}
+        </td>
+        <td><span class="wlc-badge">{{ ap.wlc_host or '-' }}</span></td>
+        <td><span class="timestamp">{{ ap.first_seen[:16] if ap.first_seen else '-' }}</span></td>
+        <td><span class="timestamp">{{ ap.last_seen[:16] if ap.last_seen else '-' }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="margin:16px 0 0; font-size:12px;">
+    Showing {{ aps|length }} of {{ stats.total }} access points
+  </p>
+  {% else %}
+  <div class="empty-state">
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px; opacity:0.5;">
+      <circle cx="24" cy="24" r="10"/>
+      <path d="M24 14v-4m0 28v-4m10-10h4M6 24h4m14.14-7.07l2.83-2.83M9.03 38.97l2.83-2.83m0-14.14L9.03 19.17m28.11 19.8l-2.83-2.83"/>
+    </svg>
+    <h3>No Access Points Found</h3>
+    {% if filters.name or filters.wlc or filters.model or filters.location %}
+    <p>No APs match your filter criteria. <a href="{{ url_for('wlc_ap_inventory') }}">Clear filters</a></p>
+    {% else %}
+    <p>No APs have been collected yet. Enable WLC dashboard polling to start collecting AP inventory automatically.</p>
+    <p style="margin-top:12px;"><a href="{{ url_for('wlc_dashboard_settings') }}">Configure WLC Dashboard Settings</a></p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Model Distribution Summary -->
+{% if stats.by_model %}
+<div class="card" style="margin-top:24px; padding:20px;">
+  <h3 style="margin:0 0 16px; font-size:16px; font-weight:600;">AP Models Distribution</h3>
+  <div style="display:flex; flex-wrap:wrap; gap:12px;">
+    {% for model, count in stats.by_model.items() | sort(attribute='1', reverse=true) %}
+    {% if loop.index <= 12 %}
+    <div style="padding:8px 14px; background:var(--bg); border:1px solid var(--border-subtle); border-radius:8px; font-size:13px;">
+      <strong>{{ model }}</strong>
+      <span class="muted" style="margin-left:8px;">{{ count }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
