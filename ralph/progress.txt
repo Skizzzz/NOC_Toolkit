@@ -673,3 +673,26 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Use `pytest tests/e2e/ -k test_name` to run specific tests
   - seed_test_data.py can be run standalone: `python tests/seed_test_data.py [--reset|--clear]`
 ---
+
+## 2026-01-27 - US-027
+- What was implemented:
+  - Created tests/e2e/test_auth.py with 11 comprehensive E2E tests for authentication flows:
+    - TestLogin: test_login_with_valid_credentials_succeeds, test_login_with_invalid_credentials_shows_error, test_login_with_nonexistent_user_shows_error, test_login_with_empty_credentials_does_not_submit
+    - TestLogout: test_logout_redirects_to_login_page, test_logout_clears_session
+    - TestProtectedPages: test_protected_page_redirects_to_login_when_not_authenticated, test_admin_pages_redirect_to_login_when_not_authenticated, test_protected_tools_redirect_to_login_when_not_authenticated, test_protected_page_accessible_after_login, test_next_parameter_redirects_after_login
+  - Enhanced tests/e2e/conftest.py seeded_db fixture to seed both SQLite database (for security.py) and SQLAlchemy models
+  - Added test database path configuration via NOC_TOOLKIT_DB_PATH environment variable
+  - Added index route to src/app.py to handle post-login redirect
+- Files changed:
+  - tests/e2e/test_auth.py (new - 206 lines)
+  - tests/e2e/conftest.py (modified - enhanced seeded_db fixture)
+  - src/app.py (modified - added index route)
+- **Learnings for future iterations:**
+  - CRITICAL: The codebase has TWO database systems - SQLite (tools/security.py, src/core/security.py) and SQLAlchemy models
+  - For E2E tests, must seed BOTH: SQLite for auth functions (verify_user, etc.) AND SQLAlchemy for any routes using models
+  - Set NOC_TOOLKIT_DB_PATH environment variable BEFORE importing app to use test database
+  - Auth routes use src.core.security which uses get_connection() from src.core.database - this reads NOC_TOOLKIT_DB_PATH
+  - The authenticated_page fixture relies on seeded_db to create users in the correct database
+  - Tests should verify auth succeeded via redirect behavior, not destination page content (templates may have issues during blueprint refactor)
+  - Use `pytest tests/e2e/test_auth.py -v --timeout=60` to run auth tests
+---
