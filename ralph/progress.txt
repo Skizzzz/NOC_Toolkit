@@ -558,3 +558,30 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - scripts/init_db.py can be run with `python scripts/init_db.py` or `python scripts/init_db.py --reset`
   - db.init_app(app) and migrate.init_app(app, db) are called in _init_extensions()
 ---
+
+## 2026-01-27 - US-023
+- What was implemented:
+  - Created src/blueprints/setup/ directory with __init__.py and routes.py
+  - Created setup wizard template at src/blueprints/setup/templates/setup/setup_wizard.html
+  - Setup wizard route /setup collects admin username and password
+  - is_first_run() function checks for empty users table in database
+  - Password validation requires minimum 12 characters
+  - Created admin user with superadmin role, Admin kb_access_level, can_create_kb=True
+  - After successful setup, redirects to auth.login with flash message
+  - Setup route returns 404 if users already exist in database
+  - Added before_request middleware in _register_request_handlers() to redirect to /setup on first run
+  - Middleware excludes /setup, /health, and /static/* paths from redirect
+  - Registered setup blueprint in app factory _register_blueprints()
+- Files changed:
+  - src/blueprints/setup/__init__.py (new)
+  - src/blueprints/setup/routes.py (new)
+  - src/blueprints/setup/templates/setup/setup_wizard.html (new)
+  - src/app.py (modified - added setup_bp import, registration, and _register_request_handlers)
+- **Learnings for future iterations:**
+  - First-run detection: check User.query.count() == 0 with exception handling
+  - before_request middleware checks request.endpoint for route exclusions
+  - Setup blueprint uses same visual style as login.html (standalone page, not base.html)
+  - Password strength indicator uses CSS classes: weak (red), medium (yellow), strong (green)
+  - Admin user created with set_password() method from User model
+  - Middleware returns None to continue request processing, redirect() to intercept
+---
