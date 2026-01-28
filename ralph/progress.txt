@@ -491,3 +491,28 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Use ondelete="CASCADE" on ForeignKey for automatic cleanup of related records
   - Status enums documented in comments: e.g., "scheduled|running|completed|failed|rolled_back|cancelled"
 ---
+
+## 2026-01-27 - US-021
+- What was implemented:
+  - Created src/models/cert.py with certificate and ISE node models:
+    - Certificate: Tracks SSL/TLS certificates with expiry, CN, serial, source info
+    - ISENode: Manages Cisco ISE nodes for certificate syncing with credentials
+    - CertSyncSettings: Singleton settings for auto-sync configuration
+  - Created src/models/kb.py with KBArticle model:
+    - KBArticle: Knowledge base articles with visibility levels (FSR/NOC/Admin)
+    - Includes author relationship to User model
+    - Search and filtering class methods
+  - Updated src/models/__init__.py to export all new models
+  - All models include proper indexes matching the SQLite schema
+- Files changed:
+  - src/models/cert.py (new)
+  - src/models/kb.py (new)
+  - src/models/__init__.py (modified)
+- **Learnings for future iterations:**
+  - Certificate model has is_expired property and days_until_expiry helper
+  - ISENode uses Integer for enabled (1/0) instead of Boolean for SQLite compatibility
+  - CertSyncSettings follows singleton pattern with CheckConstraint("id = 1")
+  - KBArticle.get_visible_to_user() filters by visibility level hierarchy
+  - KBArticle uses back_populates="kb_articles" relationship with User model
+  - Use db.or_() for combining filter conditions in SQLAlchemy queries
+---
