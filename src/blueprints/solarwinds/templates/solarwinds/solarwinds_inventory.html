@@ -713,7 +713,7 @@
     {% if filters.hw_version %}<input type="hidden" name="hw_version" value="{{ filters.hw_version }}">{% endif %}
     <button type="submit" class="btn primary">Search Versions</button>
     {% if filters.version_search %}
-    <a href="{{ url_for('solarwinds_inventory', vendor=filters.vendor, model=filters.model, version=filters.version, search=filters.search, hw_version=filters.hw_version) }}" class="btn">Clear Search</a>
+    <a href="{{ url_for('solarwinds.solarwinds_inventory', vendor=filters.vendor, model=filters.model, version=filters.version, search=filters.search, hw_version=filters.hw_version) }}" class="btn">Clear Search</a>
     {% endif %}
   </div>
 </form>
@@ -1158,7 +1158,7 @@ function filterByVersion(vendor, model, version) {
   params.append('vendor', vendor);
   params.append('model', model);
   params.append('version', version);
-  window.location.href = '{{ url_for("solarwinds_inventory") }}?' + params.toString();
+  window.location.href = '{{ url_for("solarwinds.solarwinds_inventory") }}?' + params.toString();
 }
 </script>
 {% endblock %}
