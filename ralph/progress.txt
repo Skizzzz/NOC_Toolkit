@@ -466,3 +466,28 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Settings models have get_settings() class method for getting/creating singleton instance
   - Use UniqueConstraint in __table_args__ for multi-column unique constraints
 ---
+
+## 2026-01-27 - US-020
+- What was implemented:
+  - Created src/models/bulk_ssh.py with Bulk SSH models:
+    - BulkSSHJob: Tracks bulk SSH command execution with progress counters
+    - BulkSSHResult: Stores individual device results with output/status
+    - BulkSSHTemplate: Reusable command templates with category and variables
+    - BulkSSHSchedule: Scheduled bulk SSH jobs with next_run/last_run tracking
+  - Created src/models/config.py with configuration management models:
+    - ChangeWindow: Configuration change window scheduling and execution tracking
+    - ChangeEvent: Event logging during change window execution
+  - Updated src/models/__init__.py to export all new models
+  - All models include proper indexes matching the SQLite schema in db_jobs.py
+- Files changed:
+  - src/models/bulk_ssh.py (new)
+  - src/models/config.py (new)
+  - src/models/__init__.py (modified)
+- **Learnings for future iterations:**
+  - BulkSSHJob includes progress_percent property for calculating completion percentage
+  - BulkSSHSchedule.fetch_due_schedules() class method for finding schedules ready to run
+  - ChangeWindow has status lifecycle methods: start(), complete(), fail(), rollback(), cancel()
+  - ChangeWindow.add_event() helper for adding associated ChangeEvent records
+  - Use ondelete="CASCADE" on ForeignKey for automatic cleanup of related records
+  - Status enums documented in comments: e.g., "scheduled|running|completed|failed|rolled_back|cancelled"
+---
