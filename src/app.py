@@ -8,7 +8,7 @@ and configuring the Flask application instance.
 import os
 from typing import Optional
 
-from flask import Flask
+from flask import Flask, redirect, request, url_for
 from flask_migrate import Migrate
 
 from src.config import get_config, ProductionConfig
@@ -64,6 +64,9 @@ def create_app(config_name: Optional[str] = None) -> Flask:
     # Register error handlers
     _register_error_handlers(app)
 
+    # Register request handlers (including first-run middleware)
+    _register_request_handlers(app)
+
     # Add health check endpoint
     @app.route("/health")
     def health_check() -> dict:
@@ -103,6 +106,7 @@ def _register_blueprints(app: Flask) -> None:
     from src.blueprints.certs import certs_bp
     from src.blueprints.jobs import jobs_bp
     from src.blueprints.kb import kb_bp
+    from src.blueprints.setup import setup_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
@@ -113,6 +117,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(certs_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(kb_bp)
+    app.register_blueprint(setup_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:
@@ -132,3 +137,42 @@ def _register_error_handlers(app: Flask) -> None:
     def internal_error(error):
         """Handle 500 Internal Server errors."""
         return {"error": "Internal Server Error", "status": 500}, 500
+
+
+def _register_request_handlers(app: Flask) -> None:
+    """
+    Register request handlers and middleware.
+
+    Args:
+        app: Flask application instance.
+    """
+    from src.blueprints.setup.routes import is_first_run
+
+    @app.before_request
+    def check_first_run():
+        """
+        Redirect all routes to setup wizard if no users exist.
+
+        Excluded routes:
+        - /setup (the setup wizard itself)
+        - /health (health check endpoint)
+        - /static/* (static files)
+        """
+        # Skip check for excluded routes
+        if request.endpoint in ("setup.setup_wizard", "health_check", "static"):
+            return None
+
+        # Skip for static file requests
+        if request.path.startswith("/static/"):
+            return None
+
+        # Check if this is first run
+        try:
+            if is_first_run():
+                return redirect(url_for("setup.setup_wizard"))
+        except Exception:
+            # If database check fails, allow request to proceed
+            # This handles cases where DB isn't initialized yet
+            pass
+
+        return None
