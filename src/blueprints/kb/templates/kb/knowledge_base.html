@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Base{% endblock %}
+{% block head_extra %}
+<style>
+  .kb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .kb-title h2 {
+    margin: 0;
+    font-size: 26px;
+    font-family: 'Instrument Sans', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .kb-title p { margin-top: 6px; color: var(--text-muted); font-size: 14px; }
+
+  .kb-filters {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .kb-filters .field {
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+  }
+  .kb-filters .field label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .kb-filters input, .kb-filters select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    transition: all 0.2s ease;
+  }
+  .kb-filters input:focus, .kb-filters select:focus {
+    outline: none;
+    border-color: var(--pink);
+    box-shadow: 0 0 0 3px rgba(245,4,80,0.15);
+  }
+
+  .kb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+  }
+
+  .kb-card {
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 24px;
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  .kb-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--pink);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease;
+  }
+  .kb-card:hover {
+    border-color: rgba(245,4,80,0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+  }
+  .kb-card:hover::before {
+    transform: scaleX(1);
+  }
+
+  .kb-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+  .kb-card-title {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text);
+    text-decoration: none;
+    font-family: 'Instrument Sans', sans-serif;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+  }
+  .kb-card-title:hover {
+    color: var(--pink);
+  }
+
+  .kb-card-subject {
+    display: inline-block;
+    background: rgba(245,4,80,0.12);
+    color: var(--pink);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .kb-card-preview {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+    flex: 1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
+  .kb-card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding-top: 14px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .kb-empty {
+    text-align: center;
+    padding: 80px 24px;
+    color: var(--text-muted);
+  }
+  .kb-empty svg {
+    width: 72px;
+    height: 72px;
+    margin-bottom: 20px;
+    opacity: 0.4;
+    color: var(--pink);
+  }
+  .kb-empty h3 {
+    margin: 0 0 10px 0;
+    color: var(--text);
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 20px;
+  }
+  .kb-empty p { font-size: 14px; }
+  .kb-empty a { color: var(--pink); }
+
+  .visibility-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-size: 9px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .visibility-badge.FSR {
+    background: rgba(0,214,127,0.12);
+    color: var(--success);
+  }
+  .visibility-badge.NOC {
+    background: rgba(59,139,255,0.12);
+    color: var(--info);
+  }
+  .visibility-badge.Admin {
+    background: rgba(255,168,38,0.12);
+    color: var(--warning);
+  }
+
+  .access-info {
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 14px 20px;
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 768px) {
+    .kb-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="{{ url_for('index') }}">Dashboard</a>
+  <span class="breadcrumbs-separator">/</span>
+  <span class="breadcrumbs-current">Knowledge Base</span>
+</nav>
+
+<div class="kb-header">
+  <div class="kb-title">
+    <h2>Knowledge Base</h2>
+    <p>Documentation, guides, and procedures for the NOC team</p>
+  </div>
+  {% if can_create %}
+  <a href="{{ url_for('kb.knowledge_base_create') }}" class="btn btn-primary">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/>
+    </svg>
+    New Article
+  </a>
+  {% endif %}
+</div>
+
+<div class="card">
+  <form class="kb-filters" method="get">
+    <div class="field">
+      <label for="q">Search</label>
+      <input type="text" id="q" name="q" placeholder="Search articles..." value="{{ search_query }}">
+    </div>
+    <div class="field">
+      <label for="subject">Subject</label>
+      <select id="subject" name="subject">
+        <option value="">All Subjects</option>
+        {% for subj in subjects %}
+        <option value="{{ subj }}" {% if subject_filter == subj %}selected{% endif %}>{{ subj }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field" style="align-self: flex-end;">
+      <button type="submit" class="btn">Filter</button>
+      {% if search_query or subject_filter %}
+      <a href="{{ url_for('kb.knowledge_base') }}" class="btn" style="margin-left: 8px;">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if articles %}
+  <div class="kb-grid">
+    {% for article in articles %}
+    <div class="kb-card">
+      <span class="visibility-badge {{ article.visibility }}">{{ article.visibility }}</span>
+      <div class="kb-card-header">
+        <span class="kb-card-subject">{{ article.subject }}</span>
+      </div>
+      <a href="{{ url_for('kb.knowledge_base_view', article_id=article.id) }}" class="kb-card-title">{{ article.title }}</a>
+      <p class="kb-card-preview">{{ article.content[:200] }}{% if article.content|length > 200 %}...{% endif %}</p>
+      <div class="kb-card-meta">
+        <span>By {{ article.author_name or 'Unknown' }}</span>
+        <span>{{ article.updated_at[:10] if article.updated_at else article.created_at[:10] }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="kb-empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+    </svg>
+    <h3>No Articles Found</h3>
+    <p>{% if search_query or subject_filter %}No articles match your search criteria.{% else %}The knowledge base is empty. {% if can_create %}Create the first article to get started.{% endif %}{% endif %}</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="access-info">
+  <strong style="color:var(--text);">Your access level:</strong> {{ user_access_level }}
+  <span style="margin:0 8px;">|</span>
+  <strong style="color:var(--text);">Visibility levels:</strong> FSR (all users), NOC (NOC & Admin), Admin (Admin only)
+</div>
+{% endblock %}
