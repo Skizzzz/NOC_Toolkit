@@ -297,3 +297,32 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Templates redirect to job_progress_page (in root app.py) for unified job progress tracking
   - CST timezone handling uses zoneinfo.ZoneInfo with pytz fallback for Python 3.8 compatibility
 ---
+
+## 2026-01-27 23:15 CST - US-013
+- What was implemented:
+  - Created src/blueprints/certs/routes.py with routes: /certs, /certs/export, /certs/upload, /certs/<id>/edit, /certs/<id>/delete, /certs/<id>/view, /certs/chain, /certs/converter, /ise-nodes, /ise-nodes/add, /ise-nodes/<id>/edit, /ise-nodes/<id>/delete, /ise-nodes/<id>/toggle, /ise-nodes/<id>/sync, /ise-nodes/sync-all, /ise-nodes/settings, /ise-nodes/<id>/fetch-version, /ise-nodes/fetch-all-versions
+  - Created src/blueprints/certs/templates/certs/ directory structure
+  - Copied and updated templates: cert_tracker.html, cert_view.html, cert_upload.html, cert_edit.html, cert_chain.html, cert_converter.html, ise_nodes.html, ise_node_edit.html
+  - Updated url_for() calls in all templates to use blueprint prefix (certs.route_name)
+  - Updated src/blueprints/certs/__init__.py to export certs_bp
+  - Registered certs blueprint in src/app.py _register_blueprints()
+- Files changed:
+  - src/blueprints/certs/routes.py (new)
+  - src/blueprints/certs/templates/certs/cert_tracker.html (new)
+  - src/blueprints/certs/templates/certs/cert_view.html (new)
+  - src/blueprints/certs/templates/certs/cert_upload.html (new)
+  - src/blueprints/certs/templates/certs/cert_edit.html (new)
+  - src/blueprints/certs/templates/certs/cert_chain.html (new)
+  - src/blueprints/certs/templates/certs/cert_converter.html (new)
+  - src/blueprints/certs/templates/certs/ise_nodes.html (new)
+  - src/blueprints/certs/templates/certs/ise_node_edit.html (new)
+  - src/blueprints/certs/__init__.py (modified)
+  - src/app.py (modified)
+- **Learnings for future iterations:**
+  - Certs blueprint uses url_prefix="" for root-level routes (e.g., /certs, /ise-nodes)
+  - Certificate routes include filtering, sorting, and CSV export functionality
+  - ISE node management includes CRUD operations, certificate syncing, and version fetching
+  - The cert_converter route uses tools/cert_converter module for PFX/PEM/DER conversions
+  - Decorator nesting pattern: define inner function decorated with @require_login/@require_page_enabled and call it
+  - _get_cst_tz() helper returns timezone object with zoneinfo/pytz fallback
+---
