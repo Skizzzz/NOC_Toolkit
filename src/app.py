@@ -94,6 +94,7 @@ def _register_blueprints(app: Flask) -> None:
     from src.blueprints.config import config_bp
     from src.blueprints.bulk_ssh import bulk_ssh_bp
     from src.blueprints.certs import certs_bp
+    from src.blueprints.jobs import jobs_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
@@ -102,6 +103,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(config_bp)
     app.register_blueprint(bulk_ssh_bp)
     app.register_blueprint(certs_bp)
+    app.register_blueprint(jobs_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

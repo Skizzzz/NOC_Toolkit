@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.job_id[:8] }} — NOC Toolkit{% endblock %}
+{% block head_extra %}
+<style>
+  .job-header{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:24px;
+  }
+  .job-meta{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:16px;
+    margin-top:16px;
+  }
+  .job-meta-item{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .job-meta-label{
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--muted);
+  }
+  .job-meta-value{
+    font-size:15px;
+    font-weight:600;
+  }
+  .events-timeline{
+    position:relative;
+    padding-left:40px;
+  }
+  .events-timeline::before{
+    content:'';
+    position:absolute;
+    left:16px;
+    top:0;
+    bottom:0;
+    width:2px;
+    background:var(--border);
+  }
+  .event-item{
+    position:relative;
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 16px;
+    margin-bottom:12px;
+  }
+  .event-item::before{
+    content:'';
+    position:absolute;
+    left:-28px;
+    top:16px;
+    width:12px;
+    height:12px;
+    border-radius:50%;
+    background:var(--accent);
+    border:2px solid var(--bg);
+  }
+  .event-item.log::before{background:var(--info);}
+  .event-item.error::before{background:var(--error);}
+  .event-item.success::before{background:var(--success);}
+  .event-item.warning::before{background:var(--warning);}
+  .event-timestamp{
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .event-content{
+    font-size:14px;
+  }
+  .event-payload{
+    margin-top:8px;
+    padding:10px;
+    background:var(--bg);
+    border-radius:6px;
+    font-family:monospace;
+    font-size:12px;
+    overflow-x:auto;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="{{ url_for('index') }}">Dashboard</a>
+  <span class="breadcrumbs-separator">/</span>
+  <a href="{{ url_for('jobs.jobs_center') }}">Jobs Center</a>
+  <span class="breadcrumbs-separator">/</span>
+  <span class="breadcrumbs-current">Job {{ job.job_id[:8] }}</span>
+</nav>
+
+<div class="job-header">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h2 style="margin:0;">Job Details</h2>
+      <p class="muted" style="margin-top:4px;"><code>{{ job.job_id }}</code></p>
+    </div>
+    <div style="display:flex; gap:10px;">
+      {% if not job.done %}
+      <form method="post" action="{{ url_for('jobs.cancel_job', job_id=job.job_id) }}" onsubmit="return confirm('Cancel this job?');">
+        <button class="btn" type="submit">Cancel Job</button>
+      </form>
+      {% endif %}
+      <a class="btn" href="{{ url_for('jobs.jobs_center') }}">Back to Jobs</a>
+    </div>
+  </div>
+
+  <div class="job-meta">
+    <div class="job-meta-item">
+      <div class="job-meta-label">Job Type</div>
+      <div class="job-meta-value">
+        <span class="badge neutral">{{ job.tool or 'Unknown' }}</span>
+      </div>
+    </div>
+
+    <div class="job-meta-item">
+      <div class="job-meta-label">Status</div>
+      <div class="job-meta-value">
+        {% if job.cancelled %}
+          <span class="badge neutral">Cancelled</span>
+        {% elif job.done %}
+          <span class="badge success">Completed</span>
+        {% else %}
+          <span class="badge info">Running</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="job-meta-item">
+      <div class="job-meta-label">Created</div>
+      <div class="job-meta-value">{{ job.created or '—' }}</div>
+    </div>
+
+    {% if job.params %}
+    <div class="job-meta-item">
+      <div class="job-meta-label">Parameters</div>
+      <div class="job-meta-value" style="font-size:13px;">
+        {% if job.params.get('host') %}
+          Host: {{ job.params.host }}
+        {% elif job.params.get('hosts') %}
+          Hosts: {{ job.params.hosts|length if job.params.hosts is iterable else job.params.hosts }}
+        {% else %}
+          See events below
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Events Timeline -->
+<section class="card">
+  <h3 class="section-title">Event Timeline</h3>
+  <p class="muted" style="margin:0 0 20px 0;">
+    {% if events|length > 0 %}
+      {{ events|length }} events recorded for this job
+    {% else %}
+      No events recorded yet
+    {% endif %}
+  </p>
+
+  {% if events %}
+  <div class="events-timeline">
+    {% for event in events %}
+    <div class="event-item {{ event.type }}">
+      <div class="event-timestamp">{{ event.timestamp }}</div>
+      <div class="event-content">
+        <strong>{{ event.type|title }}</strong>
+        {% if event.payload %}
+          {% if event.payload.message %}
+            <div>{{ event.payload.message }}</div>
+          {% endif %}
+          {% if event.type == 'error' and event.payload.error %}
+            <div style="color:var(--error); margin-top:4px;">{{ event.payload.error }}</div>
+          {% endif %}
+          {% if event.payload and event.payload != {'message': event.payload.get('message')} %}
+            <details class="event-payload" style="margin-top:8px;">
+              <summary style="cursor:pointer; font-weight:600;">View payload</summary>
+              <pre style="margin:8px 0 0 0; white-space:pre-wrap;">{{ event.payload | tojson(indent=2) }}</pre>
+            </details>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">This job hasn't generated any events yet.</p>
+  {% endif %}
+</section>
+
+<!-- Auto-refresh if job is running -->
+{% if not job.done and not job.cancelled %}
+<script>
+  setTimeout(() => location.reload(), 5000);
+</script>
+{% endif %}
+{% endblock %}
