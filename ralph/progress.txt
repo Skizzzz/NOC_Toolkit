@@ -696,3 +696,25 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Tests should verify auth succeeded via redirect behavior, not destination page content (templates may have issues during blueprint refactor)
   - Use `pytest tests/e2e/test_auth.py -v --timeout=60` to run auth tests
 ---
+
+## 2026-01-27 - US-028
+- What was implemented:
+  - Created tests/e2e/test_admin.py with 13 comprehensive E2E tests for admin functionality
+  - TestCreateUser: test_create_new_user, test_create_user_with_short_password_shows_error, test_create_user_with_duplicate_username_shows_error
+  - TestEditUserRole: test_edit_user_kb_permissions, test_toggle_user_kb_create_permission
+  - TestTogglePageVisibility: test_toggle_page_visibility, test_enable_all_pages_button, test_disable_all_pages_button
+  - TestAdminAccessControl: test_non_admin_cannot_access_admin_users_page, test_non_admin_cannot_access_page_settings, test_non_admin_cannot_access_app_settings, test_unauthenticated_user_cannot_access_admin_pages, test_admin_can_access_all_admin_pages
+  - Fixed src/blueprints/admin/routes.py to use get_db_path() instead of hardcoded "noc_toolkit.db"
+  - Fixed tests/e2e/conftest.py to include updated_at column in page_settings table
+- Files changed:
+  - tests/e2e/test_admin.py (new - 382 lines)
+  - src/blueprints/admin/routes.py (modified - import get_db_path, use dynamic db path)
+  - tests/e2e/conftest.py (modified - added updated_at column to page_settings)
+- **Learnings for future iterations:**
+  - Admin routes were using hardcoded "noc_toolkit.db" path - always use get_db_path() from src.core.database
+  - Toggle switches (custom styled checkboxes) have opacity:0 on the input - click the visible toggle-slider span instead
+  - HTML5 minlength validation prevents form submission - use page.evaluate() to remove the attribute for testing server-side validation
+  - The .flash class in base.html shows all flash messages without category distinction (not .flash-success or .flash-error)
+  - Test fixture page_settings table must match production schema including updated_at column
+  - Use `pytest tests/e2e/test_admin.py -v --timeout=120` to run admin tests
+---
