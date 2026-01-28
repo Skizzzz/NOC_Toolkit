@@ -588,3 +588,153 @@ Started: Mon Jan 26 21:15:43 CST 2026
   - When implementing a feature page, include CSV export in the same story to avoid creating separate stories for tightly-coupled functionality
   - CSV export was properly designed to accept the same filter parameters as the display route
 ---
+
+## 2026-01-27 - US-018
+- **What was implemented**: Created SolarWinds Hardware/Software Inventory Schema for CVE analysis
+- **Changes made**:
+  1. Extended `solarwinds_nodes` table with `hardware_version` column via migration
+  2. Added indexes for efficient CVE/inventory searches: `idx_solarwinds_vendor`, `idx_solarwinds_model`, `idx_solarwinds_version`, `idx_solarwinds_hw_version`
+  3. Updated `replace_solarwinds_nodes()` to insert hardware_version
+  4. Updated `fetch_solarwinds_nodes()` to return hardware_version
+  5. Added `SysDescription` to SolarWinds API query for hardware version extraction
+  6. Created `_extract_hardware_version()` helper function to parse hardware revisions from SysDescription
+- **Files changed**:
+  - `tools/db_jobs.py` - Added column migration and indexes, updated insert/select functions
+  - `tools/solarwinds.py` - Added SysDescription to query, added hardware version extraction
+  - `app.py` - Added hardware_version to poll shaping
+- **Verification**:
+  - Python syntax check passes on all modified files
+  - Module imports work correctly
+  - App imports and initializes successfully
+- **Learnings for future iterations**:
+  - SolarWinds Orion API provides `SysDescription` which may contain hardware revision info
+  - For network devices, hardware version is often encoded in SysDescription (e.g., "REV A", "Hardware: 2.0")
+  - The hardware_version field can be populated automatically from SysDescription patterns or manually via UI enrichment
+  - Extended existing table instead of creating new one to avoid data duplication and maintain foreign key relationships
+---
+
+## 2026-01-27 - US-019
+- **What was implemented**: Created SolarWinds Inventory Dashboard Page for CVE assessment
+- **Changes made**:
+  1. Created `/tools/solarwinds/inventory` route in app.py with multi-select filter support (vendor, model, version)
+  2. Created `/tools/solarwinds/inventory/export` route for CSV export with filtered results
+  3. Created `templates/solarwinds_inventory.html` with:
+     - Summary charts: "Devices by Vendor" and "Top Software Versions" bar charts
+     - Multi-select filter dropdowns for vendor, model, software version
+     - Search box for hostname, IP, model, version
+     - Hardware version text filter
+     - Data table with all fields: hostname, IP, organization, vendor, model, software version, hardware version
+     - Pagination (100 rows per page)
+     - CSV export button
+  4. Added navigation pills to `solarwinds_nodes.html` (Nodes, Inventory, Settings)
+- **Files changed**:
+  - `app.py` - Added solarwinds_inventory and solarwinds_inventory_export routes
+  - `templates/solarwinds_inventory.html` - New template (created)
+  - `templates/solarwinds_nodes.html` - Added navigation pills
+- **Verification**:
+  - Python syntax check passes on all modified files
+  - App imports and runs successfully
+  - Page renders correctly at `/tools/solarwinds/inventory` showing 17028 devices
+  - Summary charts display correctly with vendor counts and version distribution
+  - Multi-select filters work (Ctrl/Cmd+click for multiple selections)
+  - Data table renders with all fields including hardware_version column
+  - Navigation pills link correctly between Nodes, Inventory, and Settings pages
+  - CSV export downloads filtered results
+- **Learnings for future iterations**:
+  - Multi-select filters use `request.args.getlist()` to get multiple values
+  - Bar charts use percentages for width based on filtered count, not total count
+  - Safe DOM manipulation should be used instead of innerHTML for security (textContent, createElement)
+  - Navigation pills provide consistent nav between related SolarWinds pages
+---
+
+## 2026-01-27 - US-020
+- **What was implemented**: Implemented SolarWinds Inventory Search and Aggregation for CVE assessment
+- **Changes made**:
+  1. Added `_match_version_pattern()` helper function in app.py supporting:
+     - Plain text substring matching (case-insensitive)
+     - Wildcard matching with `*` (e.g., `15.*` matches `15.2.3`, `15.10.1`)
+     - Regex matching with `re:` prefix (e.g., `re:^15\\.([2-5])` for version ranges)
+  2. Added `version_search` parameter to `/tools/solarwinds/inventory` route
+  3. Built vendor → model → version hierarchy data structure for aggregated display
+  4. Updated export route to include `version_search` filter
+  5. Created Version Search box in template with placeholder examples and help text
+  6. Created collapsible hierarchy view with Expand All/Collapse All buttons
+  7. Added click-to-filter functionality on version counts in hierarchy
+  8. Added JavaScript functions: toggleVendor(), toggleModel(), expandAllHierarchy(), collapseAllHierarchy(), filterByVersion()
+- **Files changed**:
+  - `app.py` - Added _match_version_pattern(), hierarchy building, version_search filter
+  - `templates/solarwinds_inventory.html` - Added version search box, hierarchy view, CSS, JavaScript
+- **Verification**:
+  - Wildcard search `15.*` correctly filtered to 2298 Cisco devices with 15.x versions
+  - Hierarchy shows vendor (Cisco 9105), model (Catalyst 29xxStack 955), version counts
+  - Clicking version in hierarchy filters to exact vendor+model+version combination (761 devices)
+  - Filter tags display correctly for all active filters
+  - Export includes version_search filter parameter
+  - Typecheck passes
+- **Learnings for future iterations**:
+  - Wildcard patterns are converted to regex by escaping special chars and replacing `*` with `.*`
+  - Regex mode uses `re:` prefix to differentiate from wildcard mode
+  - Hierarchy data is sorted by count descending at each level (vendor, model, version)
+  - Use `style.maxHeight` for CSS transitions on collapsible content instead of display:none
+  - Click handlers on hierarchy items trigger form submissions with pre-filled filter values
+---
+
+## 2026-01-27 - US-021
+- **What was implemented**: Implemented SolarWinds Inventory Export with aggregation summary
+- **Changes made**:
+  1. Added `/tools/solarwinds/inventory/export-summary` route in app.py for aggregation CSV export
+  2. New route exports vendor → model → version hierarchy with device counts per combination
+  3. Added "Export Summary" button to solarwinds_inventory.html header
+  4. Both export routes support all existing filters (vendor, model, version, search, hw_version, version_search)
+- **Files changed**:
+  - `app.py` - Added solarwinds_inventory_export_summary route (~90 lines)
+  - `templates/solarwinds_inventory.html` - Added Export Summary button
+- **Verification**:
+  - Full inventory export (`/export`): 17,028 devices with all required fields (caption, ip_address, organization, vendor, model, version, hardware_version)
+  - Summary export (`/export-summary`): Hierarchical aggregation with Vendor, Vendor_Count, Model, Model_Count, Software_Version, Version_Count columns
+  - Filtered exports work correctly (tested with vendor=Cisco filter)
+  - Filename format verified: `solarwinds_inventory_summary_2026-01-27.csv`
+  - Typecheck passes
+  - Browser verification complete - both buttons visible and functional
+- **Learnings for future iterations**:
+  - Export routes should reuse the same filtering logic as display routes for consistency
+  - Aggregation exports are valuable for CVE impact analysis - showing device counts per version helps prioritize patching
+  - CSV DictWriter with explicit fieldnames ensures consistent column ordering
+---
+
+## 2026-01-27 - US-022
+- **What was implemented**: Created Production Readiness Documentation
+- **Changes made**:
+  1. Created `docs/audit-findings.md` with comprehensive audit results:
+     - Executive summary of 10 systems audited, 9 issues fixed
+     - Detailed documentation of each issue found and the fix applied
+     - Categorized by user story (US-001 through US-010)
+     - Summary table of files changed
+     - Recommendations section for future development
+  2. Created `docs/production-runbook.md` with:
+     - System overview and architecture diagram
+     - Installation and startup instructions
+     - Database configuration (dual database architecture explained)
+     - Timezone configuration guide with all 7 supported US timezones
+     - Documentation of all 5 scheduled job systems:
+       - WLC Dashboard Poller
+       - Bulk SSH Schedule Worker
+       - Change Management Scheduler
+       - WLC Summer Guest Scheduler
+       - Certificate Sync Worker
+     - New features documentation (AP Inventory, SolarWinds Inventory)
+     - Comprehensive troubleshooting guide with 7 common issues
+     - Security considerations
+     - Backup and recovery procedures
+- **Files changed**:
+  - `docs/audit-findings.md` - New file (created)
+  - `docs/production-runbook.md` - New file (created)
+- **Verification**:
+  - Typecheck passes (Python syntax check)
+  - All documentation follows markdown best practices
+  - All acceptance criteria met
+- **Learnings for future iterations**:
+  - Production documentation should be created as a final step after all features are complete
+  - Runbooks should include architecture diagrams and troubleshooting guides
+  - Audit findings should document not just the fix but also the impact and verification steps
+---

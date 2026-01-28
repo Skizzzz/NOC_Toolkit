@@ -309,8 +309,8 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extended solarwinds_nodes table with hardware_version column. Added indexes for vendor, model, version, hardware_version. Updated replace_solarwinds_nodes() and fetch_solarwinds_nodes() to handle hardware_version. Added SysDescription to SolarWinds API query and _extract_hardware_version() parser."
     },
     {
       "id": "US-019",
@@ -327,8 +327,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /tools/solarwinds/inventory route with summary charts (vendor/version bar charts), multi-select filters, searchable table with all fields (hostname, IP, org, vendor, model, software/hardware version), CSV export. Added navigation pills to SolarWinds nodes page."
     },
     {
       "id": "US-020",
@@ -344,8 +344,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added version search with wildcard (*) and regex (re:pattern) support. Created vendor→model→version hierarchy view with expand/collapse. Clicking version count filters to show matching devices. Aggregated counts display X devices running version Y."
     },
     {
       "id": "US-021",
@@ -361,8 +361,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added /tools/solarwinds/inventory/export-summary route for aggregation CSV export. Full inventory export verified at /export with all required fields. Summary export provides vendor→model→version hierarchy with device counts. Both exports support current filters and use YYYY-MM-DD filename format."
     },
     {
       "id": "US-022",
@@ -377,8 +377,8 @@
         "Document the new AP inventory and SolarWinds inventory features"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created docs/audit-findings.md documenting 9 issues found and fixed across 10 audited systems. Created docs/production-runbook.md with system overview, installation, database configuration, timezone configuration, 5 scheduled job systems documentation, AP inventory and SolarWinds inventory feature documentation, and comprehensive troubleshooting guide."
     }
   ]
 }
