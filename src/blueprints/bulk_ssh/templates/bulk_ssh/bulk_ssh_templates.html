@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+{% block title %}Command Templates{% endblock %}
+{% block head_extra %}
+<style>
+  .page-header{
+    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:24px;
+  }
+  .page-header h2{margin:0 0 8px 0; font-size:28px;}
+  .page-header p{margin:0; font-size:15px; line-height:1.5; color:var(--muted);}
+
+  .templates-grid{
+    display:grid;
+    gap:16px;
+    margin-bottom:24px;
+  }
+  .template-card{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    transition: all 0.15s ease;
+  }
+  .template-card:hover{
+    border-color:var(--accent);
+    box-shadow: 0 4px 12px color-mix(in oklab, var(--accent) 15%, transparent);
+  }
+  .template-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:12px;
+  }
+  .template-name{
+    font-size:18px;
+    font-weight:700;
+    color:var(--text);
+    margin:0 0 4px 0;
+  }
+  .template-category{
+    display:inline-block;
+    padding:4px 10px;
+    background: color-mix(in oklab, var(--accent) 15%, transparent);
+    color:var(--accent);
+    border-radius:999px;
+    font-size:11px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+  .template-description{
+    color:var(--muted);
+    font-size:14px;
+    margin-bottom:12px;
+    line-height:1.5;
+  }
+  .template-command{
+    background: color-mix(in oklab, var(--card) 90%, transparent);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size:13px;
+    color:var(--text);
+    margin-bottom:12px;
+    white-space:pre-wrap;
+    word-wrap:break-word;
+  }
+  .template-meta{
+    display:flex;
+    gap:16px;
+    font-size:13px;
+    color:var(--muted);
+    margin-bottom:12px;
+  }
+  .template-actions{
+    display:flex;
+    gap:8px;
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 14px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    transition: all 0.15s ease;
+    text-decoration:none;
+    background:transparent;
+    color:var(--text);
+  }
+  .btn:hover{
+    background: color-mix(in oklab, var(--accent) 10%, transparent);
+    border-color:var(--accent);
+  }
+  .btn-primary{
+    background:var(--accent);
+    color:white;
+    border-color:var(--accent);
+  }
+  .btn-primary:hover{
+    background:var(--accent-2);
+  }
+  .btn-danger{
+    color:var(--error);
+    border-color:var(--error);
+  }
+  .btn-danger:hover{
+    background:var(--error);
+    color:white;
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:60px 20px;
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+  }
+  .empty-state svg{
+    width:64px;
+    height:64px;
+    margin:0 auto 20px;
+    color:var(--muted);
+    opacity:0.4;
+  }
+  .empty-state h3{
+    margin:0 0 8px 0;
+    font-size:18px;
+    color:var(--muted);
+  }
+  .empty-state p{
+    margin:0 0 20px 0;
+    font-size:14px;
+    color:var(--muted);
+    opacity:0.8;
+  }
+
+  .create-form-container{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    margin-bottom:24px;
+    overflow:hidden;
+  }
+  .create-form-header{
+    padding:16px 20px;
+    background: color-mix(in oklab, var(--accent) 10%, transparent);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    cursor:pointer;
+    transition: background 0.15s ease;
+  }
+  .create-form-header:hover{
+    background: color-mix(in oklab, var(--accent) 15%, transparent);
+  }
+  .create-form-header h3{
+    margin:0;
+    font-size:16px;
+    font-weight:600;
+    color:var(--accent);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .create-form-body{
+    padding:24px;
+    display:none;
+  }
+  .create-form-body.active{
+    display:block;
+  }
+  .chevron{
+    transition: transform 0.2s ease;
+    color:var(--accent);
+  }
+  .chevron.rotated{
+    transform: rotate(90deg);
+  }
+
+  .field{
+    margin-bottom:16px;
+  }
+  .field label{
+    display:block;
+    margin-bottom:6px;
+    font-size:14px;
+    font-weight:500;
+    color:var(--text);
+  }
+  .field input[type="text"],
+  .field textarea,
+  .field select{
+    width:100%;
+    padding:10px 14px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--card);
+    color:var(--text);
+    font-size:14px;
+    font-family:inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .field input[type="text"]:focus,
+  .field textarea:focus,
+  .field select:focus{
+    outline:none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 10%, transparent);
+  }
+  .field textarea{
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    resize:vertical;
+    min-height:100px;
+  }
+  .field-help{
+    margin-top:6px;
+    font-size:13px;
+    color:var(--muted);
+    line-height:1.4;
+  }
+  .field-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap:16px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <a href="{{ url_for('bulk_ssh.bulk_ssh') }}">Bulk SSH Terminal</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Templates</span>
+  </nav>
+
+  <div class="page-header">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h2>Command Templates</h2>
+        <p>Pre-built command templates with variable substitution. Use {{variable}} syntax for dynamic values.</p>
+      </div>
+      <div style="display:flex; gap:12px;">
+        {% if not templates %}
+          <form method="post" action="{{ url_for('bulk_ssh.bulk_ssh_templates_seed') }}" style="display:inline;">
+            <button type="submit" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+              </svg>
+              Seed Default Templates
+            </button>
+          </form>
+        {% endif %}
+        <a href="{{ url_for('bulk_ssh.bulk_ssh') }}" class="btn">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
+          </svg>
+          Back to Bulk SSH
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Template Form -->
+  <div class="create-form-container">
+    <div class="create-form-header" onclick="toggleCreateForm()">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+        </svg>
+        Create New Template
+      </h3>
+      <svg class="chevron" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+      </svg>
+    </div>
+    <div class="create-form-body">
+      <form method="post" action="{{ url_for('bulk_ssh.bulk_ssh_template_create') }}">
+        <div class="field-grid">
+          <div class="field">
+            <label for="name">Template Name *</label>
+            <input type="text" id="name" name="name" required placeholder="e.g., Check VLAN Status">
+            <div class="field-help">A descriptive name for this template</div>
+          </div>
+          <div class="field">
+            <label for="category">Category</label>
+            <select id="category" name="category">
+              <option value="general">General</option>
+              <option value="troubleshooting">Troubleshooting</option>
+              <option value="monitoring">Monitoring</option>
+              <option value="routing">Routing</option>
+              <option value="backup">Backup</option>
+            </select>
+            <div class="field-help">Categorize this template for easier organization</div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="description">Description</label>
+          <input type="text" id="description" name="description" placeholder="Brief description of what this template does">
+          <div class="field-help">Optional: Describe the purpose of this template</div>
+        </div>
+
+        <div class="field">
+          <label for="command">Command *</label>
+          <textarea id="command" name="command" required placeholder="show vlan id {{vlan_id}}"></textarea>
+          <div class="field-help">Use <code>{{variable}}</code> syntax for dynamic values (e.g., <code>show interface {{interface}}</code>)</div>
+        </div>
+
+        <div class="field">
+          <label for="device_type">Device Type</label>
+          <select id="device_type" name="device_type">
+            <option value="cisco_ios">Cisco IOS</option>
+            <option value="cisco_xe">Cisco IOS-XE</option>
+            <option value="cisco_nxos">Cisco NX-OS</option>
+            <option value="cisco_asa">Cisco ASA</option>
+            <option value="dell_os10">Dell OS10</option>
+            <option value="dell_force10">Dell Force10</option>
+            <option value="dell_powerconnect">Dell PowerConnect</option>
+          </select>
+          <div class="field-help">Target device platform for this command</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+          </svg>
+          Create Template
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% if templates %}
+    <div class="templates-grid">
+      {% for template in templates %}
+        <div class="template-card">
+          <div class="template-header">
+            <div>
+              <h3 class="template-name">{{ template.name }}</h3>
+              <span class="template-category">{{ template.category }}</span>
+            </div>
+          </div>
+
+          {% if template.description %}
+            <div class="template-description">{{ template.description }}</div>
+          {% endif %}
+
+          <div class="template-command">{{ template.command }}</div>
+
+          <div class="template-meta">
+            <span>Device: <strong>{{ template.device_type }}</strong></span>
+            {% if template.variables %}
+              <span>Variables: <strong>{{ template.variables }}</strong></span>
+            {% endif %}
+            {% if template.created %}
+              <span>Created: {{ template.created[:10] }}</span>
+            {% endif %}
+          </div>
+
+          <div class="template-actions">
+            <a href="{{ url_for('bulk_ssh.bulk_ssh') }}" class="btn btn-primary">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+              </svg>
+              Use Template
+            </a>
+            <form method="post" action="{{ url_for('bulk_ssh.bulk_ssh_template_delete', template_id=template.id) }}" style="display:inline;" onsubmit="return confirm('Delete this template?');">
+              <button type="submit" class="btn btn-danger">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                Delete
+              </button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <svg viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+      </svg>
+      <h3>No Templates Yet</h3>
+      <p>Get started by seeding default templates or creating your own custom templates.</p>
+      <form method="post" action="{{ url_for('bulk_ssh.bulk_ssh_templates_seed') }}" style="display:inline;">
+        <button type="submit" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+          </svg>
+          Seed Default Templates
+        </button>
+      </form>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function toggleCreateForm() {
+    const formBody = document.querySelector('.create-form-body');
+    const chevron = document.querySelector('.chevron');
+
+    if (formBody.classList.contains('active')) {
+      formBody.classList.remove('active');
+      chevron.classList.remove('rotated');
+    } else {
+      formBody.classList.add('active');
+      chevron.classList.add('rotated');
+    }
+  }
+</script>
+{% endblock %}

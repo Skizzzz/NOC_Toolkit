@@ -92,12 +92,14 @@ def _register_blueprints(app: Flask) -> None:
     from src.blueprints.wlc import wlc_bp
     from src.blueprints.solarwinds import solarwinds_bp
     from src.blueprints.config import config_bp
+    from src.blueprints.bulk_ssh import bulk_ssh_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(wlc_bp)
     app.register_blueprint(solarwinds_bp)
     app.register_blueprint(config_bp)
+    app.register_blueprint(bulk_ssh_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

@@ -1,0 +1,822 @@
+{% extends "base.html" %}
+{% block title %}Bulk SSH Terminal{% endblock %}
+{% block head_extra %}
+<style>
+  .page-header{
+    background: var(--card);
+    border:1px solid var(--border-subtle);
+    border-radius:16px;
+    padding:28px;
+    margin-bottom:24px;
+    position:relative;
+    overflow:hidden;
+  }
+  .page-header::before{
+    content:'';
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+    height:4px;
+    background:var(--pink);
+  }
+  .page-header::after{
+    content:'';
+    position:absolute;
+    top:0;
+    right:0;
+    width:200px;
+    height:200px;
+    background:radial-gradient(circle at top right, rgba(245,4,80,0.08) 0%, transparent 70%);
+    pointer-events:none;
+  }
+  .page-header h2{margin:0 0 8px 0; font-size:26px; font-family:'Instrument Sans', sans-serif; font-weight:700; letter-spacing:-0.02em;}
+  .page-header p{margin:0; font-size:14px; line-height:1.6; color:var(--text-muted);}
+
+  .form-container{
+    background:var(--card);
+    border:1px solid var(--border-subtle);
+    border-radius:16px;
+    padding:28px;
+    margin-bottom:20px;
+  }
+  .form-section{
+    margin-bottom:32px;
+  }
+  .form-section:last-child{
+    margin-bottom:0;
+  }
+  .form-section-header{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:20px;
+    padding-bottom:14px;
+    border-bottom:1px solid var(--border-subtle);
+  }
+  .form-section-header svg{
+    color:var(--pink);
+    flex-shrink:0;
+  }
+  .form-section-header h3{
+    margin:0;
+    font-size:15px;
+    font-weight:600;
+    font-family:'Instrument Sans', sans-serif;
+    letter-spacing:-0.01em;
+  }
+
+  .field{
+    margin-bottom:18px;
+  }
+  .field label{
+    display:block;
+    margin-bottom:8px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--text);
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  .field input[type="text"],
+  .field input[type="password"],
+  .field input[type="number"],
+  .field textarea,
+  .field select{
+    width:100%;
+    padding:12px 16px;
+    border:1px solid var(--border-subtle);
+    border-radius:10px;
+    background:var(--bg);
+    color:var(--text);
+    font-size:14px;
+    font-family:inherit;
+    transition: all 0.2s ease;
+  }
+  .field input[type="text"]:focus,
+  .field input[type="password"]:focus,
+  .field input[type="number"]:focus,
+  .field textarea:focus,
+  .field select:focus{
+    outline:none;
+    border-color:var(--pink);
+    box-shadow: 0 0 0 3px rgba(245,4,80,0.15);
+  }
+  .field textarea{
+    font-family: 'IBM Plex Mono', 'Monaco', monospace;
+    resize:vertical;
+    min-height:120px;
+    font-size:13px;
+  }
+  .field-help{
+    margin-top:8px;
+    font-size:12px;
+    color:var(--text-muted);
+    line-height:1.5;
+  }
+
+  .device-input-tabs{
+    display:flex;
+    gap:4px;
+    margin-bottom:20px;
+    padding:4px;
+    background:var(--bg);
+    border-radius:10px;
+    border:1px solid var(--border-subtle);
+  }
+  .device-tab{
+    padding:10px 18px;
+    background:transparent;
+    border:none;
+    border-radius:8px;
+    color:var(--text-muted);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    transition: all 0.2s ease;
+  }
+  .device-tab:hover{
+    color:var(--text);
+    background:rgba(245,4,80,0.05);
+  }
+  .device-tab.active{
+    color:white;
+    background:var(--pink);
+    box-shadow:0 2px 8px rgba(245,4,80,0.3);
+  }
+  .device-input-panel{
+    display:none;
+  }
+  .device-input-panel.active{
+    display:block;
+  }
+
+  .inventory-results-list{
+    max-height:300px;
+    overflow-y:auto;
+    border:1px solid var(--border-subtle);
+    border-radius:10px;
+    margin-top:12px;
+    background:var(--bg);
+  }
+  .inventory-device-item{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 16px;
+    border-bottom:1px solid var(--border-subtle);
+    transition: background 0.15s ease;
+  }
+  .inventory-device-item:last-child{
+    border-bottom:none;
+  }
+  .inventory-device-item:hover{
+    background:rgba(245,4,80,0.04);
+  }
+  .inventory-device-checkbox{
+    width:18px;
+    height:18px;
+    cursor:pointer;
+    accent-color:var(--pink);
+  }
+  .inventory-device-info{
+    flex:1;
+    min-width:0;
+  }
+  .inventory-device-name{
+    font-weight:600;
+    font-size:14px;
+    color:var(--text);
+  }
+  .inventory-device-ip{
+    font-size:12px;
+    color:var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .action-bar{
+    display:flex;
+    gap:12px;
+    justify-content:flex-end;
+    padding-top:24px;
+    border-top:1px solid var(--border-subtle);
+  }
+
+  .info-box{
+    background:rgba(245,4,80,0.06);
+    border:1px solid rgba(245,4,80,0.15);
+    border-left:4px solid var(--pink);
+    padding:16px 20px;
+    border-radius:10px;
+    margin-bottom:24px;
+  }
+  .info-box-title{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+    font-weight:600;
+    font-size:13px;
+    color:var(--pink);
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  .info-box-content{
+    font-size:13px;
+    line-height:1.6;
+    color:var(--text);
+  }
+  .info-box-content ul{
+    margin:10px 0 0 0;
+    padding-left:20px;
+  }
+  .info-box-content li{
+    margin-bottom:6px;
+  }
+
+  .device-count-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 12px;
+    background:rgba(245,4,80,0.12);
+    color:var(--pink);
+    border-radius:999px;
+    font-size:12px;
+    font-weight:600;
+  }
+
+  #deviceListText{
+    font-size:13px;
+  }
+
+  .mode-option{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    cursor:pointer;
+    flex:1;
+    padding:14px 18px;
+    border-radius:10px;
+    border:2px solid var(--border-subtle);
+    transition: all 0.2s ease;
+    background:var(--bg);
+  }
+  .mode-option:hover{
+    border-color:rgba(245,4,80,0.3);
+  }
+  .mode-option.selected{
+    border-color:var(--pink);
+    background:rgba(245,4,80,0.08);
+  }
+  .mode-option input[type="radio"]{
+    width:18px;
+    height:18px;
+    accent-color:var(--pink);
+  }
+  .mode-option-title{
+    font-weight:600;
+    font-size:14px;
+    margin-bottom:2px;
+  }
+  .mode-option-desc{
+    font-size:12px;
+    color:var(--text-muted);
+  }
+</style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Bulk SSH Terminal</span>
+  </nav>
+
+  <div class="page-header">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h2>Bulk SSH Terminal</h2>
+        <p>Execute commands on multiple network devices in parallel. Select devices from inventory, paste a list, or use saved groups. Results are saved and can be exported.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <div class="info-box-title">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+      </svg>
+      Quick Start
+    </div>
+    <div class="info-box-content">
+      <ul>
+        <li>Select devices using one of the methods below (inventory search, paste list, or saved groups)</li>
+        <li>Enter your SSH credentials and the command to run</li>
+        <li>Click "Execute on All Devices" to run in parallel (default: 10 concurrent connections)</li>
+        <li>View live progress and results on the results page</li>
+      </ul>
+    </div>
+  </div>
+
+  <form id="bulkSSHForm" method="post" action="{{ url_for('bulk_ssh.bulk_ssh_execute') }}">
+    <div class="form-container">
+      <div class="form-section">
+        <div class="form-section-header">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"/>
+            <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"/>
+            <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"/>
+          </svg>
+          <h3>Device Selection</h3>
+          <span class="device-count-badge" id="deviceCountBadge">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+            </svg>
+            <span id="deviceCount">0</span> devices
+          </span>
+        </div>
+
+        <div class="device-input-tabs">
+          <button type="button" class="device-tab active" data-tab="paste">Paste List</button>
+          <button type="button" class="device-tab" data-tab="inventory">From Inventory</button>
+        </div>
+
+        <div class="device-input-panel active" id="panel-paste">
+          <div class="field">
+            <label for="deviceListText">Device Hostnames or IP Addresses</label>
+            <textarea id="deviceListText" name="device_list" placeholder="Enter one hostname or IP per line, e.g.:&#10;switch01.example.com&#10;10.0.1.1&#10;rtr-core-01"></textarea>
+            <div class="field-help">Enter one device hostname or IP address per line. Empty lines and duplicates will be ignored.</div>
+          </div>
+        </div>
+
+        <div class="device-input-panel" id="panel-inventory">
+          <div class="field">
+            <label for="inventorySearch">Search Inventory</label>
+            <input type="text" id="inventorySearch" placeholder="Type to search SolarWinds inventory..." />
+            <div class="field-help">Search for devices from your SolarWinds inventory. Click outside to close results.</div>
+          </div>
+          <div id="inventoryResults" style="margin-top:16px;">
+            <p style="color:var(--muted); font-size:14px; padding:12px;">Start typing to search...</p>
+          </div>
+          <div id="inventorySelected" style="margin-top:16px; display:none;">
+            <div style="background: color-mix(in oklab, var(--success) 10%, transparent); border:1px solid var(--success); border-radius:8px; padding:14px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color:var(--success);">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                <strong style="color:var(--success); font-size:14px;"><span id="inventorySelectedCount">0</span> devices selected</strong>
+              </div>
+              <div id="inventorySelectedList" style="font-size:13px; color:var(--text); line-height:1.6;"></div>
+              <button type="button" onclick="clearInventorySelection()" style="margin-top:10px; padding:6px 12px; background:transparent; border:1px solid var(--success); color:var(--success); border-radius:6px; cursor:pointer; font-size:13px; font-weight:500;">
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-header">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"/>
+          </svg>
+          <h3>Authentication</h3>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:16px;">
+          <div class="field">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required placeholder="SSH username" />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required placeholder="SSH password" />
+          </div>
+          <div class="field">
+            <label for="secret">Enable Secret (Optional)</label>
+            <input type="password" id="secret" name="secret" placeholder="Enable secret (if required)" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-header">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+          </svg>
+          <h3>Command</h3>
+          <div style="margin-left:auto;">
+            <a href="{{ url_for('bulk_ssh.bulk_ssh_templates') }}" style="font-size:13px; color:var(--accent); text-decoration:none;">
+              Manage Templates →
+            </a>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="templateSelect">Use Template (Optional)</label>
+          <select id="templateSelect" onchange="loadTemplate()">
+            <option value="">-- Type command manually --</option>
+            <option disabled>────── Available Templates ──────</option>
+          </select>
+          <div class="field-help">Select a pre-built template or type your command below.</div>
+        </div>
+
+        <div class="field">
+          <label for="command">Command to Execute</label>
+          <textarea id="command" name="command" required placeholder="show version" style="min-height:120px;"></textarea>
+          <div class="field-help">Enter command(s) to execute on all selected devices. For multiple commands (e.g., config changes), enter one per line. Variables in {{brackets}} will be substituted. Auto-saves as you type.</div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-header">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+          </svg>
+          <h3>Options</h3>
+        </div>
+
+        <!-- Execution Mode -->
+        <div style="display:flex; gap:16px; margin-bottom:24px;">
+          <label class="mode-option selected" id="modeShowLabel">
+            <input type="radio" name="config_mode" value="0" checked onchange="updateModeHighlight()">
+            <div>
+              <div class="mode-option-title">Show Commands</div>
+              <div class="mode-option-desc">Run commands as-is (e.g., show version, show ip route)</div>
+            </div>
+          </label>
+          <label class="mode-option" id="modeConfigLabel">
+            <input type="radio" name="config_mode" value="1" onchange="updateModeHighlight()">
+            <div>
+              <div class="mode-option-title">Config Mode</div>
+              <div class="mode-option-desc">Enter config t, run commands, then exit</div>
+            </div>
+          </label>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+          <div class="field">
+            <label for="deviceType">Device Type</label>
+            <select id="deviceType" name="device_type">
+              <option value="cisco_ios" selected>Cisco IOS</option>
+              <option value="cisco_xe">Cisco IOS-XE</option>
+              <option value="cisco_nxos">Cisco NX-OS</option>
+              <option value="cisco_asa">Cisco ASA</option>
+              <option value="dell_os10">Dell OS10</option>
+              <option value="dell_force10">Dell Force10</option>
+              <option value="dell_powerconnect">Dell PowerConnect</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="maxWorkers">Parallel Connections</label>
+            <input type="number" id="maxWorkers" name="max_workers" value="10" min="1" max="50" />
+            <div class="field-help">Max simultaneous SSH connections</div>
+          </div>
+          <div class="field">
+            <label for="timeout">Timeout (seconds)</label>
+            <input type="number" id="timeout" name="timeout" value="60" min="10" max="300" />
+            <div class="field-help">SSH connection timeout</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button type="button" class="btn btn-secondary" onclick="window.location.href='{{ url_for('index') }}'">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
+          </svg>
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" id="executeBtn">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+          </svg>
+          Execute on All Devices
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <script>
+    // Tab switching
+    const tabs = document.querySelectorAll('.device-tab');
+    const panels = document.querySelectorAll('.device-input-panel');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const targetTab = tab.getAttribute('data-tab');
+
+        // Update active tab
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Update active panel
+        panels.forEach(p => p.classList.remove('active'));
+        document.getElementById('panel-' + targetTab).classList.add('active');
+
+        // Update device count
+        updateDeviceCount();
+      });
+    });
+
+    // Update device count
+    function updateDeviceCount() {
+      const activePanel = document.querySelector('.device-input-panel.active');
+      let count = 0;
+
+      if (activePanel.id === 'panel-paste') {
+        const text = document.getElementById('deviceListText').value;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        count = new Set(lines).size; // Remove duplicates
+      } else if (activePanel.id === 'panel-inventory') {
+        // Count selected devices from the Map
+        count = selectedInventoryDevices.size;
+      }
+
+      document.getElementById('deviceCount').textContent = count;
+    }
+
+    // Update count on text input
+    document.getElementById('deviceListText').addEventListener('input', updateDeviceCount);
+
+    // Inventory search functionality
+    let inventorySearchTimeout;
+    let selectedInventoryDevices = new Map(); // Store selected devices
+    const inventorySearch = document.getElementById('inventorySearch');
+    const inventoryResults = document.getElementById('inventoryResults');
+    const inventorySelected = document.getElementById('inventorySelected');
+    const inventorySelectedCount = document.getElementById('inventorySelectedCount');
+    const inventorySelectedList = document.getElementById('inventorySelectedList');
+
+    // Show/hide results based on focus
+    inventorySearch.addEventListener('focus', () => {
+      if (inventorySearch.value.trim().length >= 2) {
+        inventoryResults.style.display = 'block';
+      }
+    });
+
+    // Close results when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!inventorySearch.contains(e.target) && !inventoryResults.contains(e.target)) {
+        inventoryResults.style.display = 'none';
+      }
+    });
+
+    inventorySearch.addEventListener('input', () => {
+      clearTimeout(inventorySearchTimeout);
+      const query = inventorySearch.value.trim();
+
+      if (query.length < 2) {
+        inventoryResults.innerHTML = '<p style="color:var(--muted); font-size:14px; padding:12px;">Type at least 2 characters to search...</p>';
+        inventoryResults.style.display = 'block';
+        return;
+      }
+
+      inventoryResults.innerHTML = '<p style="color:var(--muted); font-size:14px; padding:12px;">Searching...</p>';
+      inventoryResults.style.display = 'block';
+
+      inventorySearchTimeout = setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/solarwinds/nodes?q=${encodeURIComponent(query)}`);
+          const data = await response.json();
+
+          if (!data.nodes || data.nodes.length === 0) {
+            inventoryResults.innerHTML = '<p style="color:var(--muted); font-size:14px; padding:12px;">No devices found.</p>';
+            return;
+          }
+
+          // Build results list
+          let html = '<div class="inventory-results-list">';
+          data.nodes.forEach(node => {
+            const caption = node.caption || node.node_name || 'Unknown';
+            const ip = node.ip_address || node.ipaddress || 'N/A';
+            const isSelected = selectedInventoryDevices.has(ip);
+            html += `
+              <div class="inventory-device-item">
+                <input type="checkbox" class="inventory-device-checkbox" data-device="${caption}" data-ip="${ip}" ${isSelected ? 'checked' : ''} onchange="toggleInventoryDevice(this)">
+                <div class="inventory-device-info">
+                  <div class="inventory-device-name">${caption}</div>
+                  <div class="inventory-device-ip">${ip}</div>
+                </div>
+              </div>
+            `;
+          });
+          html += '</div>';
+
+          inventoryResults.innerHTML = html;
+
+        } catch (error) {
+          console.error('Inventory search error:', error);
+          inventoryResults.innerHTML = '<p style="color:var(--error); font-size:14px; padding:12px;">Error searching inventory. Please try again.</p>';
+        }
+      }, 300); // 300ms debounce
+    });
+
+    // Toggle device selection
+    window.toggleInventoryDevice = function(checkbox) {
+      const ip = checkbox.dataset.ip;
+      const device = checkbox.dataset.device;
+
+      if (checkbox.checked) {
+        selectedInventoryDevices.set(ip, device);
+      } else {
+        selectedInventoryDevices.delete(ip);
+      }
+
+      updateInventorySelection();
+      updateDeviceCount();
+    };
+
+    // Update selected devices display
+    function updateInventorySelection() {
+      if (selectedInventoryDevices.size === 0) {
+        inventorySelected.style.display = 'none';
+        return;
+      }
+
+      inventorySelected.style.display = 'block';
+      inventorySelectedCount.textContent = selectedInventoryDevices.size;
+
+      let listHtml = '';
+      let count = 0;
+      for (const [ip, device] of selectedInventoryDevices) {
+        if (count < 5) {
+          listHtml += `<div style="padding:2px 0;">• ${device} (${ip})</div>`;
+        }
+        count++;
+      }
+      if (selectedInventoryDevices.size > 5) {
+        listHtml += `<div style="padding:2px 0; color:var(--muted);">... and ${selectedInventoryDevices.size - 5} more</div>`;
+      }
+
+      inventorySelectedList.innerHTML = listHtml;
+    }
+
+    // Clear selection
+    window.clearInventorySelection = function() {
+      selectedInventoryDevices.clear();
+      updateInventorySelection();
+      updateDeviceCount();
+      // Clear all checkboxes in results
+      document.querySelectorAll('.inventory-device-checkbox').forEach(cb => cb.checked = false);
+    };
+
+    // Initial count
+    updateDeviceCount();
+
+    // ============ AUTO-SAVE FUNCTIONALITY ============
+    const AUTOSAVE_KEY = 'bulkSSH_autosave';
+    const commandField = document.getElementById('command');
+    const usernameField = document.getElementById('username');
+    const deviceTypeField = document.getElementById('deviceType');
+    const maxWorkersField = document.getElementById('maxWorkers');
+    const timeoutField = document.getElementById('timeout');
+
+    // Load saved data on page load
+    function loadAutosave() {
+      try {
+        const saved = localStorage.getItem(AUTOSAVE_KEY);
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.command) commandField.value = data.command;
+          if (data.username) usernameField.value = data.username;
+          if (data.deviceType) deviceTypeField.value = data.deviceType;
+          if (data.maxWorkers) maxWorkersField.value = data.maxWorkers;
+          if (data.timeout) timeoutField.value = data.timeout;
+        }
+      } catch (e) {
+        console.error('Error loading autosave:', e);
+      }
+    }
+
+    // Save data to localStorage
+    function saveAutosave() {
+      try {
+        const data = {
+          command: commandField.value,
+          username: usernameField.value,
+          deviceType: deviceTypeField.value,
+          maxWorkers: maxWorkersField.value,
+          timeout: timeoutField.value,
+          timestamp: new Date().toISOString()
+        };
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+      } catch (e) {
+        console.error('Error saving autosave:', e);
+      }
+    }
+
+    // Auto-save on input with debounce
+    let autosaveTimeout;
+    function scheduleAutosave() {
+      clearTimeout(autosaveTimeout);
+      autosaveTimeout = setTimeout(saveAutosave, 1000); // Save after 1 second of inactivity
+    }
+
+    // Attach autosave to fields
+    commandField.addEventListener('input', scheduleAutosave);
+    usernameField.addEventListener('input', scheduleAutosave);
+    deviceTypeField.addEventListener('change', scheduleAutosave);
+    maxWorkersField.addEventListener('input', scheduleAutosave);
+    timeoutField.addEventListener('input', scheduleAutosave);
+
+    // Clear autosave on successful submit
+    document.getElementById('bulkSSHForm').addEventListener('submit', (e) => {
+      // Only clear if form will actually submit (after validation passes)
+      setTimeout(() => {
+        if (!e.defaultPrevented) {
+          localStorage.removeItem(AUTOSAVE_KEY);
+        }
+      }, 100);
+    });
+
+    // Load autosave on page load
+    loadAutosave();
+
+    // Mode highlight function
+    function updateModeHighlight() {
+      const showLabel = document.getElementById('modeShowLabel');
+      const configLabel = document.getElementById('modeConfigLabel');
+      const showRadio = showLabel.querySelector('input[type="radio"]');
+
+      if (showRadio.checked) {
+        showLabel.classList.add('selected');
+        configLabel.classList.remove('selected');
+      } else {
+        configLabel.classList.add('selected');
+        showLabel.classList.remove('selected');
+      }
+    }
+
+    // Initialize mode highlight on page load
+    updateModeHighlight();
+
+    // Load templates via API
+    async function loadTemplateList() {
+      try {
+        const response = await fetch('/api/bulk-ssh/templates');
+        const templates = await response.json();
+
+        const select = document.getElementById('templateSelect');
+        templates.forEach(tmpl => {
+          const option = document.createElement('option');
+          option.value = tmpl.id;
+          option.textContent = `${tmpl.name} (${tmpl.category})`;
+          option.dataset.command = tmpl.command;
+          option.dataset.deviceType = tmpl.device_type;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Failed to load templates:', error);
+      }
+    }
+
+    // Load selected template
+    function loadTemplate() {
+      const select = document.getElementById('templateSelect');
+      const selected = select.options[select.selectedIndex];
+
+      if (selected && selected.value) {
+        document.getElementById('command').value = selected.dataset.command || '';
+        document.getElementById('deviceType').value = selected.dataset.deviceType || 'cisco_ios';
+      }
+    }
+
+    // API endpoint for templates
+    fetch('/tools/bulk-ssh/templates').then(r => r.text()).then(() => {
+      // Templates page exists, try to load them
+      loadTemplateList();
+    }).catch(() => {
+      // Templates not yet available
+    });
+
+    // Form validation and device collection
+    document.getElementById('bulkSSHForm').addEventListener('submit', (e) => {
+      const count = parseInt(document.getElementById('deviceCount').textContent);
+      if (count === 0) {
+        e.preventDefault();
+        alert('Please select at least one device.');
+        return false;
+      }
+
+      // Collect devices from inventory if that tab is active
+      const activePanel = document.querySelector('.device-input-panel.active');
+      if (activePanel && activePanel.id === 'panel-inventory') {
+        // Use the selected devices from the Map
+        const devices = Array.from(selectedInventoryDevices.keys());
+
+        // Add selected devices to the device list textarea
+        const deviceListText = document.getElementById('deviceListText');
+        deviceListText.value = devices.join('\n');
+      }
+
+      // Confirmation dialog for bulk SSH execution
+      const command = document.getElementById('command').value;
+      const commandPreview = command.length > 100 ? command.substring(0, 100) + '...' : command;
+      if (!confirm(`Are you sure you want to execute this command on ${count} device(s)?\n\nCommand: ${commandPreview}\n\nThis action cannot be undone.`)) {
+        e.preventDefault();
+        return false;
+      }
+    });
+  </script>
+{% endblock %}
