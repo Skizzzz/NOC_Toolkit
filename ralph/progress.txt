@@ -167,3 +167,31 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Blueprint routes: use `url_prefix=""` for root-level routes or a prefix like `/auth`
   - login.html is standalone (no base.html), profile.html extends base.html
 ---
+
+## 2026-01-27 21:00 CST - US-008
+- What was implemented:
+  - Created src/blueprints/admin/routes.py with routes: /admin/users, /admin/settings, /admin/page-settings
+  - Created src/blueprints/admin/templates/admin/ directory structure
+  - Copied admin_users.html to src/blueprints/admin/templates/admin/admin_users.html
+  - Copied admin_settings.html to src/blueprints/admin/templates/admin/admin_settings.html
+  - Copied admin_page_settings.html to src/blueprints/admin/templates/admin/admin_page_settings.html
+  - Updated src/blueprints/admin/__init__.py to export admin_bp
+  - Registered admin blueprint in src/app.py _register_blueprints()
+  - Added save_app_settings() function to src/core/helpers.py (was missing)
+  - Updated src/core/__init__.py to export save_app_settings
+- Files changed:
+  - src/blueprints/admin/routes.py (new)
+  - src/blueprints/admin/templates/admin/admin_users.html (new)
+  - src/blueprints/admin/templates/admin/admin_settings.html (new)
+  - src/blueprints/admin/templates/admin/admin_page_settings.html (new)
+  - src/blueprints/admin/__init__.py (modified)
+  - src/app.py (modified)
+  - src/core/helpers.py (modified)
+  - src/core/__init__.py (modified)
+- **Learnings for future iterations:**
+  - Admin blueprint uses url_prefix="/admin" so routes are /admin/users not /users
+  - Templates need url_for() calls updated from "admin_users" to "admin.admin_users"
+  - get_page_settings() in original app.py maps to get_all_page_settings() in src/core/helpers.py
+  - save_app_settings() was missing from helpers.py - needed to add it
+  - Admin routes use @require_superadmin decorator from src.core.security
+---
