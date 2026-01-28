@@ -90,10 +90,12 @@ def _register_blueprints(app: Flask) -> None:
     from src.blueprints.auth import auth_bp
     from src.blueprints.admin import admin_bp
     from src.blueprints.wlc import wlc_bp
+    from src.blueprints.solarwinds import solarwinds_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(wlc_bp)
+    app.register_blueprint(solarwinds_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:
