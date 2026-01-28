@@ -1,0 +1,25 @@
+"""
+Database models for NOC Toolkit.
+
+This package contains SQLAlchemy models for all database entities.
+The db instance is created here and should be initialized with the Flask app
+using db.init_app(app) in the application factory.
+"""
+
+from flask_sqlalchemy import SQLAlchemy
+
+# Create the shared SQLAlchemy instance
+db = SQLAlchemy()
+
+# Import models after db is created to avoid circular imports
+# These imports make the models available when importing from src.models
+from .user import User, Session
+from .settings import AppSettings, PageSettings
+
+__all__ = [
+    "db",
+    "User",
+    "Session",
+    "AppSettings",
+    "PageSettings",
+]
