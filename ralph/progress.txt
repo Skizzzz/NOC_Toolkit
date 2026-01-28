@@ -326,3 +326,27 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Decorator nesting pattern: define inner function decorated with @require_login/@require_page_enabled and call it
   - _get_cst_tz() helper returns timezone object with zoneinfo/pytz fallback
 ---
+
+## 2026-01-27 23:45 CST - US-014
+- What was implemented:
+  - Created src/blueprints/jobs/routes.py with routes: /jobs, /jobs/<job_id>, /api/jobs, /api/jobs/<job_id>/cancel, /jobs/<job_id>/progress, /api/jobs/<job_id>/progress
+  - Created src/blueprints/jobs/templates/jobs/ directory structure
+  - Created templates: jobs_center.html, job_detail.html, job_progress.html with blueprint-aware url_for() calls
+  - Updated url_for() calls in all templates to use blueprint prefix (jobs.route_name)
+  - Updated src/blueprints/jobs/__init__.py to export jobs_bp
+  - Registered jobs blueprint in src/app.py _register_blueprints()
+- Files changed:
+  - src/blueprints/jobs/routes.py (new)
+  - src/blueprints/jobs/templates/jobs/jobs_center.html (new)
+  - src/blueprints/jobs/templates/jobs/job_detail.html (new)
+  - src/blueprints/jobs/templates/jobs/job_progress.html (new)
+  - src/blueprints/jobs/__init__.py (modified)
+  - src/app.py (modified)
+- **Learnings for future iterations:**
+  - Jobs blueprint uses url_prefix="" for root-level routes (e.g., /jobs, /api/jobs)
+  - Jobs center aggregates both generic jobs (from jobs table) and bulk SSH jobs (from bulk_ssh_jobs table)
+  - _format_cst() helper uses get_app_timezone_info() from src.core.helpers for timezone-aware formatting
+  - The job_progress page polls /api/jobs/<job_id>/progress every 800ms for live updates
+  - Templates use safe DOM methods (textContent, createElement) instead of innerHTML where possible for XSS prevention
+  - Job progress API supports both generic jobs and bulk SSH jobs with different data structures
+---
