@@ -28,6 +28,8 @@ from .wlc import (
 from .solarwinds import SolarWindsSettings, SolarWindsNode
 from .bulk_ssh import BulkSSHJob, BulkSSHResult, BulkSSHTemplate, BulkSSHSchedule
 from .config import ChangeWindow, ChangeEvent
+from .cert import Certificate, ISENode, CertSyncSettings
+from .kb import KBArticle
 
 __all__ = [
     "db",
@@ -52,4 +54,8 @@ __all__ = [
     "BulkSSHSchedule",
     "ChangeWindow",
     "ChangeEvent",
+    "Certificate",
+    "ISENode",
+    "CertSyncSettings",
+    "KBArticle",
 ]
