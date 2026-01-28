@@ -766,3 +766,20 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Empty state tests should verify page loads without server error (500), not necessarily specific empty message
   - Use `pytest tests/e2e/test_solarwinds.py -v --timeout=120` to run SolarWinds tests
 ---
+
+## 2026-01-27 - US-031
+- What was implemented:
+  - Created tests/e2e/test_bulk_ssh.py with 31 comprehensive E2E tests for Bulk SSH functionality
+  - TestBulkSSHMainPage: 9 tests covering page load, device selection, authentication section, command section, options section, execute button, templates link, and device input tabs
+  - TestBulkSSHTemplates: 7 tests covering page load, create section, back link, empty state/list, seed button, create form toggle, and breadcrumbs
+  - TestBulkSSHSchedules: 9 tests covering page load, create button, back link, empty state/list, modal open, modal form fields, schedule type options, modal close, and breadcrumbs
+  - TestBulkSSHAccessControl: 6 tests covering unauthenticated redirects and regular user access for all three pages
+- Files changed:
+  - tests/e2e/test_bulk_ssh.py (new - 428 lines)
+- **Learnings for future iterations:**
+  - Use `.first` when locating buttons that appear in multiple places (e.g., "Create Schedule" in both page header and modal)
+  - Use specific parent selectors (e.g., `.page-header button:has-text('Create Schedule')`) to disambiguate multiple matching elements
+  - Modal class assertions should use exact class string (e.g., "modal-overlay active") instead of regex patterns
+  - Playwright in Python doesn't support JavaScript regex syntax - use string matching instead
+  - Use `pytest tests/e2e/test_bulk_ssh.py -v --timeout=120` to run Bulk SSH tests
+---
