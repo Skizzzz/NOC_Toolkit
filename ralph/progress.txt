@@ -375,3 +375,21 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Templates use visibility-badge classes with FSR/NOC/Admin visibility levels for access control display
   - Article listing supports filtering by subject and searching by title/content
 ---
+
+## 2026-01-27 - US-016
+- What was implemented:
+  - Moved base.html to src/templates/base.html
+  - Moved static/ directory contents to src/static/
+  - Updated Flask app config in src/app.py to use "templates" and "static" folders (relative to src/)
+  - Updated url_for() calls in base.html to use blueprint prefixes for all extracted routes
+- Files changed:
+  - src/templates/base.html (new - copied from templates/base.html with updated url_for calls)
+  - src/static/host_selector.js (new - copied from static/)
+  - src/app.py (modified - updated template_folder and static_folder paths)
+- **Learnings for future iterations:**
+  - Template folder paths are relative to the app.py location: use "templates" not "../templates" when templates are in src/templates/
+  - Blueprint url_for format: "blueprint_name.function_name" (e.g., "auth.login", "wlc.wlc_dashboard")
+  - Routes still in old app.py (not yet in blueprints): index, audit_logs, device_inventory, customer_dashboard, topology_tool
+  - The wlc_inventory route was renamed to wlc.wlc_ap_inventory in the WLC blueprint
+  - request.endpoint checks in templates also need blueprint prefix (e.g., 'wlc.wlc_dashboard' not 'wlc_dashboard')
+---
