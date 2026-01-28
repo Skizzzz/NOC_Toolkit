@@ -641,3 +641,35 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - The device_inventory page was a duplicate of functionality provided by SolarWinds integration
   - Always check both templates/base.html and src/templates/base.html for navigation changes
 ---
+
+## 2026-01-27 - US-026
+- What was implemented:
+  - Set up Playwright test infrastructure for E2E testing
+  - pytest-playwright already in requirements/dev.txt (from US-002)
+  - Created tests/ directory structure:
+    - tests/__init__.py - Package init
+    - tests/conftest.py - Main pytest fixtures (app, db_session, admin_user, regular_user, page_settings)
+    - tests/e2e/__init__.py - E2E package init
+    - tests/e2e/conftest.py - Playwright fixtures (live_server, seeded_db, page, authenticated_page)
+    - tests/e2e/test_health.py - Basic health check tests to verify infrastructure
+    - tests/seed_test_data.py - Database seeding script for test data
+  - Created pytest.ini with Playwright configuration options
+  - Added testing-related entries to .gitignore (test-results/, .pytest_cache/, coverage files)
+- Files changed:
+  - tests/__init__.py (new)
+  - tests/conftest.py (new)
+  - tests/e2e/__init__.py (new)
+  - tests/e2e/conftest.py (new)
+  - tests/e2e/test_health.py (new)
+  - tests/seed_test_data.py (new)
+  - pytest.ini (new)
+  - .gitignore (modified - added testing patterns)
+- **Learnings for future iterations:**
+  - Test fixtures are layered: tests/conftest.py has base fixtures, tests/e2e/conftest.py adds Playwright-specific ones
+  - live_server fixture starts Flask dev server in a thread for E2E tests
+  - seeded_db fixture clears and seeds test data for each test
+  - authenticated_page fixture logs in as admin, user_authenticated_page logs in as regular user
+  - Use `pytest tests/e2e/ --headed` for debugging with visible browser
+  - Use `pytest tests/e2e/ -k test_name` to run specific tests
+  - seed_test_data.py can be run standalone: `python tests/seed_test_data.py [--reset|--clear]`
+---
