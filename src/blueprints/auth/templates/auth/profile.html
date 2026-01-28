@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Profile</span>
+  </nav>
+
+  <div class="card" style="max-width:600px; margin:0 auto;">
+    <h2 class="section-title">User Profile</h2>
+    <p class="muted" style="margin-bottom:24px;">Manage your account settings and password</p>
+
+    <div class="field" style="margin-bottom:24px;">
+      <label>Username</label>
+      <input type="text" value="{{ user.username }}" readonly style="background:var(--bg); cursor:not-allowed;">
+    </div>
+
+    <div class="field" style="margin-bottom:24px;">
+      <label>Role</label>
+      <input type="text" value="{{ user.role }}" readonly style="background:var(--bg); cursor:not-allowed;">
+    </div>
+
+    <hr style="margin:32px 0; border:none; border-top:1px solid var(--border);">
+
+    <h3 style="margin-bottom:16px;">Change Password</h3>
+
+    <form method="post">
+      <div class="field">
+        <label for="current_password">Current Password</label>
+        <input type="password" id="current_password" name="current_password" required autocomplete="current-password">
+      </div>
+
+      <div class="field">
+        <label for="new_password">New Password</label>
+        <input type="password" id="new_password" name="new_password" required autocomplete="new-password" minlength="8">
+        <small class="muted">At least 8 characters</small>
+      </div>
+
+      <div class="field">
+        <label for="confirm_password">Confirm New Password</label>
+        <input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password" minlength="8">
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-gradient">Change Password</button>
+        <a href="{{ url_for('index') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

@@ -87,11 +87,9 @@ def _register_blueprints(app: Flask) -> None:
     Args:
         app: Flask application instance.
     """
-    # Blueprints will be registered here as they are created in US-007 through US-015
-    # Example:
-    # from src.blueprints.auth import auth_bp
-    # app.register_blueprint(auth_bp)
-    pass
+    from src.blueprints.auth import auth_bp
+
+    app.register_blueprint(auth_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

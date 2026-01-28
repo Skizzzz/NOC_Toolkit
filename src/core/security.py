@@ -156,7 +156,7 @@ def require_login(f: Callable[..., Any]) -> Callable[..., Any]:
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
         if "user_id" not in session:
             flash("Please log in to access this page", "error")
-            return redirect(url_for("login", next=request.url))
+            return redirect(url_for("auth.login", next=request.url))
         return f(*args, **kwargs)
 
     return decorated_function
@@ -169,7 +169,7 @@ def require_superadmin(f: Callable[..., Any]) -> Callable[..., Any]:
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
         if "user_id" not in session:
             flash("Please log in to access this page", "error")
-            return redirect(url_for("login", next=request.url))
+            return redirect(url_for("auth.login", next=request.url))
 
         # Check if user is superadmin
         conn = get_connection()
@@ -260,7 +260,7 @@ def require_kb_create(f: Callable[..., Any]) -> Callable[..., Any]:
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
         if "user_id" not in session:
             flash("Please log in to access this page", "error")
-            return redirect(url_for("login", next=request.url))
+            return redirect(url_for("auth.login", next=request.url))
 
         if not can_user_create_kb(session["user_id"]):
             flash("You don't have permission to create knowledge base articles", "error")
