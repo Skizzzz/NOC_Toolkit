@@ -439,3 +439,30 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Use ondelete="CASCADE" for FK to cascade deletes, ondelete="SET NULL" for audit logs to preserve history
   - Job.events relationship uses order_by="JobEvent.ts" for chronological ordering
 ---
+
+## 2026-01-27 - US-019
+- What was implemented:
+  - Created src/models/wlc.py with WLC-related models:
+    - WLCDashboardSettings: singleton settings for WLC dashboard polling config
+    - WLCSample: dashboard polling sample data
+    - WLCSummerSettings: settings for summer guest SSID monitoring
+    - WLCSummerSample: sample data for summer guest SSID status
+    - APInventory: access point inventory tracking across WLCs
+    - APInventorySettings: singleton settings for AP inventory cleanup
+  - Created src/models/solarwinds.py with SolarWinds integration models:
+    - SolarWindsSettings: singleton settings for SolarWinds API connection
+    - SolarWindsNode: network device inventory from SolarWinds
+  - Updated src/models/__init__.py to export all new models
+  - All models include proper indexes matching SQLite schema
+- Files changed:
+  - src/models/wlc.py (new)
+  - src/models/solarwinds.py (new)
+  - src/models/__init__.py (modified)
+- **Learnings for future iterations:**
+  - WLC models include additional tables not in PRD: WLCSummerSettings, WLCSummerSample, APInventorySettings
+  - Singleton pattern: use db.CheckConstraint("id = 1") in __table_args__
+  - SolarWindsNode includes hardware_version column for CVE analysis
+  - APInventory uses composite unique constraint on (ap_mac, wlc_host)
+  - Settings models have get_settings() class method for getting/creating singleton instance
+  - Use UniqueConstraint in __table_args__ for multi-column unique constraints
+---
