@@ -605,3 +605,39 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - For exception traces, use logger.debug("Traceback: %s", traceback.format_exc())
   - Production SECRET_KEY validation is in src/app.py create_app() function
 ---
+
+## 2026-01-27 - US-025
+- What was implemented:
+  - Removed /tools/device-inventory route and all related routes from app.py:
+    - device_inventory() - main view
+    - device_inventory_scan() - POST route for scanning
+    - device_inventory_export() - CSV export
+    - device_inventory_delete() - DELETE route
+    - api_device_inventory() - JSON API endpoint
+  - Removed import of tools.device_inventory module from app.py
+  - Removed import of device inventory functions from tools.db_jobs in app.py
+  - Removed templates/device_inventory.html template file
+  - Removed tools/device_inventory.py module completely
+  - Removed device_inventory table creation from db_jobs.py init_db()
+  - Removed all device_inventory functions from db_jobs.py:
+    - upsert_device_inventory()
+    - list_device_inventory()
+    - get_device_inventory()
+    - delete_device_inventory()
+    - get_device_inventory_stats()
+    - clear_device_inventory()
+  - Removed device_inventory entry from _DEFAULT_PAGES in db_jobs.py
+  - Removed Device Inventory navigation link from both templates/base.html and src/templates/base.html
+- Files changed:
+  - app.py (removed ~240 lines - imports and routes)
+  - templates/device_inventory.html (deleted - 291 lines)
+  - tools/device_inventory.py (deleted - 443 lines)
+  - tools/db_jobs.py (removed ~200 lines - table creation, functions, page setting)
+  - templates/base.html (removed 8 lines - navigation link)
+  - src/templates/base.html (removed 8 lines - navigation link)
+- **Learnings for future iterations:**
+  - When deprecating a feature, remove in this order: imports, routes, templates, helper functions, database tables, page settings, navigation
+  - Users should now use SolarWinds Inventory (/tools/solarwinds/inventory) instead
+  - The device_inventory page was a duplicate of functionality provided by SolarWinds integration
+  - Always check both templates/base.html and src/templates/base.html for navigation changes
+---
