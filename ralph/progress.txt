@@ -393,3 +393,28 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - The wlc_inventory route was renamed to wlc.wlc_ap_inventory in the WLC blueprint
   - request.endpoint checks in templates also need blueprint prefix (e.g., 'wlc.wlc_dashboard' not 'wlc_dashboard')
 ---
+
+## 2026-01-27 - US-017
+- What was implemented:
+  - Added Flask-SQLAlchemy>=3.1.1 and psycopg2-binary>=2.9.9 to requirements/base.txt
+  - Created src/models/user.py with User and Session models
+  - Created src/models/settings.py with AppSettings and PageSettings models
+  - Updated src/models/__init__.py to create db instance and export all models
+  - User model includes: username (indexed), password_hash, role, created_at, last_login, kb_access_level, can_create_kb
+  - Session model includes: user_id (FK), session_token (indexed), ip_address, user_agent, created_at, expires_at
+  - AppSettings model uses singleton pattern (id=1 constraint) with timezone setting
+  - PageSettings model includes: page_key (PK), page_name, enabled, category (indexed)
+- Files changed:
+  - requirements/base.txt (modified)
+  - src/models/__init__.py (modified)
+  - src/models/user.py (new)
+  - src/models/settings.py (new)
+- **Learnings for future iterations:**
+  - SQLAlchemy models go in src/models/ with one file per domain
+  - Import db from src.models (e.g., `from src.models import db, User`)
+  - Use `from . import db` within model files to get shared db instance
+  - Singleton pattern: use db.CheckConstraint("id = 1") in __table_args__
+  - Forward references in relationships: use string like "KBArticle" for models not yet defined
+  - User model has helper methods: set_password(), check_password(), is_superadmin property
+  - PageSettings has class methods: is_page_enabled(), get_all_pages(), set_page_enabled()
+---
