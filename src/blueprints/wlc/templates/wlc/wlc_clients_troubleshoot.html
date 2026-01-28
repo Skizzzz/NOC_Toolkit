@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}WLC Clients Troubleshooter{% endblock %}
+{% block head_extra %}
+<style>
+  .wlc-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--info-soft);
+    color: var(--info);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+</style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <a href="{{ url_for('wlc_tools') }}">WLC Tools</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Clients Troubleshooter</span>
+  </nav>
+
+  <div class="tool-header">
+    <div class="tool-icon">
+      <svg width="28" height="28" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+      </svg>
+    </div>
+    <h2>Wireless Clients Troubleshooter</h2>
+    <p>Poll total connected wireless clients at configurable intervals to track trends over time. Monitor one or more Cisco 9800 controllers with per-WLAN breakdown on the latest round. Perfect for troubleshooting client connectivity issues and capacity planning.</p>
+  </div>
+
+  <form method="post" action="{{ url_for('wlc_clients_troubleshoot_start') }}">
+    <!-- Target Controllers Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
+          </svg>
+        </div>
+        <div style="flex:1;">
+          <h3 class="form-section-title">Target Controllers</h3>
+          <p class="form-section-subtitle">Specify which WLCs to monitor</p>
+        </div>
+        <span class="wlc-count" id="wlcCount">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/>
+          </svg>
+          <span id="wlcCountNumber">0</span> controllers
+        </span>
+      </div>
+
+      <div class="field">
+        <label>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+            <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
+          </svg>
+          WLC IPs / Hostnames
+        </label>
+        <textarea id="wlc-hosts" name="hosts" placeholder="Enter IP addresses or hostnames (comma or newline separated)&#10;&#10;Examples:&#10;10.20.30.40, 10.20.30.41&#10;wlc-building-a.domain.com" rows="4">{{ request.form.get('hosts','') }}</textarea>
+        <div class="muted">Paste from Excel or enter multiple addresses separated by commas or new lines</div>
+      </div>
+    </div>
+
+    <!-- Authentication Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="form-section-title">Authentication</h3>
+          <p class="form-section-subtitle">Your network credentials for SSH access</p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field field-with-icon">
+          <label>Username</label>
+          <svg class="field-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
+          </svg>
+          <input name="username" type="text" required placeholder="Enter your network username" value="{{ request.form.get('username','') }}" />
+        </div>
+        <div class="field field-with-icon">
+          <label>Password</label>
+          <svg class="field-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z"/>
+          </svg>
+          <input name="password" type="password" required placeholder="Enter your network password" value="{{ request.form.get('password','') }}" />
+        </div>
+        <div class="field">
+          <label>Enable Secret <span class="muted">(optional)</span></label>
+          <input name="secret" type="password" placeholder="Leave blank if not required" value="{{ request.form.get('secret','') }}" />
+          <div class="muted">Only needed if devices require enable mode</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Polling Configuration Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="form-section-title">Polling Configuration</h3>
+          <p class="form-section-subtitle">Configure polling frequency and duration</p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/>
+            </svg>
+            Polling Interval (minutes)
+          </label>
+          <input name="interval" type="number" min="2" placeholder="5" required value="{{ request.form.get('interval','') }}" />
+          <div class="muted">Minimum 2 minutes. Recommended: 5-10 minutes for client monitoring</div>
+        </div>
+        <div class="field">
+          <label>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1z"/>
+            </svg>
+            Number of Polls
+          </label>
+          <input name="max_polls" type="number" min="1" max="144" placeholder="3" required value="{{ request.form.get('max_polls','') }}" />
+          <div class="muted">Maximum 144 polls (12 hours @ 5 min interval)</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; padding:12px; background: color-mix(in oklab, var(--warning) 8%, transparent); border-radius:8px; border:1px solid color-mix(in oklab, var(--warning) 20%, transparent);">
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="var(--warning)" style="flex-shrink:0; margin-top:2px;">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"/>
+          </svg>
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:13px; margin-bottom:4px; color:var(--warning);">Important Notes</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.5;">
+              • This creates a <strong>background job</strong> — you can close this page after starting<br>
+              • Total runtime is limited to <strong>12 hours maximum</strong><br>
+              • View progress and results in the <a href="{{ url_for('wlc_clients_troubleshoot_jobs') }}">Jobs page</a><br>
+              • Example: 12 polls × 5 min interval = 60 minutes (1 hour) total runtime
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <a class="btn" href="{{ url_for('wlc_clients_troubleshoot_jobs') }}">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+          <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+          <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"/>
+        </svg>
+        View Jobs
+      </a>
+      <button class="btn" type="reset">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+          <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/>
+        </svg>
+        Reset Form
+      </button>
+      <button class="btn primary" type="submit">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/>
+        </svg>
+        Start Polling
+      </button>
+    </div>
+  </form>
+
+  <script>
+    // Update WLC count dynamically
+    const hostsTextarea = document.getElementById('wlc-hosts');
+    const wlcCountNumber = document.getElementById('wlcCountNumber');
+
+    function updateWlcCount(){
+      const text = hostsTextarea.value.trim();
+      if(!text){
+        wlcCountNumber.textContent = '0';
+        return;
+      }
+      const hosts = text.split(/[,\n]/).map(h => h.trim()).filter(h => h.length > 0);
+      wlcCountNumber.textContent = hosts.length;
+    }
+
+    hostsTextarea.addEventListener('input', updateWlcCount);
+    updateWlcCount();
+  </script>
+{% endblock %}

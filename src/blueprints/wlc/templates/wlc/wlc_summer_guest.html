@@ -1,0 +1,451 @@
+{% extends "base.html" %}
+{% block title %}Summer Guest Monitor{% endblock %}
+{% block head_extra %}
+  <style>
+    .status-pill {
+      display:inline-flex;
+      align-items:center;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:600;
+    }
+    .status-ok { background:rgba(34,197,94,.15); color:#16a34a; }
+    .status-partial { background:rgba(234,179,8,.18); color:#ca8a04; }
+    .status-error { background:rgba(248,113,113,.18); color:#f87171; }
+    .muted-small { color:var(--muted); font-size:12px; }
+    .host-grid {
+      display:grid;
+      gap:14px;
+      grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+      margin-top:12px;
+    }
+    .host-card {
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:14px;
+      background:color-mix(in srgb, var(--card) 90%, transparent);
+      box-shadow:var(--shadow);
+    }
+    .host-card h3 { margin:0 0 6px 0; font-size:17px; }
+    .host-card ul { list-style:none; margin:10px 0 0 0; padding:0; display:grid; gap:10px; }
+    .host-card li {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding:10px 12px;
+      border:1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      border-radius:10px;
+      background:color-mix(in srgb, var(--card) 94%, transparent);
+    }
+    .li-header {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      font-size:13px;
+    }
+    .wlan-badge { padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
+    .wlan-enabled { background:rgba(34,197,94,.15); color:#166534; }
+    .wlan-disabled { background:rgba(248,113,113,.18); color:#b91c1c; }
+    .wlan-unknown { background:rgba(148,163,184,.25); color:#475569; }
+    .entry-enabled { color:#15803d; font-weight:600; }
+    .entry-disabled { color:#dc2626; font-weight:600; }
+    .entry-unknown { color:#475569; }
+    .security-pill {
+      margin-left:8px;
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:11px;
+      color:#475569;
+      background:rgba(148,163,184,.18);
+    }
+    .wlan-actions {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin-top:6px;
+    }
+    .action-pop {
+      position:relative;
+    }
+    .action-pop summary {
+      list-style:none;
+      cursor:pointer;
+    }
+    .action-trigger {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:6px 12px;
+      font-size:11px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:color-mix(in srgb, var(--card) 95%, transparent);
+      color:var(--accent);
+      transition:background .2s ease;
+    }
+    .action-trigger:hover,
+    .action-pop[open] .action-trigger {
+      background:color-mix(in srgb, var(--accent) 20%, var(--card));
+      color:#fff;
+      border-color:transparent;
+    }
+    .action-pop > summary::-webkit-details-marker { display:none; }
+    .action-card {
+      position:absolute;
+      top:110%;
+      right:0;
+      width:320px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:14px;
+      background:color-mix(in srgb, var(--card) 98%, transparent);
+      box-shadow:0 18px 38px rgba(15,23,42,.4);
+      z-index:5;
+    }
+    @media (max-width: 640px) {
+      .action-card {
+        position:static;
+        width:100%;
+        margin-top:10px;
+      }
+    }
+    .action-card h4 {
+      margin:0 0 6px 0;
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+      color:var(--muted);
+    }
+    .action-form {
+      display:grid;
+      gap:8px;
+    }
+    .action-form label {
+      font-size:11px;
+      color:var(--muted);
+      display:grid;
+      gap:4px;
+    }
+    .action-form input[type="datetime-local"],
+    .action-form input[type="text"],
+    .action-form input[type="password"] {
+      font-size:12px;
+      padding:6px 8px;
+      border-radius:8px;
+      border:1px solid var(--border);
+      background:color-mix(in srgb, var(--card) 96%, transparent);
+      color:inherit;
+    }
+    .action-form input[type="text"]::placeholder,
+    .action-form input[type="password"]::placeholder {
+      color:var(--muted);
+    }
+    .action-buttons {
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .action-form button {
+      font-size:11px;
+      padding:6px 12px;
+    }
+    .action-form .rollback-toggle {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-size:11px;
+      color:var(--muted);
+    }
+    .chg-link {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(249,115,22,0.6);
+      color:#f97316;
+      font-size:11px;
+      font-weight:600;
+      text-decoration:none;
+      background:rgba(249,115,22,0.15);
+      margin-top:8px;
+      transition:all .2s ease;
+    }
+    .chg-link:hover {
+      color:#fff;
+      border-color:transparent;
+      background:rgba(249,115,22,0.85);
+      box-shadow:0 8px 18px rgba(249,115,22,0.35);
+    }
+    .host-errors { margin-top:8px; color:#b91c1c; font-size:12px; }
+    table.simple-table {
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    table.simple-table th, table.simple-table td {
+      padding:6px 8px;
+      border-bottom:1px solid var(--border);
+    }
+    table.simple-table th { text-align:left; color:var(--muted); font-weight:600; }
+    details.collapsible {
+      border:1px solid transparent;
+    }
+    details.collapsible[open] {
+      border-color:var(--border);
+    }
+    details.collapsible summary {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      cursor:pointer;
+      list-style:none;
+      font-weight:600;
+      font-size:16px;
+    }
+    details.collapsible summary::-webkit-details-marker { display:none; }
+    details.collapsible summary span {
+      color:var(--muted);
+      font-size:12px;
+      font-weight:400;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h2 class="section-title" style="margin:0;">Summer Guest Monitor</h2>
+      <p class="muted" style="margin:6px 0 0 0;">Daily poll of configured controllers to confirm Summer Guest WLAN availability, auto-matching any profile that starts with “Summer”.</p>
+    </div>
+    <div class="row" style="gap:10px; flex-wrap:wrap;">
+      <a class="btn" href="{{ url_for('wlc_summer_guest_settings') }}">Settings</a>
+      <a class="btn" href="{{ url_for('wlc_tools') }}">WLC Tools</a>
+    </div>
+  </div>
+
+  {% set status = summary.status or 'never' %}
+  {% if status == 'ok' %}
+    {% set pill_class = 'status-ok' %}
+  {% elif status == 'error' %}
+    {% set pill_class = 'status-error' %}
+  {% else %}
+    {% set pill_class = 'status-partial' %}
+  {% endif %}
+
+  <div class="row" style="margin-top:16px; gap:18px; flex-wrap:wrap;">
+    <div>
+      <span class="status-pill {{ pill_class }}">{{ status|capitalize }}</span>
+      <p class="muted" style="margin:6px 0 0 0;">{{ summary.message or 'Awaiting first poll.' }}</p>
+    </div>
+    <div>
+      <p class="muted-small">Last poll</p>
+      <p style="margin:2px 0 0 0;">{{ last_poll_display or '—' }}</p>
+    </div>
+    <div>
+      <p class="muted-small">Next poll ({{ tz_name }})</p>
+      <p style="margin:2px 0 0 0;">{{ next_run_display or '—' }}</p>
+    </div>
+    <div>
+      <p class="muted-small">Targets</p>
+      <p style="margin:2px 0 0 0;">Profiles: {{ (summary.targets.profile_names or [])|join(', ') or '—' }}</p>
+      <p class="muted-small" style="margin:2px 0 0 0;">WLAN IDs: {{ (summary.targets.wlan_ids or [])|join(', ') or '—' }}</p>
+      {% if summary.targets.auto_prefix %}
+        <p class="muted-small" style="margin:2px 0 0 0;">Auto prefix match: {{ summary.targets.auto_prefix }}*</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:18px; padding:14px;">
+    <label style="display:grid; gap:6px;">
+      <span class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:.05em;">Filter Controllers</span>
+      <input id="controllerFilter" type="text" placeholder="Search by hostname, IP, or message" style="padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 96%, transparent);" />
+    </label>
+  </div>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h3 style="margin:0;">Controller Status</h3>
+  {% if summary.host_status %}
+    <div class="host-grid" id="controllerGrid">
+      {% for host in summary.host_status %}
+        <div class="host-card" data-controller="{{ (host.display or host.host)|lower }}" data-message="{{ (host.message or '')|lower }}" data-change="{{ host.upcoming_change.tooltip|lower if host.upcoming_change else '' }}">
+          <h3>{{ host.display or host.host }}</h3>
+          <p class="muted" style="margin:0;">{{ host.message or '—' }}</p>
+          {% if host.upcoming_change %}
+            <a class="chg-link" href="{{ url_for('change_detail', change_id=host.upcoming_change.change_id) }}" title="{{ host.upcoming_change.tooltip }}">
+              Scheduled CHG · {{ host.upcoming_change.scheduled_short }}
+            </a>
+          {% endif %}
+          {% if host.entries %}
+            <ul>
+              {% for entry in host.entries %}
+                {% if entry.enabled is true %}
+                  {% set badge_class = 'wlan-enabled' %}
+                  {% set badge_label = 'Enabled' %}
+                  {% set entry_class = 'entry-enabled' %}
+                {% elif entry.enabled is sameas(false) %}
+                  {% set badge_class = 'wlan-disabled' %}
+                  {% set badge_label = 'Disabled' %}
+                  {% set entry_class = 'entry-disabled' %}
+                {% else %}
+                  {% set badge_class = 'wlan-unknown' %}
+                  {% set badge_label = entry.status_text or 'Unknown' %}
+                  {% set entry_class = 'entry-unknown' %}
+                {% endif %}
+                <li>
+                  <div class="li-header">
+                    <span class="{{ entry_class }}">{{ entry.wlan_id if entry.wlan_id is not none else '—' }} · {{ entry.profile_name or '—' }}</span>
+                    <span class="wlan-badge {{ badge_class }}">{{ badge_label }}</span>
+                  </div>
+                <div class="wlan-actions">
+                    <details class="action-pop">
+                      <summary class="action-trigger">Enable / Disable</summary>
+                      <div class="action-card">
+                        <h4>Immediate action</h4>
+                        <form method="post" action="{{ url_for('wlc_summer_guest_toggle') }}" class="action-form">
+                          <input type="hidden" name="host" value="{{ host.host }}" />
+                          <input type="hidden" name="profile_name" value="{{ entry.profile_name or '' }}" />
+                          <input type="hidden" name="wlan_id" value="{{ entry.wlan_id if entry.wlan_id is not none else '' }}" />
+                          <input type="hidden" name="redirect" value="wlc_summer_guest" />
+                          <label>New PSK (optional)
+                            <input type="password" name="psk" autocomplete="off" placeholder="Update when enabling" />
+                          </label>
+                          <div class="action-buttons">
+                            {% if entry.enabled is true %}
+                              <button class="btn" name="action" value="disable" type="submit">Disable now</button>
+                            {% elif entry.enabled is sameas(false) %}
+                              <button class="btn" name="action" value="enable" type="submit">Enable now</button>
+                            {% else %}
+                              <button class="btn" name="action" value="enable" type="submit">Enable now</button>
+                              <button class="btn" name="action" value="disable" type="submit">Disable now</button>
+                            {% endif %}
+                          </div>
+                        </form>
+                      </div>
+                    </details>
+                    <details class="action-pop">
+                      <summary class="action-trigger">Schedule CHG</summary>
+                      <div class="action-card">
+                        <h4>Schedule change</h4>
+                        <form method="post" action="{{ url_for('wlc_summer_guest_schedule') }}" class="action-form">
+                          <input type="hidden" name="host" value="{{ host.host }}" />
+                          <input type="hidden" name="profile_name" value="{{ entry.profile_name or '' }}" />
+                          <input type="hidden" name="wlan_id" value="{{ entry.wlan_id if entry.wlan_id is not none else '' }}" />
+                          <label>When (CST)
+                            <input type="datetime-local" name="scheduled" required />
+                          </label>
+                          <label>Change number
+                            <input type="text" name="change_number" placeholder="CHG-12345" />
+                          </label>
+                          <label class="rollback-toggle">
+                            <input type="checkbox" name="schedule_rollback" value="1" />
+                            Create auto-rollback
+                          </label>
+                          <label>New PSK (optional)
+                            <input type="password" name="psk" autocomplete="off" placeholder="Update when enabling" />
+                          </label>
+                          <div class="action-buttons">
+                          {% if entry.enabled is true %}
+                            <button class="btn" name="action" value="disable" type="submit">Schedule disable</button>
+                          {% elif entry.enabled is sameas(false) %}
+                            <button class="btn" name="action" value="enable" type="submit">Schedule enable</button>
+                          {% else %}
+                            <button class="btn" name="action" value="enable" type="submit">Schedule enable</button>
+                            <button class="btn" name="action" value="disable" type="submit">Schedule disable</button>
+                          {% endif %}
+                        </div>
+                        </form>
+                      </div>
+                    </details>
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted" style="margin:8px 0 0 0; font-size:13px;">No matching WLANs returned.</p>
+          {% endif %}
+          {% if host.errors %}
+            <div class="host-errors">
+              {% for err in host.errors %}
+                <div>• {{ err }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+      <p class="muted" style="margin-top:12px;">No poll results yet.</p>
+  {% endif %}
+</section>
+
+<details class="card collapsible" style="margin-top:18px;">
+  <summary>Recent Polls <span>(click to expand)</span></summary>
+  <div style="margin-top:12px;">
+    {% if recent_runs %}
+      <table class="simple-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Matched WLANs</th>
+            <th>Enabled</th>
+            <th>Disabled</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in recent_runs %}
+            <tr>
+              <td>{{ format_ts(run.ts) if run.ts else '—' }}</td>
+              <td>{{ run.total }}</td>
+              <td>{{ run.enabled }}</td>
+              <td>{{ run.disabled }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No history yet.</p>
+    {% endif %}
+  </div>
+</details>
+
+{% if summary.errors %}
+  <section class="card" style="margin-top:18px;">
+    <h3 style="margin:0 0 8px 0;">Errors</h3>
+    <ul style="margin:0; padding-left:20px;">
+      {% for err in summary.errors %}
+        <li style="margin-top:4px;">{{ err }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}
+<script>
+  (function(){
+    const filterInput = document.getElementById('controllerFilter');
+    const grid = document.getElementById('controllerGrid');
+    if (!filterInput || !grid) return;
+
+    const cards = Array.from(grid.querySelectorAll('.host-card'));
+
+    const applyFilter = () => {
+      const query = filterInput.value.trim().toLowerCase();
+      if (!query) {
+        cards.forEach(card => card.style.display = '');
+        return;
+      }
+    cards.forEach(card => {
+      const matches = (card.dataset.controller || '').includes(query)
+        || (card.dataset.message || '').includes(query)
+        || (card.dataset.change || '').includes(query);
+        card.style.display = matches ? '' : 'none';
+      });
+    };
+
+    filterInput.addEventListener('input', applyFilter);
+  })();
+</script>
+{% endblock %}
