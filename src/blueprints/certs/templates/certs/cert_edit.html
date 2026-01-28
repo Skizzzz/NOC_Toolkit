@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Edit Certificate{% endblock %}
+{% block content %}
+<div style="max-width:700px; margin:0 auto;">
+  <div style="margin-bottom:24px;">
+    <a href="{{ url_for('certs.cert_tracker') }}" class="muted" style="text-decoration:none;">&larr; Back to Certificate Tracker</a>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 24px;">Edit Certificate</h2>
+
+    <form method="post">
+      <div class="grid" style="gap:16px;">
+        <div class="field">
+          <label>Common Name (CN)</label>
+          <input type="text" name="cn" value="{{ cert.cn or '' }}" readonly style="background:var(--bg); cursor:not-allowed;">
+          <span class="muted">Certificate CN cannot be changed</span>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>Expires</label>
+            <input type="text" value="{{ cert.expires or 'Unknown' }}" readonly style="background:var(--bg); cursor:not-allowed;">
+          </div>
+          <div class="field">
+            <label>Source</label>
+            <input type="text" value="{% if cert.source_type == 'ise' %}ISE ({{ cert.source_hostname or cert.source_ip }}){% else %}Uploaded{% endif %}" readonly style="background:var(--bg); cursor:not-allowed;">
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>Issued To</label>
+            <input type="text" name="issued_to" value="{{ cert.issued_to or '' }}">
+          </div>
+          <div class="field">
+            <label>Issued By</label>
+            <input type="text" name="issued_by" value="{{ cert.issued_by or '' }}">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Used By / Purpose</label>
+          <input type="text" name="used_by" value="{{ cert.used_by or '' }}" placeholder="e.g., Admin Portal, Guest WiFi, RADIUS">
+        </div>
+
+        <div class="field">
+          <label>Devices</label>
+          <textarea name="devices" rows="2" placeholder="List devices or services using this certificate...">{{ cert.devices or '' }}</textarea>
+        </div>
+
+        <div class="field">
+          <label>Notes</label>
+          <textarea name="notes" rows="4" placeholder="Add any notes about this certificate...">{{ cert.notes or '' }}</textarea>
+        </div>
+      </div>
+
+      <div style="margin-top:24px; display:flex; gap:12px;">
+        <button type="submit" class="btn primary">Save Changes</button>
+        <a href="{{ url_for('certs.cert_tracker') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Certificate Details -->
+  <div class="card" style="margin-top:24px;">
+    <h3 style="margin:0 0 16px;">Certificate Details</h3>
+    <table style="width:100%;">
+      <tr>
+        <td style="padding:8px 0; color:var(--muted); width:140px;">Serial Number</td>
+        <td style="padding:8px 0;">{{ cert.serial or 'Unknown' }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0; color:var(--muted);">Uploaded</td>
+        <td style="padding:8px 0;">{{ cert.uploaded or 'Unknown' }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0; color:var(--muted);">Last Updated</td>
+        <td style="padding:8px 0;">{{ cert.updated or 'Never' }}</td>
+      </tr>
+      {% if cert.source_type == 'ise' %}
+      <tr>
+        <td style="padding:8px 0; color:var(--muted);">ISE Node</td>
+        <td style="padding:8px 0;">{{ cert.source_hostname }} ({{ cert.source_ip }})</td>
+      </tr>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}

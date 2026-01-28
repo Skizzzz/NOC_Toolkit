@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Edit ISE Node{% endblock %}
+{% block content %}
+<div style="max-width:600px; margin:0 auto;">
+  <div style="margin-bottom:24px;">
+    <a href="{{ url_for('certs.ise_nodes') }}" class="muted" style="text-decoration:none;">&larr; Back to ISE Nodes</a>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 24px;">Edit ISE Node</h2>
+
+    <form method="post">
+      <div class="grid" style="gap:16px;">
+        <div class="field">
+          <label>Hostname</label>
+          <input type="text" name="hostname" value="{{ node.hostname }}" required>
+        </div>
+        <div class="field">
+          <label>IP Address</label>
+          <input type="text" name="ip" value="{{ node.ip }}" required>
+        </div>
+        <div class="field">
+          <label>API Username</label>
+          <input type="text" name="username" value="{{ node.username }}" required>
+        </div>
+        <div class="field">
+          <label>API Password</label>
+          <input type="password" name="password" placeholder="Leave blank to keep current password">
+          <span class="muted">Leave blank to keep existing password</span>
+        </div>
+        <div class="field">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" name="enabled" {% if node.enabled %}checked{% endif %} style="width:auto;">
+            Enabled
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-top:24px; display:flex; gap:12px;">
+        <button type="submit" class="btn primary">Save Changes</button>
+        <a href="{{ url_for('certs.ise_nodes') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Node Status -->
+  <div class="card" style="margin-top:24px;">
+    <h3 style="margin:0 0 16px;">Sync Status</h3>
+    <table style="width:100%;">
+      <tr>
+        <td style="padding:8px 0; color:var(--muted); width:140px;">Created</td>
+        <td style="padding:8px 0;">{{ node.created or 'Unknown' }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0; color:var(--muted);">Last Updated</td>
+        <td style="padding:8px 0;">{{ node.updated or 'Never' }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0; color:var(--muted);">Last Sync</td>
+        <td style="padding:8px 0;">{{ node.last_sync or 'Never' }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0; color:var(--muted);">Sync Status</td>
+        <td style="padding:8px 0;">
+          {% if node.last_sync_status == 'success' %}
+            <span class="badge success">Success</span>
+          {% elif node.last_sync_status == 'error' %}
+            <span class="badge error">Error</span>
+          {% else %}
+            <span class="badge neutral">Pending</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% if node.last_sync_message %}
+      <tr>
+        <td style="padding:8px 0; color:var(--muted);">Message</td>
+        <td style="padding:8px 0;">{{ node.last_sync_message }}</td>
+      </tr>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}

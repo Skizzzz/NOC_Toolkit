@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Upload Certificate{% endblock %}
+{% block head_extra %}
+<style>
+  .upload-zone{
+    border:2px dashed var(--border);
+    border-radius:12px;
+    padding:48px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:all 0.2s ease;
+    background: color-mix(in oklab, var(--card) 80%, transparent);
+  }
+  .upload-zone:hover, .upload-zone.dragover{
+    border-color:var(--accent);
+    background: color-mix(in oklab, var(--accent) 5%, transparent);
+  }
+  .upload-zone-icon{
+    width:64px;
+    height:64px;
+    margin:0 auto 16px;
+    color:var(--muted);
+  }
+  .upload-zone h3{margin:0 0 8px;}
+  .upload-zone p{margin:0; color:var(--muted);}
+  .upload-zone input[type="file"]{display:none;}
+
+  .file-list{margin-top:16px;}
+  .file-item{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    margin-bottom:8px;
+  }
+  .file-item-icon{width:24px; height:24px; color:var(--success);}
+  .file-item-name{flex:1; font-weight:500;}
+  .file-item-size{color:var(--muted); font-size:13px;}
+  .file-item-remove{
+    background:none;
+    border:none;
+    color:var(--error);
+    cursor:pointer;
+    padding:4px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div style="max-width:700px; margin:0 auto;">
+  <div style="margin-bottom:24px;">
+    <a href="{{ url_for('certs.cert_tracker') }}" class="muted" style="text-decoration:none;">&larr; Back to Certificate Tracker</a>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 8px;">Upload Certificates</h2>
+    <p class="muted" style="margin:0 0 24px;">Upload certificate files to track their expiration. Supported formats: .crt, .pem, .cer, .der</p>
+
+    <form method="post" enctype="multipart/form-data" id="uploadForm">
+      <label class="upload-zone" id="uploadZone">
+        <svg class="upload-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <h3>Drop certificate files here</h3>
+        <p>or click to browse</p>
+        <input type="file" name="cert_file" id="certInput" accept=".crt,.pem,.cer,.der">
+      </label>
+
+      <div class="file-list" id="fileList"></div>
+
+      <div class="grid" style="margin-top:24px;">
+        <div class="field">
+          <label>Notes (optional)</label>
+          <textarea name="notes" rows="3" placeholder="Add any notes about these certificates..."></textarea>
+        </div>
+        <div class="field">
+          <label>Devices (optional)</label>
+          <input type="text" name="devices" placeholder="e.g., server1.example.com, loadbalancer">
+        </div>
+      </div>
+
+      <div style="margin-top:24px; display:flex; gap:12px;">
+        <button type="submit" class="btn primary" id="submitBtn" disabled>Upload Certificate</button>
+        <a href="{{ url_for('certs.cert_tracker') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const uploadZone = document.getElementById('uploadZone');
+const certInput = document.getElementById('certInput');
+const fileList = document.getElementById('fileList');
+const submitBtn = document.getElementById('submitBtn');
+
+let selectedFile = null;
+
+function updateFileList() {
+  fileList.textContent = '';
+  if (selectedFile) {
+    const div = document.createElement('div');
+    div.className = 'file-item';
+
+    // Create file icon SVG
+    const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    iconSvg.setAttribute('class', 'file-item-icon');
+    iconSvg.setAttribute('viewBox', '0 0 24 24');
+    iconSvg.setAttribute('fill', 'none');
+    iconSvg.setAttribute('stroke', 'currentColor');
+    iconSvg.setAttribute('stroke-width', '2');
+    const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path1.setAttribute('d', 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z');
+    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    polyline.setAttribute('points', '14 2 14 8 20 8');
+    iconSvg.appendChild(path1);
+    iconSvg.appendChild(polyline);
+    div.appendChild(iconSvg);
+
+    // Create file name span
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'file-item-name';
+    nameSpan.textContent = selectedFile.name;
+    div.appendChild(nameSpan);
+
+    // Create file size span
+    const sizeSpan = document.createElement('span');
+    sizeSpan.className = 'file-item-size';
+    sizeSpan.textContent = (selectedFile.size / 1024).toFixed(1) + ' KB';
+    div.appendChild(sizeSpan);
+
+    // Create remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'file-item-remove';
+    removeBtn.onclick = clearFile;
+    const removeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    removeSvg.setAttribute('width', '16');
+    removeSvg.setAttribute('height', '16');
+    removeSvg.setAttribute('viewBox', '0 0 24 24');
+    removeSvg.setAttribute('fill', 'none');
+    removeSvg.setAttribute('stroke', 'currentColor');
+    removeSvg.setAttribute('stroke-width', '2');
+    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line1.setAttribute('x1', '18');
+    line1.setAttribute('y1', '6');
+    line1.setAttribute('x2', '6');
+    line1.setAttribute('y2', '18');
+    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line2.setAttribute('x1', '6');
+    line2.setAttribute('y1', '6');
+    line2.setAttribute('x2', '18');
+    line2.setAttribute('y2', '18');
+    removeSvg.appendChild(line1);
+    removeSvg.appendChild(line2);
+    removeBtn.appendChild(removeSvg);
+    div.appendChild(removeBtn);
+
+    fileList.appendChild(div);
+  }
+  submitBtn.disabled = !selectedFile;
+}
+
+function clearFile() {
+  selectedFile = null;
+  certInput.value = '';
+  updateFileList();
+}
+
+certInput.addEventListener('change', (e) => {
+  if (e.target.files.length > 0) {
+    selectedFile = e.target.files[0];
+    updateFileList();
+  }
+});
+
+// Drag and drop
+uploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadZone.classList.add('dragover');
+});
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.classList.remove('dragover');
+});
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const files = Array.from(e.dataTransfer.files).filter(f =>
+    f.name.match(/\.(crt|pem|cer|der)$/i)
+  );
+  if (files.length) {
+    selectedFile = files[0];
+    // Update the input element
+    const dt = new DataTransfer();
+    dt.items.add(selectedFile);
+    certInput.files = dt.files;
+    updateFileList();
+  }
+});
+</script>
+{% endblock %}
