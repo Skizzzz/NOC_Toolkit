@@ -1,0 +1,25 @@
+Database Migrations
+===================
+
+This directory contains database migrations managed by Flask-Migrate (Alembic).
+
+Usage
+-----
+
+Generate a new migration after model changes:
+    flask db migrate -m "Description of changes"
+
+Apply migrations to the database:
+    flask db upgrade
+
+Revert to a previous migration:
+    flask db downgrade
+
+Show current migration state:
+    flask db current
+
+Show migration history:
+    flask db history
+
+For more information, see the Flask-Migrate documentation:
+https://flask-migrate.readthedocs.io/

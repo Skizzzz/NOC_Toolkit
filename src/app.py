@@ -9,8 +9,13 @@ import os
 from typing import Optional
 
 from flask import Flask
+from flask_migrate import Migrate
 
 from src.config import get_config, ProductionConfig
+from src.models import db
+
+# Global migrate instance for CLI commands
+migrate = Migrate()
 
 
 def create_app(config_name: Optional[str] = None) -> Flask:
@@ -75,9 +80,11 @@ def _init_extensions(app: Flask) -> None:
     Args:
         app: Flask application instance.
     """
-    # Flask-SQLAlchemy will be initialized here in US-017
-    # Flask-Migrate will be initialized here in US-022
-    pass
+    # Initialize Flask-SQLAlchemy
+    db.init_app(app)
+
+    # Initialize Flask-Migrate for database migrations
+    migrate.init_app(app, db)
 
 
 def _register_blueprints(app: Flask) -> None:
