@@ -846,3 +846,27 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Remove required attribute with page.evaluate() to test server-side validation
   - Use `pytest tests/e2e/test_setup.py -v --timeout=180` to run Setup Wizard tests
 ---
+
+## 2026-01-27 - US-035
+- What was implemented:
+  - Created tests/e2e/test_smoke.py with 47 comprehensive E2E smoke tests for validating all pages load
+  - TestSmokeAllPagesLoad: 17 parameterized tests for main navigation routes + 2 public routes, verifies 200 status
+  - TestSmokeNoJavaScriptErrors: 6 tests checking major pages for JavaScript console errors
+  - TestSmokeProtectedRoutesRequireAuth: 9 tests verifying protected routes redirect to login when not authenticated
+  - TestSmokeNavigationLinks: 5 tests for sidebar navigation structure, user profile, admin panel visibility
+  - TestSmokeApiEndpoints: 2 tests for /health endpoint JSON response
+  - TestSmokePageContent: 5 tests for base layout elements (header, sidebar, footer, login form)
+  - TestSmokeThemeToggle: 2 tests for theme toggle button and functionality
+  - Fixed url_for() call in wlc_rf.html template (wlc_tools -> wlc.wlc_tools)
+- Files changed:
+  - tests/e2e/test_smoke.py (new - 407 lines)
+  - src/blueprints/wlc/templates/wlc/wlc_rf.html (modified - fixed url_for blueprint prefix)
+- **Learnings for future iterations:**
+  - Smoke tests discovered template url_for() bugs in WLC templates that reference routes not yet migrated to blueprints
+  - Routes /tools/wlc-rf and /tools/wlc/summer-guest have templates that reference old route names (wlc_rf_run, wlc_summer_guest_settings)
+  - Certificate converter route is /certs/converter (not /cert-converter) - no url_prefix on certs blueprint
+  - Use wait_until="domcontentloaded" for redirect tests to avoid timeout issues
+  - Use page.set_default_timeout(30000) for tests involving multiple redirects
+  - Filter JavaScript console errors to exclude favicon 404s and other non-critical errors
+  - Use `pytest tests/e2e/test_smoke.py -v --timeout=180` to run Smoke Test Suite
+---
