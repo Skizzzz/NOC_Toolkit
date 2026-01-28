@@ -147,6 +147,20 @@ def load_app_settings() -> Dict:
     return settings
 
 
+def save_app_settings(*, timezone: str) -> bool:
+    """Save application settings to the database."""
+    try:
+        with get_db_lock(), get_connection() as conn:
+            conn.execute(
+                """INSERT INTO app_settings (id, timezone, updated_at) VALUES (1, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET timezone = ?, updated_at = ?""",
+                (timezone, now_iso(), timezone, now_iso()),
+            )
+            return True
+    except Exception:
+        return False
+
+
 def format_datetime(
     dt: Optional[datetime], fmt: str = "%Y-%m-%d %H:%M:%S"
 ) -> str:

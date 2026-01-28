@@ -88,8 +88,10 @@ def _register_blueprints(app: Flask) -> None:
         app: Flask application instance.
     """
     from src.blueprints.auth import auth_bp
+    from src.blueprints.admin import admin_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(admin_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:
