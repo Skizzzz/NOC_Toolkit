@@ -91,6 +91,67 @@ def wlc_dashboard():
     )
 
 
+@wlc_bp.get("/api/wlc/dashboard")
+@require_login
+def wlc_dashboard_data():
+    """API endpoint returning dashboard data for chart updates."""
+    from tools.db_jobs import (
+        load_wlc_dashboard_settings,
+        fetch_wlc_dashboard_series,
+        fetch_wlc_dashboard_latest_totals,
+        fetch_wlc_dashboard_latest_details,
+    )
+
+    _DASHBOARD_RANGE_TO_HOURS = {
+        "1h": 1,
+        "6h": 6,
+        "12h": 12,
+        "24h": 24,
+        "7d": 168,
+        "30d": 720,
+    }
+
+    selected = request.args.get("range", "24h")
+    if selected not in _DASHBOARD_RANGE_TO_HOURS:
+        selected = "24h"
+    hours = _DASHBOARD_RANGE_TO_HOURS[selected]
+
+    series = fetch_wlc_dashboard_series(hours)
+    latest = fetch_wlc_dashboard_latest_totals()
+    settings = load_wlc_dashboard_settings()
+    details = fetch_wlc_dashboard_latest_details()
+
+    fallback_summary = {
+        "ts": settings.get("last_poll_ts"),
+        "status": settings.get("last_poll_status", "never"),
+        "message": settings.get("last_poll_message", "No poll has run yet."),
+        "total_hosts": len(settings.get("hosts") or []),
+        "success_hosts": 0,
+        "enabled_total": 0,
+        "disabled_total": 0,
+        "errors": [],
+        "host_status": [],
+    }
+    summary = settings.get("summary") or fallback_summary
+
+    return jsonify({
+        "series": series,
+        "latest": latest,
+        "poll": {
+            "enabled": settings.get("enabled", False),
+            "status": summary.get("status", "unknown"),
+            "message": summary.get("message", ""),
+            "total_hosts": summary.get("total_hosts", 0),
+            "success_hosts": summary.get("success_hosts", 0),
+            "errors": summary.get("errors", []),
+        },
+        "summary": summary,
+        "hosts": settings.get("hosts") or [],
+        "aruba_hosts": settings.get("aruba_hosts") or [],
+        "latest_details": details,
+    })
+
+
 # ====================== WLC AP Inventory ======================
 
 @wlc_bp.get("/tools/wlc/ap-inventory")

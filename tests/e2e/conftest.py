@@ -170,18 +170,30 @@ def seeded_db(app, live_server):
     )
 
     # Create page settings (all enabled)
+    # Note: page_key values must match what's used in @require_page_enabled() decorators
     pages = [
-        ("wlc-dashboard", "WLC Dashboard", "WLC Tools"),
-        ("ap-inventory", "AP Inventory", "WLC Tools"),
-        ("solarwinds-nodes", "SolarWinds Nodes", "SolarWinds"),
-        ("solarwinds-inventory", "SolarWinds Inventory", "SolarWinds"),
-        ("bulk-ssh", "Bulk SSH", "SSH Tools"),
-        ("phrase-search", "Phrase Search", "Config"),
-        ("global-config", "Global Config", "Config"),
-        ("cert-tracker", "Certificate Tracker", "Certificates"),
-        ("ise-nodes", "ISE Nodes", "Certificates"),
-        ("knowledge-base", "Knowledge Base", "Documentation"),
-        ("changes", "Change Windows", "Config"),
+        # WLC Tools
+        ("wlc_dashboard", "WLC Dashboard", "WLC Tools"),
+        ("wlc_inventory", "AP Inventory", "WLC Tools"),
+        ("wlc_rf", "RF Summary", "WLC Tools"),
+        ("wlc_summer_guest", "Summer Guest", "WLC Tools"),
+        # Infrastructure
+        ("solarwinds_nodes", "SolarWinds Nodes", "Infrastructure"),
+        ("customer_dashboard", "Customer Dashboard", "Infrastructure"),
+        ("topology_tool", "Topology", "Infrastructure"),
+        ("changes_list", "Change Windows", "Infrastructure"),
+        # Config Tools
+        ("tool_phrase_search", "Interface Search", "Config Tools"),
+        ("tool_global_config", "Global Config", "Config Tools"),
+        ("bulk_ssh", "Bulk SSH Terminal", "Config Tools"),
+        ("audit_logs", "Audit Logs", "Config Tools"),
+        # Certificates
+        ("cert_tracker", "Certificate Tracker", "Certificates"),
+        ("cert_converter", "Cert Converter", "Certificates"),
+        ("ise_nodes", "ISE Nodes", "Certificates"),
+        # Main
+        ("knowledge_base", "Knowledge Base", "Main"),
+        ("jobs_center", "Jobs Center", "Main"),
     ]
     for key, name, category in pages:
         cursor.execute(
