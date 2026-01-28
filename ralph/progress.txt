@@ -195,3 +195,29 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - save_app_settings() was missing from helpers.py - needed to add it
   - Admin routes use @require_superadmin decorator from src.core.security
 ---
+
+## 2026-01-27 21:20 CST - US-009
+- What was implemented:
+  - Created src/blueprints/wlc/routes.py with routes: /tools/wlc, /tools/wlc/dashboard, /tools/wlc/ap-inventory, /tools/wlc/ap-inventory/export, /tools/wlc/summer-guest, /tools/wlc-rf, /tools/wlc-rf-troubleshoot, /tools/wlc-clients-troubleshoot
+  - Created src/blueprints/wlc/templates/wlc/ directory structure
+  - Copied templates: wlc_dashboard.html, ap_inventory.html, wlc_summer_guest.html, wlc_rf.html, wlc_tools.html, wlc_rf_troubleshoot.html, wlc_clients_troubleshoot.html to src/blueprints/wlc/templates/wlc/
+  - Updated src/blueprints/wlc/__init__.py to export wlc_bp
+  - Registered wlc blueprint in src/app.py _register_blueprints()
+- Files changed:
+  - src/blueprints/wlc/routes.py (new)
+  - src/blueprints/wlc/templates/wlc/wlc_dashboard.html (new)
+  - src/blueprints/wlc/templates/wlc/ap_inventory.html (new)
+  - src/blueprints/wlc/templates/wlc/wlc_summer_guest.html (new)
+  - src/blueprints/wlc/templates/wlc/wlc_rf.html (new)
+  - src/blueprints/wlc/templates/wlc/wlc_tools.html (new)
+  - src/blueprints/wlc/templates/wlc/wlc_rf_troubleshoot.html (new)
+  - src/blueprints/wlc/templates/wlc/wlc_clients_troubleshoot.html (new)
+  - src/blueprints/wlc/__init__.py (modified)
+  - src/app.py (modified)
+- **Learnings for future iterations:**
+  - WLC blueprint uses url_prefix="" for root-level routes (e.g., /tools/wlc)
+  - Import db_jobs functions locally within route handlers to avoid circular imports
+  - Helper functions for timezone and datetime formatting can be defined within the route handler
+  - Templates use `render_template("wlc/wlc_dashboard.html")` - the blueprint prefix is required
+  - The WLC module has many more routes in app.py (inventory/run, RF run, jobs, settings) - only extracted the core view routes per PRD
+---
