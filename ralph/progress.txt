@@ -718,3 +718,29 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Test fixture page_settings table must match production schema including updated_at column
   - Use `pytest tests/e2e/test_admin.py -v --timeout=120` to run admin tests
 ---
+
+## 2026-01-27 - US-029
+- What was implemented:
+  - Created tests/e2e/test_wlc.py with 13 comprehensive E2E tests for WLC functionality
+  - TestWLCDashboard: test_dashboard_page_loads_with_charts_placeholder, test_dashboard_displays_time_range_selector, test_dashboard_time_range_parameter_accepted
+  - TestWLCDashboardSettings: test_dashboard_settings_page_can_be_accessed, test_wlc_tools_menu_page_loads
+  - TestAPInventory: test_ap_inventory_page_displays, test_ap_inventory_has_filter_inputs, test_ap_inventory_has_export_option, test_ap_inventory_export_returns_csv
+  - TestWLCAccessControl: test_unauthenticated_user_redirected_to_login, test_unauthenticated_user_redirected_from_inventory, test_regular_user_can_access_wlc_dashboard, test_regular_user_can_access_ap_inventory
+  - Fixed url_for() calls in WLC templates to use blueprint prefixes (wlc.route_name)
+  - Added wlc_dashboard_data API endpoint to WLC blueprint for chart data fetching
+  - Updated seeded_db fixture with correct page_key values (using underscores like wlc_dashboard, not dashes)
+- Files changed:
+  - tests/e2e/test_wlc.py (new - 220 lines)
+  - src/blueprints/wlc/routes.py (modified - added wlc_dashboard_data endpoint)
+  - src/blueprints/wlc/templates/wlc/wlc_dashboard.html (modified - fixed url_for calls)
+  - src/blueprints/wlc/templates/wlc/ap_inventory.html (modified - fixed url_for calls)
+  - src/blueprints/wlc/templates/wlc/wlc_tools.html (modified - fixed url_for calls)
+  - tests/e2e/conftest.py (modified - fixed page_key values to match production)
+- **Learnings for future iterations:**
+  - page_key values in page_settings table use underscores (wlc_dashboard), not dashes (wlc-dashboard)
+  - Blueprint templates must use url_for('blueprint.route') not url_for('route') for all routes in the blueprint
+  - Playwright download test: use expect_download() context manager and click the download link instead of goto()
+  - WLC routes use @require_page_enabled("wlc_dashboard") - check _DEFAULT_PAGES in tools/db_jobs.py for correct keys
+  - When adding API endpoints to blueprints, ensure templates reference them with blueprint prefix
+  - Use `pytest tests/e2e/test_wlc.py -v --timeout=120` to run WLC tests
+---
