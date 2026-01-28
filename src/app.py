@@ -73,6 +73,15 @@ def create_app(config_name: Optional[str] = None) -> Flask:
         """Health check endpoint for container orchestration."""
         return {"status": "healthy", "service": "noc-toolkit"}
 
+    # Add index route (redirects to WLC dashboard for now)
+    @app.route("/")
+    def index():
+        """Home page - redirects to main dashboard."""
+        from flask import session
+        if "user_id" not in session:
+            return redirect(url_for("auth.login"))
+        return redirect(url_for("wlc.wlc_dashboard"))
+
     return app
 
 

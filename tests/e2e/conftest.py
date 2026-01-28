@@ -9,10 +9,17 @@ import os
 import subprocess
 import time
 import socket
+import tempfile
 from contextlib import closing
 
 import pytest
 from playwright.sync_api import Page, BrowserContext
+
+# Set up test database path BEFORE importing app
+_test_db_dir = tempfile.mkdtemp(prefix="noc_toolkit_test_")
+_test_db_path = os.path.join(_test_db_dir, "test_noc_toolkit.db")
+os.environ["NOC_TOOLKIT_DB_PATH"] = _test_db_path
+os.environ["NOC_TOOLKIT_DATA_DIR"] = _test_db_dir
 
 # Import app fixtures from main conftest
 from tests.conftest import app, db_session, admin_user, regular_user, page_settings
@@ -93,15 +100,106 @@ def seeded_db(app, live_server):
     Seed the test database with initial data for E2E tests.
 
     Creates admin user and page settings needed for E2E testing.
+    Seeds both SQLAlchemy models AND the SQLite database used by security.py.
     """
+    import sqlite3
+    from werkzeug.security import generate_password_hash
+
+    # Get the SQLite database path that security.py uses
+    db_path = os.environ.get("NOC_TOOLKIT_DB_PATH", _test_db_path)
+
+    # Initialize security tables and seed users directly in SQLite
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Create users table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'user',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_login TEXT,
+            kb_access_level TEXT NOT NULL DEFAULT 'FSR',
+            can_create_kb INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+
+    # Create audit_log table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT NOT NULL,
+            action TEXT NOT NULL,
+            resource TEXT,
+            ip_address TEXT,
+            timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            details TEXT
+        )
+    """)
+
+    # Create page_settings table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS page_settings (
+            page_key TEXT PRIMARY KEY,
+            page_name TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            category TEXT
+        )
+    """)
+
+    # Clear existing data
+    cursor.execute("DELETE FROM users")
+    cursor.execute("DELETE FROM page_settings")
+
+    # Create admin user
+    admin_hash = generate_password_hash("TestPassword123!", method="pbkdf2:sha256")
+    cursor.execute(
+        "INSERT INTO users (username, password_hash, role, kb_access_level, can_create_kb) VALUES (?, ?, ?, ?, ?)",
+        ("admin", admin_hash, "superadmin", "Admin", 1),
+    )
+
+    # Create regular user
+    user_hash = generate_password_hash("TestPassword123!", method="pbkdf2:sha256")
+    cursor.execute(
+        "INSERT INTO users (username, password_hash, role, kb_access_level, can_create_kb) VALUES (?, ?, ?, ?, ?)",
+        ("testuser", user_hash, "user", "FSR", 0),
+    )
+
+    # Create page settings (all enabled)
+    pages = [
+        ("wlc-dashboard", "WLC Dashboard", "WLC Tools"),
+        ("ap-inventory", "AP Inventory", "WLC Tools"),
+        ("solarwinds-nodes", "SolarWinds Nodes", "SolarWinds"),
+        ("solarwinds-inventory", "SolarWinds Inventory", "SolarWinds"),
+        ("bulk-ssh", "Bulk SSH", "SSH Tools"),
+        ("phrase-search", "Phrase Search", "Config"),
+        ("global-config", "Global Config", "Config"),
+        ("cert-tracker", "Certificate Tracker", "Certificates"),
+        ("ise-nodes", "ISE Nodes", "Certificates"),
+        ("knowledge-base", "Knowledge Base", "Documentation"),
+        ("changes", "Change Windows", "Config"),
+    ]
+    for key, name, category in pages:
+        cursor.execute(
+            "INSERT OR REPLACE INTO page_settings (page_key, page_name, enabled, category) VALUES (?, ?, ?, ?)",
+            (key, name, 1, category),
+        )
+
+    conn.commit()
+    conn.close()
+
+    # Also seed SQLAlchemy models for any routes that use them
     with app.app_context():
         from src.models import db, User, PageSettings
 
-        # Clear existing data
+        # Clear SQLAlchemy tables
         User.query.delete()
         PageSettings.query.delete()
 
-        # Create admin user
+        # Create admin user in SQLAlchemy
         admin = User(
             username="admin",
             role="superadmin",
@@ -111,7 +209,7 @@ def seeded_db(app, live_server):
         admin.set_password("TestPassword123!")
         db.session.add(admin)
 
-        # Create regular user
+        # Create regular user in SQLAlchemy
         regular = User(
             username="testuser",
             role="user",
@@ -121,20 +219,7 @@ def seeded_db(app, live_server):
         regular.set_password("TestPassword123!")
         db.session.add(regular)
 
-        # Create page settings (all enabled)
-        pages = [
-            ("wlc-dashboard", "WLC Dashboard", "WLC Tools"),
-            ("ap-inventory", "AP Inventory", "WLC Tools"),
-            ("solarwinds-nodes", "SolarWinds Nodes", "SolarWinds"),
-            ("solarwinds-inventory", "SolarWinds Inventory", "SolarWinds"),
-            ("bulk-ssh", "Bulk SSH", "SSH Tools"),
-            ("phrase-search", "Phrase Search", "Config"),
-            ("global-config", "Global Config", "Config"),
-            ("cert-tracker", "Certificate Tracker", "Certificates"),
-            ("ise-nodes", "ISE Nodes", "Certificates"),
-            ("knowledge-base", "Knowledge Base", "Documentation"),
-            ("changes", "Change Windows", "Config"),
-        ]
+        # Create page settings in SQLAlchemy
         for key, name, category in pages:
             page = PageSettings(
                 page_key=key,
@@ -149,7 +234,15 @@ def seeded_db(app, live_server):
     yield
 
     # Cleanup after test
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users")
+    cursor.execute("DELETE FROM page_settings")
+    conn.commit()
+    conn.close()
+
     with app.app_context():
+        from src.models import db, User, PageSettings
         User.query.delete()
         PageSettings.query.delete()
         db.session.commit()
