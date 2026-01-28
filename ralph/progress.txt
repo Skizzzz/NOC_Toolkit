@@ -245,3 +245,28 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Templates reference external routes like 'changes_list' which remain in app.py
   - Use _apply_inventory_filters() helper to avoid duplicating filter logic across routes
 ---
+
+## 2026-01-27 22:10 CST - US-011
+- What was implemented:
+  - Created src/blueprints/config/routes.py with routes: /tools/phrase-search, /search, /download-csv, /tools/global-config, /global/search, /global/download-csv, /global/actions/*, /changes, /changes/<id>, /changes/<id>/start, /changes/<id>/rollback, /actions/*
+  - Created src/blueprints/config/templates/config/ directory structure
+  - Copied and updated phrase_search.html, global_config.html, changes.html to src/blueprints/config/templates/config/
+  - Updated url_for() calls in templates to use blueprint prefix (config.route_name, solarwinds.solarwinds_nodes)
+  - Updated src/blueprints/config/__init__.py to export config_bp
+  - Registered config blueprint in src/app.py _register_blueprints()
+  - Included helper functions: _solar_node_options(), _parse_hosts_field(), _format_cst(), _parse_cst_datetime(), _new_job_id(), _filter_cli_map(), _run_cli_job_sync(), _start_background_cli_job(), _get_cli_job_state(), _job_outcome(), _start_change_execution(), _start_change_rollback()
+- Files changed:
+  - src/blueprints/config/routes.py (new)
+  - src/blueprints/config/templates/config/phrase_search.html (new)
+  - src/blueprints/config/templates/config/global_config.html (new)
+  - src/blueprints/config/templates/config/changes.html (new)
+  - src/blueprints/config/__init__.py (modified)
+  - src/app.py (modified)
+- **Learnings for future iterations:**
+  - Config blueprint uses url_prefix="" for root-level routes (e.g., /tools/phrase-search, /changes)
+  - Many helper functions were duplicated from app.py to keep the blueprint self-contained
+  - Templates that render shared results (results.html, action_preview.html, action_result.html, change_detail.html, global_config_results.html, action_preview_global.html) remain in root templates/ folder and are used by multiple blueprints
+  - The _CHANGE_WAKE threading.Event is created lazily via _get_change_wake() since it can't be shared between modules
+  - Cross-blueprint references: phrase_search and global_config templates reference solarwinds.solarwinds_nodes for the "Sync from Nodes" link
+  - Action routes (/actions/*, /global/actions/*) handle both synchronous and background job execution
+---
