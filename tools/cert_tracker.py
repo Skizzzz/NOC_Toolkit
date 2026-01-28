@@ -1,5 +1,6 @@
 # tools/cert_tracker.py
 """Certificate tracking and ISE integration module."""
+import logging
 import subprocess
 import tempfile
 import os
@@ -11,6 +12,9 @@ from zoneinfo import ZoneInfo
 import urllib3
 
 urllib3.disable_warnings()
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 def _get_app_tz() -> ZoneInfo:
     """Get the configured application timezone."""
@@ -31,7 +35,7 @@ def get_ise_version(ip: str, username: str, password: str, hostname: str = "") -
     node_name = hostname or ip
 
     # ERS API is the only reliable source for ISE version
-    print(f"[{node_name}] Trying ERS API on port 9060...")
+    logger.debug("[%s] Trying ERS API on port 9060...", node_name)
     try:
         url = f"https://{ip}:9060/ers/config/op/systemconfig/iseversion"
         response = requests.get(
@@ -45,7 +49,7 @@ def get_ise_version(ip: str, username: str, password: str, hostname: str = "") -
             timeout=10
         )
 
-        print(f"[{node_name}] ERS -> HTTP {response.status_code}")
+        logger.debug("[%s] ERS -> HTTP %s", node_name, response.status_code)
 
         if response.status_code == 200:
             data = response.json()
@@ -58,25 +62,25 @@ def get_ise_version(ip: str, username: str, password: str, hostname: str = "") -
                     result["patch"] = item.get("value", "")
 
             if result["version"]:
-                print(f"[{node_name}] Success: version={result['version']}, patch={result['patch']}")
+                logger.info("[%s] Success: version=%s, patch=%s", node_name, result['version'], result['patch'])
                 return result
             else:
-                print(f"[{node_name}] ERS returned 200 but no version found")
+                logger.warning("[%s] ERS returned 200 but no version found", node_name)
         elif response.status_code == 401:
-            print(f"[{node_name}] ERS auth failed - check API credentials have ERS access")
+            logger.warning("[%s] ERS auth failed - check API credentials have ERS access", node_name)
         elif response.status_code == 403:
-            print(f"[{node_name}] ERS forbidden - ERS may not be enabled")
+            logger.warning("[%s] ERS forbidden - ERS may not be enabled", node_name)
         else:
-            print(f"[{node_name}] ERS returned HTTP {response.status_code}")
+            logger.warning("[%s] ERS returned HTTP %s", node_name, response.status_code)
 
     except requests.exceptions.Timeout:
-        print(f"[{node_name}] ERS timeout - port 9060 may be blocked by firewall")
+        logger.warning("[%s] ERS timeout - port 9060 may be blocked by firewall", node_name)
     except requests.exceptions.ConnectionError:
-        print(f"[{node_name}] ERS connection refused - ERS not enabled or port blocked")
+        logger.warning("[%s] ERS connection refused - ERS not enabled or port blocked", node_name)
     except Exception as e:
-        print(f"[{node_name}] ERS error: {e}")
+        logger.error("[%s] ERS error: %s", node_name, e)
 
-    print(f"[{node_name}] Failed - ERS API required for version info")
+    logger.warning("[%s] Failed - ERS API required for version info", node_name)
     return None
 
 
@@ -184,7 +188,7 @@ def pull_ise_certs(nodes: List[Dict[str, str]], callback=None) -> Tuple[List[Dic
     def log(msg):
         if callback:
             callback(msg)
-        print(msg)
+        logger.info(msg)
 
     log(f"Starting ISE cert pull for {len(nodes)} node(s)...")
 
@@ -260,7 +264,7 @@ def pull_ise_certs(nodes: List[Dict[str, str]], callback=None) -> Tuple[List[Dic
         except Exception as e:
             errors.append(f"{hostname}: {str(e)}")
             log(f"Exception when contacting {ip}: {e}")
-            traceback.print_exc()
+            logger.debug("Traceback: %s", traceback.format_exc())
 
     log(f"Finished ISE cert pull. Found {len(certs)} total certs, {len(errors)} errors.")
     return certs, errors

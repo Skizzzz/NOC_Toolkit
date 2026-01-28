@@ -12,8 +12,8 @@ from typing import Optional
 class Config:
     """Base configuration class with common settings."""
 
-    # Flask core settings
-    SECRET_KEY: str = os.environ.get("FLASK_SECRET_KEY", "")
+    # Flask core settings - no default value, must be explicitly set
+    SECRET_KEY: str = os.environ.get("FLASK_SECRET_KEY") or ""
 
     # Database settings - PostgreSQL by default
     SQLALCHEMY_DATABASE_URI: str = os.environ.get(
@@ -60,7 +60,8 @@ class ProductionConfig(Config):
     TESTING: bool = False
 
     # Require SECRET_KEY in production - validated in create_app()
-    SECRET_KEY: str = os.environ.get("FLASK_SECRET_KEY", "")
+    # No default value - will raise RuntimeError in create_app if not set
+    SECRET_KEY: str = os.environ.get("FLASK_SECRET_KEY") or ""
 
     # Strict security settings
     SESSION_COOKIE_SECURE: bool = True

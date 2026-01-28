@@ -3,6 +3,7 @@ Security utilities for NOC Toolkit
 Provides password encryption, authentication, and access control
 """
 
+import logging
 import os
 import sqlite3
 from functools import wraps
@@ -10,6 +11,9 @@ from typing import Optional
 from flask import session, redirect, url_for, flash, request
 from cryptography.fernet import Fernet
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 # Database path
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "noc_toolkit.db")
@@ -143,8 +147,8 @@ def init_security_db():
             ("admin", password_hash, "superadmin")
         )
         conn.commit()
-        print(f"[SECURITY] Default superadmin created - username: admin, password: {default_password}")
-        print("[SECURITY] CHANGE THIS PASSWORD IMMEDIATELY!")
+        # Log user creation without exposing password
+        logger.info("Default superadmin user 'admin' created. Use setup wizard or NOC_ADMIN_PASSWORD env var to set password.")
 
     conn.close()
 
@@ -354,12 +358,12 @@ def migrate_existing_passwords():
             # Try to decrypt - if it fails, it's plaintext
             try:
                 decrypt_password(row[1])
-                print("[SECURITY] Passwords already encrypted")
+                logger.debug("Stored credentials already encrypted")
                 conn.close()
                 return
             except Exception:
                 # Plaintext detected, migrate
-                print("[SECURITY] Migrating plaintext passwords to encrypted...")
+                logger.info("Migrating stored credentials to encrypted format...")
                 cursor.execute("SELECT id, password, secret FROM wlc_dashboard_settings")
                 for row_id, password, secret in cursor.fetchall():
                     encrypted_pass = encrypt_password(password) if password else ""
@@ -369,8 +373,8 @@ def migrate_existing_passwords():
                         (encrypted_pass, encrypted_secret, row_id)
                     )
                 conn.commit()
-                print("[SECURITY] Password migration complete")
+                logger.info("Credential migration complete")
     except Exception as e:
-        print(f"[SECURITY] Migration error: {e}")
+        logger.error("Credential migration error: %s", e)
 
     conn.close()
