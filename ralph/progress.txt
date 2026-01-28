@@ -270,3 +270,30 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Cross-blueprint references: phrase_search and global_config templates reference solarwinds.solarwinds_nodes for the "Sync from Nodes" link
   - Action routes (/actions/*, /global/actions/*) handle both synchronous and background job execution
 ---
+
+## 2026-01-27 22:45 CST - US-012
+- What was implemented:
+  - Created src/blueprints/bulk_ssh/routes.py with routes: /tools/bulk-ssh, /tools/bulk-ssh/execute, /tools/bulk-ssh/results/<job_id>, /tools/bulk-ssh/jobs, /tools/bulk-ssh/templates, /tools/bulk-ssh/templates/create, /tools/bulk-ssh/templates/<id>/update, /tools/bulk-ssh/templates/<id>/delete, /tools/bulk-ssh/templates/seed-defaults, /tools/bulk-ssh/schedules, /tools/bulk-ssh/schedules/create, /tools/bulk-ssh/schedules/<id>/toggle, /tools/bulk-ssh/schedules/<id>/delete, /api/bulk-ssh/status/<job_id>, /api/bulk-ssh/export/<job_id>, /api/bulk-ssh/templates, /api/bulk-ssh/templates/<id>
+  - Created src/blueprints/bulk_ssh/templates/bulk_ssh/ directory structure
+  - Copied and updated templates: bulk_ssh.html, bulk_ssh_templates.html, bulk_ssh_schedules.html, bulk_ssh_results.html, bulk_ssh_jobs.html
+  - Updated url_for() calls in all templates to use blueprint prefix (bulk_ssh.route_name)
+  - Updated src/blueprints/bulk_ssh/__init__.py to export bulk_ssh_bp
+  - Registered bulk_ssh blueprint in src/app.py _register_blueprints()
+- Files changed:
+  - src/blueprints/bulk_ssh/routes.py (new)
+  - src/blueprints/bulk_ssh/templates/bulk_ssh/bulk_ssh.html (new)
+  - src/blueprints/bulk_ssh/templates/bulk_ssh/bulk_ssh_templates.html (new)
+  - src/blueprints/bulk_ssh/templates/bulk_ssh/bulk_ssh_schedules.html (new)
+  - src/blueprints/bulk_ssh/templates/bulk_ssh/bulk_ssh_results.html (new)
+  - src/blueprints/bulk_ssh/templates/bulk_ssh/bulk_ssh_jobs.html (new)
+  - src/blueprints/bulk_ssh/__init__.py (modified)
+  - src/app.py (modified)
+- **Learnings for future iterations:**
+  - Bulk SSH blueprint uses url_prefix="" for root-level routes (e.g., /tools/bulk-ssh)
+  - Routes include both view routes AND API routes for status polling and CSV export
+  - Template create/update/delete routes are POST-only for CRUD operations
+  - Schedule routes handle different schedule types (once, daily, weekly) with timezone-aware datetime calculations
+  - The execute route spawns a background thread using threading.Thread(target=run_job, daemon=True)
+  - Templates redirect to job_progress_page (in root app.py) for unified job progress tracking
+  - CST timezone handling uses zoneinfo.ZoneInfo with pytz fallback for Python 3.8 compatibility
+---
