@@ -783,3 +783,20 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Playwright in Python doesn't support JavaScript regex syntax - use string matching instead
   - Use `pytest tests/e2e/test_bulk_ssh.py -v --timeout=120` to run Bulk SSH tests
 ---
+
+## 2026-01-27 - US-032
+- What was implemented:
+  - Created tests/e2e/test_certs.py with 38 comprehensive E2E tests for Certificate Tracker functionality
+  - TestCertificateTracker: 10 tests covering page load, header, stats cards, filter bar, upload button, export button, converter link, ISE nodes link, view chain button, and empty state
+  - TestISENodes: 10 tests covering page load, header, add button, sync all button, fetch versions button, auto-sync settings, add form toggle, add form fields, back link, and empty state
+  - TestCertificateConverter: 8 tests covering page load, header, back link, PFX to CRT option, CRT+KEY to PFX option, DER/PEM options, conversion cards grid, and convert buttons
+  - TestCertificateAccessControl: 6 tests covering unauthenticated redirects and regular user access for all three pages
+  - TestCertificateNavigation: 4 tests covering navigation between certificate tracker, ISE nodes, and converter pages
+- Files changed:
+  - tests/e2e/test_certs.py (new - 594 lines)
+- **Learnings for future iterations:**
+  - Use `get_by_role("link", name="...", exact=True)` when links have partial text matches (e.g., "ISE Nodes" vs "Configure ISE Nodes")
+  - Use `.first` locator when elements appear in multiple places (e.g., buttons in both header and empty state)
+  - The empty state section in cert_tracker.html contains duplicate buttons ("Upload Certificate", "Configure ISE Nodes")
+  - Use `pytest tests/e2e/test_certs.py -v --timeout=120` to run Certificate Tracker tests
+---
