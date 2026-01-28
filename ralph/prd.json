@@ -1,384 +1,553 @@
 {
   "project": "NOC Toolkit",
-  "branchName": "ralph/production-readiness",
-  "description": "Production Readiness & New Features - Audit existing tools, add timezone configuration, auto-updating AP inventory, and SolarWinds hardware/software inventory",
+  "branchName": "ralph/noc-toolkit-production-readiness",
+  "description": "Production Readiness - Docker deployment, Flask blueprints restructure, PostgreSQL migration, security improvements, deprecated feature removal, and Playwright E2E tests",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Audit WLC Dashboard and Polling System",
-      "description": "As a NOC engineer, I need the WLC Dashboard to reliably poll and display wireless statistics so I can monitor the network in real-time.",
+      "title": "Create Docker and Docker Compose Configuration",
+      "description": "As a DevOps engineer, I want to deploy NOC Toolkit with a single docker-compose up command so that new machine setup takes minutes instead of hours.",
       "acceptanceCriteria": [
-        "Verify WLC dashboard settings save/load correctly",
-        "Confirm polling interval works as configured",
-        "Validate time-series data storage and retrieval (24h, 3d, 7d, 30d ranges)",
-        "Test both Cisco 9800 and Aruba AOS controller support",
-        "Verify stat cards and graphs render correctly",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create Dockerfile with Python 3.11+ base image",
+        "Create docker-compose.yml with services: app, postgres",
+        "Create .env.example with all required environment variables documented",
+        "Create docker-entrypoint.sh that handles database initialization",
+        "Create health check endpoint /health that returns 200 when app is ready",
+        "PostgreSQL data persists in named volume",
+        "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Fixed Aruba settings persistence bug - aruba_hosts and aruba_enabled were not saved/loaded from DB"
+      "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Audit Bulk SSH Tool and Templates",
-      "description": "As a NOC engineer, I need the Bulk SSH tool to reliably execute commands across multiple devices so I can perform bulk operations.",
+      "title": "Create Production-Ready Requirements and Dependencies",
+      "description": "As a developer, I want clearly separated development and production dependencies so that production images are lean and secure.",
       "acceptanceCriteria": [
-        "Verify template creation, editing, and deletion works",
-        "Test command execution against multiple devices",
-        "Validate variable substitution in templates",
-        "Confirm results are properly stored and displayed",
-        "Test CSV export of results",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create requirements/base.txt with core dependencies",
+        "Create requirements/prod.txt extending base with gunicorn, psycopg2-binary",
+        "Create requirements/dev.txt extending base with pytest, playwright, black, flake8",
+        "Update Dockerfile to use requirements/prod.txt",
+        "Add pyproject.toml for modern Python project configuration",
+        "All imports resolve successfully after restructure",
+        "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "All functionality verified working - templates CRUD, variable substitution, job execution, results display, CSV export"
+      "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Audit Bulk SSH Scheduling System",
-      "description": "As a NOC engineer, I need scheduled SSH jobs to execute at the correct times so automated tasks run reliably.",
+      "title": "Create Project Documentation for GitHub",
+      "description": "As a new contributor, I want clear documentation so that I can understand how to set up, run, and contribute to the project.",
       "acceptanceCriteria": [
-        "Verify schedule creation (one-time, cron, interval)",
-        "Confirm next_run calculation is accurate",
-        "Test that scheduled jobs execute within 60 seconds of due time",
-        "Validate schedule enable/disable functionality",
-        "Verify execution history is recorded",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create/update README.md with project overview, features, and quick start",
+        "Create docs/DEPLOYMENT.md with production deployment guide",
+        "Create docs/DEVELOPMENT.md with local development setup",
+        "Create docs/CONTRIBUTING.md with contribution guidelines",
+        "Create CHANGELOG.md for version history"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Fixed timezone mismatch in schedule_worker.py and db_jobs.py. Added schedule creation UI modal. Verified one-time, daily, weekly schedules work. Enable/disable toggle verified. Note: System supports once/daily/weekly (not cron expressions)."
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Audit Change Management Workflow",
-      "description": "As a NOC engineer, I need the change management system to schedule and execute changes at the correct times with proper audit trails.",
+      "title": "Create Blueprint Directory Structure",
+      "description": "As a developer, I want the codebase organized by feature domain so that I can quickly find and modify related code.",
       "acceptanceCriteria": [
-        "Verify change window creation with scheduled datetime",
-        "Confirm changes execute when scheduled time arrives",
-        "Test rollback functionality works correctly",
-        "Validate change event audit trail is complete",
-        "Verify change status transitions (pending -> running -> completed/failed)",
-        "Test that apply and rollback CLI payloads execute correctly",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/ directory as main package with __init__.py",
+        "Create src/blueprints/ directory with subdirectories: auth/, admin/, wlc/, solarwinds/, config/, bulk_ssh/, certs/, jobs/, kb/, api/",
+        "Each blueprint directory contains __init__.py",
+        "Create src/core/ for shared utilities (db, security, helpers) with __init__.py",
+        "Create src/models/ for database models with __init__.py",
+        "Typecheck passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Added missing CSS status classes (scheduled, running, rollback-running, rolled-back, rollback-failed). All functionality verified: change creation, scheduled execution, rollback, status transitions, audit trail."
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Audit SolarWinds Integration",
-      "description": "As a NOC engineer, I need SolarWinds integration to reliably sync node data so I can use it as a source for other tools.",
+      "title": "Create Application Factory and Config Classes",
+      "description": "As a developer, I want the app to use the factory pattern so that testing and configuration is easier.",
       "acceptanceCriteria": [
-        "Verify settings page saves credentials correctly",
-        "Test connection validation works",
-        "Confirm node sync fetches all expected fields",
-        "Validate organization mapping works",
-        "Test that nodes display correctly in the UI",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/config.py with configuration classes (Development, Production, Testing)",
+        "Create src/app.py with create_app(config_name) factory function stub",
+        "Create wsgi.py as production entry point that calls create_app",
+        "Factory function initializes Flask app with config",
+        "Typecheck passes"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "All functionality verified working - settings persistence, connection polling, node sync (17028 nodes), organization mapping via CustomProperties.Organization, filtering, pagination. No issues found."
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Audit WLC Summer Guest Automation",
-      "description": "As a NOC engineer, I need the Summer Guest WLAN automation to enable/disable WLANs at the correct times.",
+      "title": "Extract Core Utilities to src/core",
+      "description": "As a developer, I want shared utilities in a dedicated module so they can be imported by all blueprints.",
       "acceptanceCriteria": [
-        "Verify settings configuration saves correctly",
-        "Confirm scheduled enable/disable executes at configured time",
-        "Test timezone-aware scheduling works",
-        "Validate WLAN state changes are logged",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/core/database.py with database connection utilities from tools/db_jobs.py",
+        "Create src/core/security.py by copying tools/security.py",
+        "Create src/core/helpers.py with shared helper functions",
+        "Update imports in core modules to be relative",
+        "Typecheck passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "All functionality verified working - settings persistence (username, password, poll time, timezone, enable scheduler), timezone-aware scheduling with configurable IANA timezone, WLAN toggle/schedule logged to audit trail (wlc-summer-toggle, wlc_wlan_toggle, wlc_wlan_schedule), change windows integration for scheduled enable/disable. No issues found."
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Audit Certificate Tracker and ISE Sync",
-      "description": "As a NOC engineer, I need certificate tracking to reliably monitor expiration dates and sync from ISE nodes.",
+      "title": "Extract Auth Blueprint Routes",
+      "description": "As a developer, I want authentication routes in a dedicated blueprint so that auth logic is isolated and testable.",
       "acceptanceCriteria": [
-        "Verify certificate upload and parsing works",
-        "Confirm expiration calculations are accurate",
-        "Test ISE node sync functionality",
-        "Validate scheduled sync runs at configured interval",
-        "Test certificate deletion works",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/blueprints/auth/routes.py with routes: /login, /logout, /profile",
+        "Create src/blueprints/auth/templates/ directory",
+        "Move login.html to src/blueprints/auth/templates/",
+        "Move profile.html to src/blueprints/auth/templates/",
+        "Register blueprint in app factory",
+        "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "Fixed 4 API call bugs where routes passed dicts instead of keyword args to insert_ise_node(), update_certificate(), update_ise_node(). All functionality verified working - cert upload/parsing, expiration calculations, ISE node CRUD, scheduled sync, delete."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Audit Device Inventory Tool",
-      "description": "As a NOC engineer, I need the device inventory to reliably scan and store hardware/firmware information.",
+      "title": "Extract Admin Blueprint Routes",
+      "description": "As a developer, I want admin routes in a dedicated blueprint so that administrative functions are clearly separated.",
       "acceptanceCriteria": [
-        "Verify device scanning works for all supported vendors (Cisco IOS, IOS-XE, NX-OS, Aruba)",
-        "Confirm inventory data is stored correctly",
-        "Test CSV export functionality",
-        "Validate SolarWinds node linking",
-        "Test device deletion from inventory",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/blueprints/admin/routes.py with routes: /admin/users, /admin/settings, /admin/page-settings",
+        "Create src/blueprints/admin/templates/ directory",
+        "Move admin_users.html to src/blueprints/admin/templates/",
+        "Move admin_settings.html to src/blueprints/admin/templates/",
+        "Move admin_page_settings.html to src/blueprints/admin/templates/",
+        "Register blueprint in app factory",
+        "Typecheck passes"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "All functionality verified working - SolarWinds data display (17028 nodes), vendor filtering, search, CSV export, device scanning for Cisco IOS/IOS-XE/NX-OS/Aruba/Dell, database CRUD operations, superadmin delete restriction. No issues found."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Audit Topology Builder",
-      "description": "As a NOC engineer, I need the topology builder to reliably discover network neighbors and visualize topology.",
+      "title": "Extract WLC Blueprint Routes",
+      "description": "As a developer, I want WLC-related routes in a dedicated blueprint so that wireless controller features are grouped together.",
       "acceptanceCriteria": [
-        "Verify CDP/LLDP neighbor collection works",
-        "Confirm multi-vendor support (Cisco, Dell, etc.)",
-        "Test topology visualization renders correctly",
-        "Validate device type auto-detection",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/blueprints/wlc/routes.py with routes: /tools/wlc (menu), /tools/wlc/dashboard, /tools/wlc/ap-inventory, /tools/wlc/summer-guest, /tools/wlc-rf, /tools/wlc-rf-troubleshoot, /tools/wlc-clients-troubleshoot",
+        "Create src/blueprints/wlc/templates/ directory",
+        "Move wlc_dashboard.html, ap_inventory.html, wlc_summer_guest.html, wlc_rf.html to src/blueprints/wlc/templates/",
+        "Register blueprint in app factory",
+        "Typecheck passes"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "All functionality verified working - CDP/LLDP parsing, multi-vendor support (Cisco IOS/XE, Dell OS10/Force10/PowerConnect), Cytoscape.js graph visualization with dagre layout, device type auto-detection with fallback, SolarWinds inventory annotation, CSV export. No issues found."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Audit Authentication and Admin Panel",
-      "description": "As a NOC engineer, I need authentication and admin features to work securely and reliably.",
+      "title": "Extract SolarWinds Blueprint Routes",
+      "description": "As a developer, I want SolarWinds routes in a dedicated blueprint so that inventory features are cleanly organized.",
       "acceptanceCriteria": [
-        "Verify login/logout functionality",
-        "Confirm user creation and role assignment works",
-        "Test password change functionality",
-        "Validate page settings (feature visibility) work",
-        "Confirm audit logging captures all actions",
-        "Test KB access level permissions",
-        "Document any issues found and fixes applied in progress.txt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/blueprints/solarwinds/routes.py with routes: /tools/solarwinds/nodes, /tools/solarwinds/inventory, /api/solarwinds/nodes",
+        "Create src/blueprints/solarwinds/templates/ directory",
+        "Move solarwinds_nodes.html, solarwinds_inventory.html to src/blueprints/solarwinds/templates/",
+        "Register blueprint in app factory",
+        "Typecheck passes"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "All functionality verified working - login/logout, user creation with roles (user/superadmin), password change with validation, page settings toggle (enable/disable pages), audit logging via SQLite (auth actions) and CSV (config changes), KB access levels (FSR/NOC/Admin) with can_create_kb permission. No issues found."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-011",
-      "title": "Add Timezone Configuration to Admin Panel",
-      "description": "As an admin, I want to configure the application timezone so all scheduled operations use the correct local time.",
+      "title": "Extract Config Blueprint Routes",
+      "description": "As a developer, I want configuration management routes in a dedicated blueprint.",
       "acceptanceCriteria": [
-        "Add app_settings table with timezone field (default: 'America/Chicago')",
-        "Create admin settings page at /admin/settings for timezone configuration",
-        "Add timezone dropdown with common US timezones (EST, CST, MST, PST, etc.)",
-        "Display current configured timezone on settings page",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/blueprints/config/routes.py with routes: /tools/phrase-search, /search, /download-csv, /tools/global-config, /global/*, /changes, /changes/<id>, /actions/*",
+        "Create src/blueprints/config/templates/ directory",
+        "Move phrase_search.html, global_config.html, changes.html to src/blueprints/config/templates/",
+        "Register blueprint in app factory",
+        "Typecheck passes"
       ],
       "priority": 11,
-      "passes": true,
-      "notes": "Added app_settings table with timezone field, created /admin/settings page with timezone dropdown (7 US timezones), added get_app_timezone() and get_app_timezone_info() helpers, updated admin tabs on all admin pages."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-012",
-      "title": "Integrate Timezone Setting into Scheduling Systems",
-      "description": "As a NOC engineer, I need all scheduled operations to respect the configured timezone so changes execute at the correct local time.",
+      "title": "Extract Bulk SSH Blueprint Routes",
+      "description": "As a developer, I want bulk SSH routes in a dedicated blueprint.",
       "acceptanceCriteria": [
-        "Update change window scheduler to use configured timezone",
-        "Update bulk SSH scheduler to use configured timezone",
-        "Update WLC Summer Guest scheduler to use configured timezone",
-        "Update certificate sync scheduler to use configured timezone",
-        "Update WLC dashboard polling display to show times in configured timezone",
-        "Add get_app_timezone() helper function",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/blueprints/bulk_ssh/routes.py with routes: /tools/bulk-ssh, /tools/bulk-ssh/templates, /tools/bulk-ssh/schedules, /tools/bulk-ssh/results/<job_id>, /api/bulk-ssh/*",
+        "Create src/blueprints/bulk_ssh/templates/ directory",
+        "Move bulk_ssh.html, bulk_ssh_templates.html, bulk_ssh_schedules.html, bulk_ssh_results.html to src/blueprints/bulk_ssh/templates/",
+        "Register blueprint in app factory",
+        "Typecheck passes"
       ],
       "priority": 12,
-      "passes": true,
-      "notes": "Updated all schedulers to use get_app_timezone_info() instead of hardcoded CST. Modified: app.py (_format_cst, _parse_cst_datetime, _summer_timezone, changes_list), schedule_worker.py (_get_app_tz), db_jobs.py (fetch_due_bulk_ssh_schedules), cert_tracker.py (get_days_until_expiry), changes.html (dynamic timezone display)."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-013",
-      "title": "Create Auto-Updating AP Inventory Database Schema",
-      "description": "As a developer, I need database tables to store the auto-updating AP inventory with proper deduplication.",
+      "title": "Extract Certs Blueprint Routes",
+      "description": "As a developer, I want certificate management routes in a dedicated blueprint.",
       "acceptanceCriteria": [
-        "Create ap_inventory table with fields: ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state, slots, country, wlc_host, first_seen, last_seen",
-        "Add unique constraint on (ap_mac, wlc_host) to prevent duplicates",
-        "Create index on last_seen for efficient cleanup queries",
-        "Create ap_inventory_settings table for configuration",
+        "Create src/blueprints/certs/routes.py with routes: /certs, /certs/<id>, /certs/upload, /cert-converter, /cert-chain, /ise-nodes",
+        "Create src/blueprints/certs/templates/ directory",
+        "Move certs.html, cert_detail.html, ise_nodes.html to src/blueprints/certs/templates/",
+        "Register blueprint in app factory",
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": true,
-      "notes": "Created ap_inventory table with all required fields (ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state, slots, country, wlc_host, first_seen, last_seen). Added unique index on (ap_mac, wlc_host), index on last_seen. Created ap_inventory_settings table. Added CRUD functions: load/save_ap_inventory_settings, upsert_ap_inventory, upsert_ap_inventory_bulk, list_ap_inventory, get_ap_inventory, delete_ap_inventory, cleanup_stale_ap_inventory, get_ap_inventory_stats, clear_ap_inventory."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-014",
-      "title": "Implement AP Inventory Polling During Dashboard Updates",
-      "description": "As a NOC engineer, I want AP inventory to update automatically during normal WLC polling so I always have current data.",
+      "title": "Extract Jobs Blueprint Routes",
+      "description": "As a developer, I want job management routes in a dedicated blueprint.",
       "acceptanceCriteria": [
-        "Extend dashboard polling to collect AP details (name, IP, model, MAC, location, state, slots, country)",
-        "Insert new APs with first_seen = now, last_seen = now",
-        "Update existing APs' last_seen timestamp on each poll",
-        "Only insert if AP MAC + WLC host combo doesn't exist (no duplicates)",
-        "Track which WLC controller each AP belongs to",
+        "Create src/blueprints/jobs/routes.py with routes: /jobs, /jobs/<job_id>, /api/jobs, /api/jobs/<job_id>/progress",
+        "Create src/blueprints/jobs/templates/ directory",
+        "Move jobs.html, job_detail.html to src/blueprints/jobs/templates/",
+        "Register blueprint in app factory",
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": true,
-      "notes": "Extended _collect_wlc_snapshot() and get_aruba_snapshot() to collect AP details. Added _parse_cisco_ap_summary() and _parse_aruba_ap_database() parsers. Modified _dashboard_poll_once() to call upsert_ap_inventory_bulk() for each host. Cisco uses ether_mac from 'show ap summary'. Aruba generates pseudo-MAC from AP name hash when MAC not available."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-015",
-      "title": "Implement AP Inventory Cleanup (5-Day Stale Removal)",
-      "description": "As a NOC engineer, I want APs not seen for 5+ days to be automatically removed so the inventory stays current.",
+      "title": "Extract Knowledge Base Blueprint Routes",
+      "description": "As a developer, I want knowledge base routes in a dedicated blueprint.",
       "acceptanceCriteria": [
-        "Add cleanup function that runs after each AP inventory update",
-        "Delete AP records where last_seen < (now - 5 days)",
-        "Log removed APs for audit purposes",
-        "Do not remove APs that were just added (protect against clock issues)",
+        "Create src/blueprints/kb/routes.py with routes: /knowledge-base, /knowledge-base/create, /knowledge-base/<id>, /knowledge-base/<id>/edit",
+        "Create src/blueprints/kb/templates/ directory",
+        "Move knowledge_base.html, kb_article.html, kb_edit.html to src/blueprints/kb/templates/",
+        "Register blueprint in app factory",
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": true,
-      "notes": "Modified cleanup_stale_ap_inventory() to return list of removed APs. Added cleanup call after AP inventory updates in _dashboard_poll_once(). Each removed AP is logged via log_audit() with ap_inventory_cleanup action, including AP name, MAC, model, WLC host, and last seen timestamp. Clock issue protection preserved from US-013."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-016",
-      "title": "Create AP Inventory Dashboard Page",
-      "description": "As a NOC engineer, I want a dedicated page to view the auto-updating AP inventory with filtering and export options.",
+      "title": "Update Base Template and Static Files",
+      "description": "As a developer, I want the base template to work with the new blueprint structure.",
       "acceptanceCriteria": [
-        "Create /tools/wlc/ap-inventory route and template",
-        "Display AP inventory table with all fields including WLC host",
-        "Add search/filter by AP name, model, WLC, location",
-        "Show first_seen and last_seen timestamps",
-        "Add total AP count summary",
-        "Group or filter by WLC controller",
-        "Add navigation from WLC dashboard",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Move base.html to src/templates/base.html",
+        "Move static/ directory to src/static/",
+        "Update Flask app config for template and static folders",
+        "Update url_for() calls in base.html to use blueprint prefixes where needed",
+        "Typecheck passes"
       ],
       "priority": 16,
-      "passes": true,
-      "notes": "Created /tools/wlc/ap-inventory route and ap_inventory.html template. Features: stats cards by WLC, filters for name/WLC/model/location, table with all fields (name, IP, model, MAC, location, state, WLC host, first_seen, last_seen), model distribution summary, navigation pills linking to Dashboard/Settings, CSV export route. Added AP Inventory button to WLC dashboard header."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-017",
-      "title": "Implement AP Inventory CSV Export",
-      "description": "As a NOC engineer, I want to download the AP inventory as CSV for reporting and analysis.",
+      "title": "Create PostgreSQL Database Models - User and Settings",
+      "description": "As a developer, I want SQLAlchemy models for users and settings so the application works with PostgreSQL.",
       "acceptanceCriteria": [
-        "Add CSV export button to AP inventory page",
-        "Export includes all fields: AP Name, IP, Model, MAC, Location, State, Slots, Country, WLC Host, First Seen, Last Seen",
-        "Apply current filters to export (filtered export)",
-        "Filename format: ap_inventory_YYYY-MM-DD.csv",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Add Flask-SQLAlchemy and psycopg2-binary to requirements/base.txt",
+        "Create src/models/user.py with User and Session models",
+        "Create src/models/settings.py with AppSettings and PageSettings models",
+        "Models include proper indexes matching current SQLite schema",
+        "Typecheck passes"
       ],
       "priority": 17,
-      "passes": true,
-      "notes": "CSV export was fully implemented in US-016. Verified: Export CSV button in header, all fields exported (AP Name, IP, Model, MAC, Location, State, Slots, Country, WLC Host, First Seen, Last Seen), filters passed via request.args, filename format ap_inventory_YYYY-MM-DD.csv verified."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-018",
-      "title": "Create SolarWinds Hardware/Software Inventory Schema",
-      "description": "As a developer, I need database tables to store hardware/software inventory data from SolarWinds for CVE analysis.",
+      "title": "Create PostgreSQL Database Models - Jobs and Events",
+      "description": "As a developer, I want SQLAlchemy models for jobs and events.",
       "acceptanceCriteria": [
-        "Extend solarwinds_nodes table or create sw_inventory table with: node_id, hostname, vendor, model, hardware_version, software_version, ip_address, organization, last_synced",
-        "Add indexes for efficient searching by vendor, model, software_version",
-        "Ensure data is populated from existing SolarWinds sync",
+        "Create src/models/job.py with Job and JobEvent models",
+        "Create src/models/audit.py with AuditLog model",
+        "Foreign key relationships defined correctly",
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": true,
-      "notes": "Extended solarwinds_nodes table with hardware_version column. Added indexes for vendor, model, version, hardware_version. Updated replace_solarwinds_nodes() and fetch_solarwinds_nodes() to handle hardware_version. Added SysDescription to SolarWinds API query and _extract_hardware_version() parser."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-019",
-      "title": "Create SolarWinds Inventory Dashboard Page",
-      "description": "As a NOC engineer, I want a dashboard to view and search hardware/software inventory so I can assess CVE impact.",
+      "title": "Create PostgreSQL Database Models - WLC and SolarWinds",
+      "description": "As a developer, I want SQLAlchemy models for WLC and SolarWinds data.",
       "acceptanceCriteria": [
-        "Create /tools/solarwinds/inventory route and template",
-        "Display summary charts: device count by vendor, devices by software version",
-        "Add searchable/filterable data table with all inventory fields",
-        "Enable multi-select filters for vendor, model, software version",
-        "Show total device counts per filter selection",
-        "Add navigation from SolarWinds nodes page",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/models/wlc.py with WLCDashboardSettings, WLCSample, APInventory models",
+        "Create src/models/solarwinds.py with SolarWindsSettings, SolarWindsNode models",
+        "Models include proper indexes",
+        "Typecheck passes"
       ],
       "priority": 19,
-      "passes": true,
-      "notes": "Created /tools/solarwinds/inventory route with summary charts (vendor/version bar charts), multi-select filters, searchable table with all fields (hostname, IP, org, vendor, model, software/hardware version), CSV export. Added navigation pills to SolarWinds nodes page."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-020",
-      "title": "Implement SolarWinds Inventory Search and Aggregation",
-      "description": "As a NOC engineer, I want to search inventory by version and see counts so I can quickly assess CVE exposure.",
+      "title": "Create PostgreSQL Database Models - Bulk SSH and Config",
+      "description": "As a developer, I want SQLAlchemy models for bulk SSH and config management.",
       "acceptanceCriteria": [
-        "Add search box for software version (partial match supported)",
-        "Display aggregated counts: X devices running version Y",
-        "Allow clicking version count to see device list",
-        "Support regex or wildcard search for version ranges",
-        "Show results grouped by vendor -> model -> version hierarchy",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/models/bulk_ssh.py with BulkSSHJob, BulkSSHResult, BulkSSHTemplate, BulkSSHSchedule models",
+        "Create src/models/config.py with ChangeWindow and ChangeEvent models",
+        "Models include proper indexes",
+        "Typecheck passes"
       ],
       "priority": 20,
-      "passes": true,
-      "notes": "Added version search with wildcard (*) and regex (re:pattern) support. Created vendor→model→version hierarchy view with expand/collapse. Clicking version count filters to show matching devices. Aggregated counts display X devices running version Y."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-021",
-      "title": "Implement SolarWinds Inventory Export",
-      "description": "As a NOC engineer, I want to export inventory search results for CVE reports and remediation tracking.",
+      "title": "Create PostgreSQL Database Models - Certs and KB",
+      "description": "As a developer, I want SQLAlchemy models for certificates and knowledge base.",
       "acceptanceCriteria": [
-        "Add CSV export for full inventory",
-        "Add CSV export for current search/filter results",
-        "Include all fields: hostname, vendor, model, hardware_version, software_version, ip_address, organization",
-        "Add aggregation summary export (counts per version)",
-        "Filename format: solarwinds_inventory_YYYY-MM-DD.csv",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create src/models/cert.py with Certificate, ISENode, CertSyncSettings models",
+        "Create src/models/kb.py with KBArticle model",
+        "Models include proper indexes",
+        "Typecheck passes"
       ],
       "priority": 21,
-      "passes": true,
-      "notes": "Added /tools/solarwinds/inventory/export-summary route for aggregation CSV export. Full inventory export verified at /export with all required fields. Summary export provides vendor→model→version hierarchy with device counts. Both exports support current filters and use YYYY-MM-DD filename format."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-022",
-      "title": "Create Production Readiness Documentation",
-      "description": "As a NOC engineer, I need documentation of all audit findings and a runbook for using the toolkit in production.",
+      "title": "Create Database Migration System",
+      "description": "As a developer, I want Alembic migrations so that database schema changes are versioned and reproducible.",
       "acceptanceCriteria": [
-        "Create docs/audit-findings.md with all issues found and fixes applied",
-        "Create docs/production-runbook.md with operational procedures",
-        "Document all scheduled job systems and their timing behavior",
-        "Document timezone configuration and its effects",
-        "Include troubleshooting guide for common issues",
-        "Document the new AP inventory and SolarWinds inventory features"
+        "Add Flask-Migrate (Alembic) to requirements/base.txt",
+        "Initialize migrations directory with flask db init",
+        "Create initial migration with all models",
+        "Create scripts/init_db.py for first-time database setup",
+        "Typecheck passes"
       ],
       "priority": 22,
-      "passes": true,
-      "notes": "Created docs/audit-findings.md documenting 9 issues found and fixed across 10 audited systems. Created docs/production-runbook.md with system overview, installation, database configuration, timezone configuration, 5 scheduled job systems documentation, AP inventory and SolarWinds inventory feature documentation, and comprehensive troubleshooting guide."
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Create First-Run Setup Wizard",
+      "description": "As an administrator, I want a web-based setup wizard on first run so that I can securely set the admin password without it appearing in logs.",
+      "acceptanceCriteria": [
+        "Detect first-run state (no users in database)",
+        "Create src/blueprints/setup/ blueprint with setup wizard routes",
+        "Redirect all routes to /setup when in first-run state",
+        "Setup wizard page collects: admin username, admin password with confirmation",
+        "Password validation: minimum 12 characters",
+        "After setup, redirect to login page",
+        "Setup route returns 404 after initial setup complete",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Remove Password Logging and Improve Security",
+      "description": "As a security engineer, I want no passwords logged to console or files so that credentials are not exposed.",
+      "acceptanceCriteria": [
+        "Remove print() statement logging default password in security.py:146",
+        "Audit all print() statements for credential exposure and remove any found",
+        "Replace print statements with proper Python logging",
+        "Remove default value from FLASK_SECRET_KEY - require it in production",
+        "Application refuses to start in production without FLASK_SECRET_KEY",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Remove Deprecated Device Inventory Page",
+      "description": "As a product owner, I want the deprecated /tools/device-inventory page removed so that users use the SolarWinds-based inventory instead.",
+      "acceptanceCriteria": [
+        "Remove /tools/device-inventory route and related routes from app.py",
+        "Remove templates/device_inventory.html",
+        "Remove device_inventory functions from db_jobs.py",
+        "Update navigation to remove Device Inventory link",
+        "Update page_settings to remove device-inventory entry",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Set Up Playwright Test Infrastructure",
+      "description": "As a developer, I want a Playwright test infrastructure so that I can write and run E2E tests.",
+      "acceptanceCriteria": [
+        "Add pytest-playwright to requirements/dev.txt",
+        "Create tests/ directory structure: tests/e2e/, tests/conftest.py, tests/e2e/conftest.py",
+        "Create pytest.ini configuration for Playwright",
+        "Create test database seeding script in tests/seed_test_data.py",
+        "Tests can run with pytest tests/e2e/",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Create Auth E2E Tests",
+      "description": "As a developer, I want E2E tests for authentication flows.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_auth.py",
+        "Test: Login with valid credentials succeeds",
+        "Test: Login with invalid credentials shows error",
+        "Test: Logout redirects to login page",
+        "Test: Protected pages redirect to login when not authenticated",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Create Admin E2E Tests",
+      "description": "As a developer, I want E2E tests for admin functionality.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_admin.py",
+        "Test: Create new user",
+        "Test: Edit user role",
+        "Test: Toggle page visibility",
+        "Test: Non-admin cannot access admin pages",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Create WLC Dashboard E2E Tests",
+      "description": "As a developer, I want E2E tests for WLC dashboard functionality.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_wlc.py",
+        "Test: Dashboard page loads with charts placeholder",
+        "Test: Dashboard settings page can be accessed",
+        "Test: AP inventory page displays (empty state or data)",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Create SolarWinds Inventory E2E Tests",
+      "description": "As a developer, I want E2E tests for SolarWinds inventory functionality.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_solarwinds.py",
+        "Test: Inventory page loads",
+        "Test: Search/filter input is present",
+        "Test: Export button is present",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Create Bulk SSH E2E Tests",
+      "description": "As a developer, I want E2E tests for bulk SSH functionality.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_bulk_ssh.py",
+        "Test: Bulk SSH page loads",
+        "Test: Templates page loads with template list",
+        "Test: Schedules page loads",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Create Certificate Tracker E2E Tests",
+      "description": "As a developer, I want E2E tests for certificate management.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_certs.py",
+        "Test: Certificate tracker page loads",
+        "Test: ISE nodes page loads",
+        "Test: Certificate converter page loads",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Create Knowledge Base E2E Tests",
+      "description": "As a developer, I want E2E tests for knowledge base functionality.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_kb.py",
+        "Test: Knowledge base page loads",
+        "Test: New article button visible for authorized users",
+        "Test: Search input is present",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-034",
+      "title": "Create Setup Wizard E2E Tests",
+      "description": "As a developer, I want E2E tests for the first-run setup wizard.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_setup.py",
+        "Test: Fresh database redirects to setup",
+        "Test: Setup wizard validates password requirements",
+        "Test: Setup wizard creates admin user and redirects to login",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-035",
+      "title": "Create Smoke Test Suite",
+      "description": "As a developer, I want a smoke test that validates all pages load without errors.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/test_smoke.py",
+        "Test iterates through main navigation links",
+        "Each accessible page returns 200 status (or 302 redirect for auth)",
+        "No JavaScript console errors on tested pages",
+        "All tests pass locally",
+        "Typecheck passes"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

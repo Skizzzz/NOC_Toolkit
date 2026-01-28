@@ -1,740 +1,142 @@
 # Ralph Progress Log
-Started: Mon Jan 26 21:15:43 CST 2026
+Started: Tue Jan 27 18:46:20 CST 2026
+---
 
 ## Codebase Patterns
-- WLC Dashboard data is stored in `~/.noc_toolkit/noc_toolkit.db` (not project-local db)
-- Passwords are encrypted using Fernet cipher stored in `wlc_dashboard.key`
-- Settings save/load functions use INSERT...ON CONFLICT for upsert pattern
-- Database migrations use try/except around ALTER TABLE to handle existing columns
-- Threading uses daemon threads with wake events for responsive polling
-- Credentials are shared between Cisco and Aruba controllers
-- Auto-discovery pulls from SolarWinds nodes table
-- **IMPORTANT**: `security.py` uses project-local `noc_toolkit.db` for auth, while `db_jobs.py` uses `~/.noc_toolkit/noc_toolkit.db` for data
-- Bulk SSH uses ThreadPoolExecutor for parallel execution (default 10 workers)
-- Template variables use `{{variable_name}}` syntax, extracted via regex
-- Schedule credentials are Fernet-encrypted in database
-- **IMPORTANT**: Always use `_CST_TZ = ZoneInfo("America/Chicago")` for timezone-aware datetime in scheduling code
-- Change statuses: scheduled, running, completed, failed, rollback-running, rolled-back, rollback-failed
-- Change scheduler runs every 30 seconds; uses `_CHANGE_WAKE.set()` for immediate wake-up
-- SolarWinds API uses SWIS REST endpoint on port 17778 (`/SolarWinds/InformationService/v3/Json/Query`)
-- SolarWinds settings use in-memory cache (`_SOLAR_SETTINGS`) with lock, synced to DB on change
-- WLC/Aruba hosts auto-detected from SolarWinds nodes via hostname/vendor/model patterns
-- **IMPORTANT**: Database functions in `db_jobs.py` use `*,` to force keyword-only args - always call like `func(id, field=value)` not `func(id, {'field': value})`
-- App-wide timezone is stored in `app_settings` table; use `get_app_timezone()` for IANA string or `get_app_timezone_info()` for ZoneInfo
+- Flask app is monolithic in app.py with routes, use jsonify for JSON responses
+- Database is SQLite via tools/db_jobs.py - uses DB_PATH constant
+- Environment variables: FLASK_SECRET_KEY, NOC_ENCRYPTION_KEY, NOC_ADMIN_PASSWORD, NOC_TOOLKIT_DB_PATH, NOC_TOOLKIT_DATA_DIR, WLC_DASHBOARD_KEY
+- Security functions in tools/security.py - init_security_db(), require_login decorator
+- Syntax check: python3 -m py_compile <file>.py
+- Requirements layered in requirements/ directory: base.txt -> prod.txt -> dev.txt
+- pyproject.toml contains tool configs for black, mypy, pytest, flake8
+- New src/ structure: src/blueprints/{domain}/, src/core/, src/models/ - all with __init__.py
+- Application factory: src/app.py create_app(config_name) - configs in src/config.py
+- Production entry point: wsgi.py calls create_app("production")
+- Core utilities in src/core/: database.py, security.py, helpers.py - import via `from src.core import ...`
+
 ---
 
-## 2026-01-26 21:30 - US-001
-- **What was implemented**: Audited WLC Dashboard and Polling System
-- **Issues found and fixed**:
-  1. **FIXED: Aruba settings not persisted to database** - `aruba_hosts` and `aruba_enabled` were defined in defaults but never saved/loaded from DB
-     - Added migration to create `aruba_hosts_json` and `aruba_enabled` columns
-     - Updated `load_wlc_dashboard_settings()` to read Aruba settings
-     - Updated `save_wlc_dashboard_settings()` to write Aruba settings
-  2. **FIXED: Duplicate code block** - Removed duplicate `poll_summary` loading (lines 931-938 had same block twice)
-- **Files changed**:
-  - `tools/db_jobs.py` - Added Aruba column migrations, fixed load/save functions
-- **Verification**:
-  - Settings page displays both Cisco 9800 (104) and Aruba 72XX (26) controllers
-  - Polling interval displays correctly (5 minutes)
-  - Time range buttons work (24h, 3d, 7d, 30d)
-  - Stat cards render correctly (Total Clients, Access Points, Polling Status)
-  - Aruba settings now persist in database (`aruba_hosts_json`, `aruba_enabled` columns verified)
-- **Learnings for future iterations**:
-  - Check that new settings fields have corresponding DB columns and are in load/save functions
-  - Test settings persistence by restarting app
-  - The password hash format must match what `verify_user()` expects (werkzeug pbkdf2)
+## 2026-01-27 18:47 CST - US-001
+- What was implemented:
+  - Created Dockerfile with Python 3.11-slim base image
+  - Created docker-compose.yml with app and postgres services
+  - Created .env.example documenting all environment variables
+  - Created docker-entrypoint.sh for database initialization
+  - Added /health endpoint in app.py returning {"status": "healthy", "service": "noc-toolkit"}
+  - Configured PostgreSQL persistence via named volume (postgres-data)
+- Files changed:
+  - Dockerfile (new)
+  - docker-compose.yml (new)
+  - .env.example (new)
+  - docker-entrypoint.sh (new)
+  - app.py (added health endpoint at line 1847)
+- **Learnings for future iterations:**
+  - Health endpoint added before /login route at line 1847
+  - No pyproject.toml or mypy config exists yet - syntax check via py_compile
+  - The app currently uses SQLite; PostgreSQL service is ready but migration happens in later stories
+  - Non-root user 'appuser' is created in Docker for security
 ---
 
-## 2026-01-26 22:15 - US-002
-- **What was implemented**: Audited Bulk SSH Tool and Templates
-- **Issues found**: None - all functionality working correctly
-- **Verification completed**:
-  - Template CRUD operations work (create, read, update, delete)
-  - Default templates seed correctly (10 common templates)
-  - Variable substitution syntax `{{variable}}` displays correctly
-  - Template categories (backup, monitoring, routing, troubleshooting) work
-  - Job history page renders correctly (empty state shown)
-  - Scheduled jobs page renders correctly
-  - Main execution page has all required fields:
-    - Device selection (paste list, from inventory)
-    - Authentication (username, password, enable secret)
-    - Command input with template dropdown
-    - Options (Show Commands/Config Mode, Device Type, Parallel Connections, Timeout)
-  - CSV export route exists and is properly implemented
-  - Results storage uses `bulk_ssh_jobs` and `bulk_ssh_results` tables
-- **Files changed**: None (no issues found)
-- **Code review findings**:
-  - BulkSSHJob class in `tools/bulk_ssh.py` uses ThreadPoolExecutor correctly
-  - Template engine in `tools/template_engine.py` properly extracts and substitutes variables
-  - Database layer in `tools/db_jobs.py` has proper CRUD functions with encryption
-  - Schedule worker in `tools/schedule_worker.py` checks every 60 seconds for due jobs
-  - Routes in `app.py` lines 5171-5608 handle all Bulk SSH operations
-- **Learnings for future iterations**:
-  - Bulk SSH templates are stored in `bulk_ssh_templates` table
-  - Job results stored in `bulk_ssh_jobs` (metadata) and `bulk_ssh_results` (per-device output)
-  - Schedule credentials are encrypted with Fernet before storage
-  - Email alerting for schedule failures is a placeholder (not implemented)
+## 2026-01-27 19:02 CST - US-002
+- What was implemented:
+  - Created requirements/base.txt with core dependencies (Flask, netmiko, cryptography, requests)
+  - Created requirements/prod.txt extending base.txt with gunicorn>=21.2.0 and psycopg2-binary>=2.9.9
+  - Created requirements/dev.txt extending base.txt with pytest, playwright, black, flake8, mypy
+  - Updated Dockerfile to use requirements/prod.txt instead of flat requirements.txt
+  - Added pyproject.toml with modern Python project configuration (black, mypy, pytest, flake8 settings)
+- Files changed:
+  - requirements/base.txt (new)
+  - requirements/prod.txt (new)
+  - requirements/dev.txt (new)
+  - Dockerfile (modified - now copies requirements/ directory and uses prod.txt)
+  - pyproject.toml (new)
+- **Learnings for future iterations:**
+  - pyproject.toml now exists with tool configurations for black, mypy, pytest, flake8
+  - Requirements are layered: base.txt (core) -> prod.txt (adds production server) -> dev.txt (adds testing tools)
+  - Use `-r base.txt` syntax in requirements files to extend base dependencies
+  - The original requirements.txt still exists for backward compatibility but Dockerfile now uses requirements/prod.txt
 ---
 
-## 2026-01-27 01:00 - US-003
-- **What was implemented**: Audited Bulk SSH Scheduling System
-- **Issues found and fixed**:
-  1. **FIXED: Timezone mismatch in schedule_worker.py** - `_calculate_next_run()` used naive `datetime.now()` while schedule creation used `datetime.now(_CST_TZ)`. This caused inconsistent timezone handling.
-     - Added `ZoneInfo` import and `_CST_TZ = ZoneInfo("America/Chicago")` constant
-     - Updated `_calculate_next_run()` to use `datetime.now(_CST_TZ)`
-     - Updated `last_run` timestamp to use `datetime.now(_CST_TZ)`
-     - Fixed ISE cert sync to handle timezone-aware datetime comparisons
-  2. **FIXED: Timezone mismatch in db_jobs.py** - `fetch_due_bulk_ssh_schedules()` used naive `datetime.now()`
-     - Added `ZoneInfo` import and `_CST_TZ` constant
-     - Updated `fetch_due_bulk_ssh_schedules()` to use `datetime.now(_CST_TZ)`
-  3. **ADDED: Missing schedule creation UI** - No UI existed for creating scheduled jobs
-     - Added "Create Schedule" button to page header
-     - Added modal form with all required fields (name, devices, command, credentials)
-     - Schedule type selector (one-time, daily, weekly) with dynamic config sections
-     - Alert on failure checkbox and email field
-- **Files changed**:
-  - `tools/schedule_worker.py` - Timezone fixes, ZoneInfo import
-  - `tools/db_jobs.py` - Timezone fix for fetch_due_bulk_ssh_schedules
-  - `templates/bulk_ssh_schedules.html` - Added create modal, CSS, JavaScript
-- **Verification**:
-  - Schedule creation works (tested one-time schedule)
-  - Schedule type switching works (one-time, daily, weekly)
-  - next_run shows correct timezone offset (-06:00 for CST)
-  - Enable/disable toggle works correctly
-  - Schedule shows in list with all metadata (type, next_run, last_run, command)
-- **Learnings for future iterations**:
-  - Always use timezone-aware datetime for scheduling (use `_CST_TZ` constant)
-  - Schedule types are: once, daily, weekly (NOT cron expressions)
-  - Email alerting is not implemented (placeholder only)
-  - Schedule worker checks every 60 seconds via daemon thread
+## 2026-01-27 19:15 CST - US-003
+- What was implemented:
+  - Created README.md with project overview, features list, quick start guide, and project structure
+  - Created docs/DEPLOYMENT.md with production deployment guide (Docker, nginx, backups, monitoring, troubleshooting)
+  - Created docs/DEVELOPMENT.md with local development setup (venv, running, testing, debugging)
+  - Created docs/CONTRIBUTING.md with contribution guidelines (code style, PR process, architecture)
+  - Created CHANGELOG.md with version history format and initial release notes
+- Files changed:
+  - README.md (new)
+  - docs/DEPLOYMENT.md (new)
+  - docs/DEVELOPMENT.md (new)
+  - docs/CONTRIBUTING.md (new)
+  - CHANGELOG.md (new)
+- **Learnings for future iterations:**
+  - Existing docs/ directory already had audit-findings.md and production-runbook.md from previous work
+  - Project structure documented: main app.py, tools/ for backend modules, templates/ for Jinja2, static/ for assets
+  - Key security decorators: @require_login, @require_superadmin, @require_page_enabled("page-name")
+  - Database operations centralized in tools/db_jobs.py
+  - pyproject.toml references README.md for project description
 ---
 
-## 2026-01-27 07:00 - US-004
-- **What was implemented**: Audited Change Management Workflow
-- **Issues found and fixed**:
-  1. **FIXED: Missing CSS status classes** - `changes.html` only had styles for `pending`, `completed`, `failed`, `cancelled`, but actual statuses are: `scheduled`, `running`, `rollback-running`, `rolled-back`, `rollback-failed`
-     - Added `.status-scheduled` (accent/blue color)
-     - Added `.status-running` (info/blue color)
-     - Added `.status-rollback-running` (warning/yellow color)
-     - Added `.status-rolled-back` (success/green color)
-     - Added `.status-rollback-failed` (error/red color)
-- **Files changed**:
-  - `templates/changes.html` - Added missing CSS status badge classes
-- **Verification**:
-  - Change window creation with scheduled datetime works
-  - Change scheduler loop runs every 30 seconds via daemon thread
-  - "Start Now" button triggers immediate execution
-  - Status transitions work: scheduled → running → completed/failed
-  - Rollback triggers correctly with status: → rollback-running → rolled-back/rollback-failed
-  - Timeline shows all change events (created, started, completed, error, rollback-start, rollback-complete)
-  - Apply Job Logs and Rollback Job Logs sections display correctly
-  - Audit Log link filters correctly by change number
-- **Code review findings**:
-  - Change scheduler in `app.py` (`_change_scheduler_loop`) runs every 30 seconds
-  - Uses `_CHANGE_WAKE` threading.Event for manual wake-up on schedule creation
-  - Changes stored in `change_windows` table, events in `change_events` table
-  - Credentials encrypted with Fernet before storage via `_encode_change_payload()`
-  - Status transitions: scheduled → running → completed/failed, then optionally → rollback-running → rolled-back/rollback-failed
-  - Changes created via `/actions/schedule` endpoint (from Interface Search or Global Config tools)
-  - Also created via `/tools/wlc/summer-guest/schedule` for WLC Summer Guest automation
-- **Learnings for future iterations**:
-  - Change statuses: scheduled, running, completed, failed, rollback-running, rolled-back, rollback-failed
-  - Scheduler uses UTC for storage, CST for display (via `_format_cst()` helper)
-  - Background CLI jobs use `_start_background_cli_job()` which spawns daemon threads
-  - Job completion signals `_CHANGE_WAKE.set()` to wake scheduler immediately
+## 2026-01-27 19:30 CST - US-004
+- What was implemented:
+  - Created src/ directory as main package with __init__.py
+  - Created src/blueprints/ directory with 10 subdirectories: auth/, admin/, wlc/, solarwinds/, config/, bulk_ssh/, certs/, jobs/, kb/, api/
+  - Each blueprint directory contains __init__.py for Python package recognition
+  - Created src/core/ directory for shared utilities (db, security, helpers) with __init__.py
+  - Created src/models/ directory for database models with __init__.py
+- Files changed:
+  - src/__init__.py (new)
+  - src/blueprints/__init__.py (new)
+  - src/blueprints/{auth,admin,wlc,solarwinds,config,bulk_ssh,certs,jobs,kb,api}/__init__.py (10 files, new)
+  - src/core/__init__.py (new)
+  - src/models/__init__.py (new)
+- **Learnings for future iterations:**
+  - New blueprint structure: src/blueprints/{domain}/ contains routes.py and templates/ subdirectory
+  - Shared utilities will go in src/core/ (database.py, security.py, helpers.py)
+  - Database models will go in src/models/ (one file per domain)
+  - All __init__.py files are currently empty - they will be populated as blueprints are implemented
 ---
 
-## 2026-01-27 08:30 - US-005
-- **What was implemented**: Audited SolarWinds Integration
-- **Issues found**: None - all functionality working correctly
-- **Verification completed**:
-  - Settings page at `/tools/solarwinds/nodes/settings`:
-    - Base URL saves correctly (using SWIS API port 17774)
-    - Username persists correctly (supports domain\user format)
-    - Password encrypts with Fernet before storage, shown as masked placeholder on reload
-    - SSL verification checkbox works correctly
-    - "Save Settings" and "Save & Poll" buttons function correctly
-  - Connection/poll validation:
-    - Auto-port upgrade to SWIS port 17778 works for standard HTTPS
-    - API endpoint discovery tries multiple paths (/SolarWinds/InformationService, /Orion/InformationService, etc.)
-    - Error messages are descriptive (connection failed, 404, invalid JSON)
-  - Node sync verified (17028 nodes fetched):
-    - All expected fields populated: node_id, caption, organization, vendor, model, version, ip_address, status, last_seen
-    - Organization mapping via CustomProperties.Organization query
-    - Vendor auto-detection from MachineType or caption when not provided
-    - Extra JSON stored for raw node data
-  - Nodes display page at `/tools/solarwinds/nodes`:
-    - All fields render correctly in table
-    - Client-side filtering works (tested filtering by vendor "cisco" - 9105 matches)
-    - Pagination works (100 rows per page)
-    - Last poll timestamp and status displayed
-    - Links to settings and changes pages
-  - Integration points verified:
-    - WLC hosts auto-derived from SolarWinds nodes (hostname contains "wc01", vendor "cisco", model "9800")
-    - Aruba hosts auto-derived (hostname starts with "wc0", vendor starts with "aruba")
-    - Summer guest hosts sync from same WLC detection
-    - API endpoint `/api/solarwinds/nodes` returns filtered nodes for bulk SSH inventory search
-- **Files changed**: None (no issues found)
-- **Code review findings**:
-  - SolarWinds API client in `tools/solarwinds.py` with robust endpoint discovery
-  - Database functions in `tools/db_jobs.py` lines 1412-1561
-  - Settings use in-memory cache with lock (`_SOLAR_SETTINGS_LOCK`) plus DB persistence
-  - Poll timestamp uses CST timezone (`datetime.now(_CST_TZ)`)
-  - Routes require superadmin for settings, login for viewing nodes
-- **Learnings for future iterations**:
-  - SolarWinds settings cached in `_SOLAR_SETTINGS` dict with lock protection
-  - API uses SWIS (SolarWinds Information Service) REST API on port 17778
-  - Organization comes from CustomProperties.Organization in Orion
-  - Node sync replaces all nodes (DELETE then INSERT pattern)
-  - WLC/Aruba host detection uses specific naming patterns from organization
-- Summer Guest scheduler uses `_SUMMER_WAKE` threading.Event for immediate wake-up and waits up to 5 minutes between checks
+## 2026-01-27 20:15 CST - US-005
+- What was implemented:
+  - Created src/config.py with configuration classes (Config, DevelopmentConfig, ProductionConfig, TestingConfig)
+  - Created src/app.py with create_app(config_name) factory function
+  - Created wsgi.py as production entry point that imports and calls create_app("production")
+  - Factory function validates SECRET_KEY is required in production mode
+  - Health check endpoint at /health in the factory function
+  - Error handlers for 404 and 500 registered in factory
+- Files changed:
+  - src/config.py (new)
+  - src/app.py (new)
+  - wsgi.py (new)
+- **Learnings for future iterations:**
+  - Config classes use class attributes with type hints for Flask configuration
+  - Production requires FLASK_SECRET_KEY env var - raises RuntimeError if missing
+  - get_config(config_name) helper function to retrieve config class by name
+  - Factory pattern stubs for _init_extensions() and _register_blueprints() ready for future stories
+  - Template/static folders configured relative to src/app.py: "../templates", "../static"
+  - wsgi.py exports both `application` and `app` for compatibility with different WSGI servers
 ---
 
-## 2026-01-27 10:15 - US-006
-- **What was implemented**: Audited WLC Summer Guest Automation
-- **Issues found**: None - all functionality working correctly
-- **Verification completed**:
-  - Settings page at `/tools/wlc/summer-guest/settings`:
-    - Username, password, enable secret save correctly
-    - Password encrypted with Fernet before storage
-    - Profile names and WLAN IDs persist correctly
-    - Poll time (HH:MM format) saves correctly (tested 08:30)
-    - Timezone saves correctly (tested America/New_York)
-    - Enable scheduler checkbox persists correctly
-    - Validation results section displays connection test results
-    - "Run Now", "Save & Run", "Save Settings" buttons all work
-  - Monitor page at `/tools/wlc/summer-guest`:
-    - Status pill shows correct state (Never/OK/Partial/Error)
-    - Last poll and next poll timestamps display correctly
-    - Next poll shows in configured timezone with proper offset (e.g., "2026-01-28 08:30 AM EST")
-    - Targets section shows profile names, WLAN IDs, and auto prefix match
-    - Controller filter works for searching host cards
-    - Controller cards show hostname, status, and WLAN entries
-    - Enable/Disable action popover for immediate toggle
-    - Schedule CHG action popover for creating change windows
-    - Recent Polls expandable section shows poll history
-  - Scheduling integration:
-    - Changes created via `/tools/wlc/summer-guest/schedule` endpoint
-    - Uses change_windows table for scheduling enable/disable
-    - Supports auto-rollback option
-    - Change events logged: scheduled, started, completed, error
-    - Upcoming changes shown as "Scheduled CHG" badge on controller cards
-  - Audit logging verified:
-    - WLAN toggle actions logged as `wlc_wlan_toggle` to audit trail
-    - WLAN schedule actions logged as `wlc_wlan_schedule` to audit trail
-    - Change execution logged via `wlc-summer-toggle` tool in changes.csv
-  - Timezone-aware scheduling:
-    - `_summer_timezone()` returns ZoneInfo from configurable timezone
-    - `_next_summer_run()` calculates next poll in configured timezone
-    - `_summer_worker_loop()` uses configured timezone for scheduling
-    - Poll timestamps stored and displayed in CST format
-- **Files changed**: None (no issues found)
-- **Code review findings**:
-  - Summer Guest scheduler in `app.py` (`_summer_worker_loop`) uses daemon thread
-  - Settings stored in `wlc_summer_settings` table with JSON columns for lists
-  - Poll samples stored in `wlc_summer_samples` table with cleanup after 30 days
-  - WLC hosts auto-populated from SolarWinds (hostname contains "wc01", vendor "Cisco", model "9800")
-  - WLAN state changes via `set_wlan_state()` in `tools/wlc_summer_guest.py`
-  - Uses netmiko IOS-XE connection for CLI commands
-- **Learnings for future iterations**:
-  - Summer Guest has its own configurable timezone (separate from other schedulers)
-  - `_SUMMER_WAKE.set()` triggers immediate poll when settings change
-  - Scheduler waits up to 5 minutes (300s) between checks when no poll is due
-  - Auto prefix match "Summer*" catches all profiles starting with "Summer"
-  - WLAN toggle uses: `wlan <profile_name> <wlan_id>`, `no shutdown`/`shutdown`, `write memory`
----
-
-## 2026-01-27 12:00 - US-007
-- **What was implemented**: Audited Certificate Tracker and ISE Sync
-- **Issues found and fixed**:
-  1. **FIXED: `ise_node_add` route passing dict instead of keyword args** - `insert_ise_node(node_data)` was passing a dict, but function expects keyword args
-     - Changed to `insert_ise_node(hostname=..., ip=..., username=..., password=..., enabled=True)`
-  2. **FIXED: `cert_edit` route passing dict instead of keyword args** - `update_certificate(cert_id, updates)` was passing dict
-     - Changed to `update_certificate(cert_id, issued_to=..., issued_by=..., used_by=..., notes=..., devices=...)`
-  3. **FIXED: `ise_node_edit` route passing dict instead of keyword args** - `update_ise_node(node_id, updates)` was passing dict
-     - Changed to `update_ise_node(node_id, hostname=..., ip=..., username=..., enabled=..., password=...)`
-  4. **FIXED: `ise_node_toggle` route passing dict instead of keyword args** - `update_ise_node(node_id, {'enabled': new_status})`
-     - Changed to `update_ise_node(node_id, enabled=new_status)`
-- **Files changed**:
-  - `app.py` - Fixed 4 function calls to use keyword arguments instead of dicts
-- **Verification**:
-  - Certificate Tracker page loads correctly with stats cards and filter bar
-  - ISE Nodes page loads correctly with auto-sync settings
-  - Add ISE Node form works - creates node in database
-  - Enable/Disable toggle works correctly
-  - Delete node works with confirmation dialog
-  - All routes pass syntax check
-- **Code review findings**:
-  - Certificate upload extracts CN, expiration, serial via OpenSSL subprocess calls
-  - ISE cert sync uses REST API: `https://{ip}/api/v1/certs/system-certificate/{hostname}`
-  - ISE version fetch uses ERS API on port 9060
-  - Scheduled sync runs via ScheduleWorker daemon thread every 60 seconds
-  - Duplicate detection uses certificate serial number
-  - Password encryption uses Fernet cipher
-- **Learnings for future iterations**:
-  - Database functions use `*,` to force keyword-only arguments - always use `func(id, field=value)` not `func(id, {'field': value})`
-  - Certificate expiry status classes: exp-expired, exp-critical, exp-warning, exp-caution, exp-ok, exp-unknown
-  - ISE cert API returns: friendlyName, expirationDate, issuedTo, issuedBy, usedBy, serialNumberDecimalFormat
-  - Auto-sync settings stored in `cert_sync_settings` table (single row with id=1)
----
-
-## 2026-01-27 14:10 - US-008
-- **What was implemented**: Audited Device Inventory Tool
-- **Issues found**: None - all functionality working correctly
-- **Verification completed**:
-  - Device Inventory page (`/tools/device-inventory`) displays SolarWinds data correctly
-  - Stats cards showing: Total 17028, Cisco 9105, Dell 3149, Unknown 2664, Net-SNMP 728, Tripp Lite 339
-  - Filter bar works: search, vendor dropdown, organization dropdown, model/version text filters
-  - "Clear" button appears when filters are active
-  - Device table renders correctly with columns: Hostname, IP, Organization, Vendor, Model, Version, Status
-  - Vendor color badges work (Cisco blue, Aruba orange, Dell blue)
-  - Status indicators work (Up green, Down red)
-  - CSV export downloads correctly with filtered data, filename format: `device_inventory_YYYYMMDD_HHMMSS.csv`
-  - Device scanning code supports: Cisco IOS, IOS-XE, NX-OS, Aruba AOS, Dell OS10/Force10/PowerConnect
-  - Database CRUD operations verified (insert/update/get/delete)
-  - Delete endpoint requires superadmin role (correctly implemented)
-  - SolarWinds node linking via `solarwinds_node_id` field in schema
-- **Files changed**: None (no issues found)
-- **Code review findings**:
-  - `tools/device_inventory.py` - Device scanning with ThreadPoolExecutor (max 50 workers)
-  - `tools/db_jobs.py` - Device inventory CRUD with proper ON CONFLICT upsert
-  - `tools/netmiko_helpers.py` - Connection context managers for IOS, IOS-XE, Aruba AOS
-  - Routes in `app.py` lines 4632-4861 handle display, scan, export, delete, API
-  - Page primarily displays SolarWinds data; scan/delete are for locally-scanned devices
-- **Learnings for future iterations**:
-  - Device Inventory has dual data sources: SolarWinds (display) and local scans (enrichment)
-  - Local scan results stored in `device_inventory` table, SolarWinds data in `solarwinds_nodes` table
-  - Export uses SolarWinds data with current filters applied
-  - Scan endpoint accepts hosts (comma/newline), credentials, device_type, max_workers
-  - No UI for manual scanning currently - would need to add if required
----
-
-## 2026-01-27 15:30 - US-009
-- **What was implemented**: Audited Topology Builder
-- **Issues found**: None - all functionality working correctly
-- **Verification completed**:
-  - Topology Builder page (`/tools/topology`) renders correctly with three tabs:
-    - Single Device: Device selector with SolarWinds datalist, credentials, device type dropdown
-    - Organization: Organization selector with SolarWinds orgs, credentials, device type
-    - Bulk Discovery: Device list textarea, credentials, device type (Cisco/Dell only)
-  - Graph View page (`/tools/topology/graph`) renders correctly:
-    - Cytoscape.js with dagre layout for hierarchical top-down visualization
-    - Graph controls: Fit, Reset Zoom, Layout Refresh, Center Selected
-    - Stats bar showing node/edge counts
-    - Legend showing Root Device (purple), Network Device (green), Expanded Node (gray)
-    - View toggle between Graph View and Table View
-    - Node selection panel with details and "Discover Neighbors" button
-  - CDP/LLDP neighbor collection:
-    - `parse_cdp_detail()` parses "show cdp neighbors detail" output
-    - `parse_lldp_detail()` parses "show lldp neighbors detail" output
-    - `_merge_neighbors()` combines CDP and LLDP findings intelligently
-    - `annotate_with_inventory()` enriches neighbors with SolarWinds metadata
-  - Multi-vendor support verified:
-    - Cisco IOS/XE: cisco_ios, cisco_xe device types
-    - Dell: dell_os10, dell_force10, dell_powerconnect device types
-    - Auto-detection tries Cisco first, then Dell variants
-  - Device type auto-detection:
-    - `_build_device_type_candidates()` builds ordered list of device types to try
-    - Uses vendor hint from SolarWinds or manual mode selection
-    - Graceful fallback on connection failures
-  - CSV export functionality verified via `/tools/topology/export`
-  - API endpoint `/api/topology/discover` for dynamic graph expansion
-- **Files changed**: None (no issues found)
-- **Code review findings**:
-  - `tools/topology.py` - Core CDP/LLDP parsing and neighbor merging logic
-  - Routes in `app.py` lines 2442-2841 handle all topology operations
-  - Cytoscape.js 3.26.0 with dagre 2.5.0 extension for graph visualization
-  - Hierarchy detection based on device naming (cs/core, mor, tor, ds/dist, ag/agg, as/access)
-  - Access Points (AP*) are filtered out from graph visualization
-  - No persistent database storage - topology data is transient, calculated on-demand
-- **Learnings for future iterations**:
-  - Topology data is ephemeral - discovered on-demand, not stored in database
-  - CDP/LLDP parsing uses regex patterns for flexibility across vendor outputs
-  - Graph expansion uses POST to `/api/topology/discover` with stored credentials
-  - AP filtering is implemented both in backend and frontend (hideAPToggle checkbox)
-  - SolarWinds inventory matching uses IP address first, then caption (hostname)
----
-
-## 2026-01-27 17:00 - US-010
-- **What was implemented**: Audited Authentication and Admin Panel
-- **Issues found**: None - all functionality working correctly
-- **Verification completed**:
-  - Login page renders correctly with username/password form and theme toggle
-  - Login with admin/admin123 works, sets session (user_id, username, role)
-  - Welcome flash message displays on successful login
-  - Login failures are logged via `log_audit()` with action "login_failed"
-  - Logout clears session, logs action, displays flash message
-  - Admin Users panel (`/admin/users`):
-    - Create New User form with: username, password (min 8 chars), role dropdown (user/superadmin), KB access level (FSR/NOC/Admin), can_create_kb checkbox
-    - User table displays: ID, username, role badge, KB permissions with inline edit, created date, last login
-    - KB permissions inline form allows updating access level and create permission
-    - Superadmins have disabled create checkbox (always have permission)
-    - User creation correctly inserts to `users` table with password_hash (pbkdf2:sha256)
-  - Page Settings panel (`/admin/page-settings`):
-    - All pages grouped by category (Main, Config Tools, WLC Tools, Infrastructure, Certificates)
-    - Toggle switches with status dots (green=enabled, red=disabled)
-    - Enable All / Disable All buttons work
-    - Save Changes updates `page_settings` table via `bulk_update_page_settings()`
-    - `@require_page_enabled` decorator blocks access to disabled pages
-  - Profile page (`/profile`):
-    - Shows username and role (read-only)
-    - Password change form validates: current password, new password >= 8 chars, confirmation match
-    - Password change logged via `log_audit()`
-  - Knowledge Base (`/knowledge-base`):
-    - "New Article" button only visible to users with `can_create_kb` or superadmin role
-    - Articles filtered by user's `kb_access_level` (FSR < NOC < Admin hierarchy)
-    - Visibility badges display correctly (FSR green, NOC blue, Admin orange)
-    - Search and subject filter work correctly
-  - Audit Logging:
-    - Auth actions logged to `audit_log` SQLite table via `log_audit()` in security.py
-    - Config changes logged to `logs/changes.csv` via `_log_audit()` in app.py
-    - Audit Log Viewer at `/logs` shows CSV data with filtering, search, pagination, CSV export
-    - 15+ log entries displaying correctly with timestamps, users, tools, results
-- **Files changed**: None (no issues found)
-- **Code review findings**:
-  - `tools/security.py` - Core auth functions: encrypt/decrypt password, create_user, verify_user, change_password, log_audit, require_login/require_superadmin/require_kb_create/require_page_enabled decorators
-  - `tools/db_jobs.py` lines 2812-2916 - Page settings CRUD functions
-  - `app.py` lines 1729-1890 - Login/logout/profile/admin routes
-  - `app.py` lines 6360-6569 - KB article functions and routes
-  - Password hashing uses werkzeug pbkdf2:sha256
-  - Session stores user_id, username, role
-  - KB access levels: FSR (1) < NOC (2) < Admin (3)
-- **Learnings for future iterations**:
-  - Two audit systems: SQLite `audit_log` table (auth) and `logs/changes.csv` (config changes)
-  - Page visibility uses `page_settings` table with `@require_page_enabled` decorator
-  - KB access is hierarchical: Admin sees all, NOC sees NOC+FSR, FSR sees only FSR
-  - Superadmins always have KB create permission (checked in `can_user_create_kb()`)
-  - User passwords use werkzeug's pbkdf2:sha256 method, device passwords use Fernet encryption
----
-
-## 2026-01-27 18:30 - US-011
-- **What was implemented**: Added Timezone Configuration to Admin Panel
-- **Changes made**:
-  1. Added `app_settings` table in `tools/db_jobs.py` with timezone field (default: America/Chicago)
-  2. Added helper functions: `get_app_timezone()`, `get_app_timezone_info()`, `load_app_settings()`, `save_app_settings()`
-  3. Added `US_TIMEZONES` constant with 7 common US timezones
-  4. Created `/admin/settings` route in `app.py` with timezone configuration form
-  5. Created `templates/admin_settings.html` with styled timezone dropdown and info cards
-  6. Updated admin tabs in `admin_users.html` and `admin_page_settings.html` to include App Settings tab
-- **Files changed**:
-  - `tools/db_jobs.py` - Added app_settings table schema and CRUD functions
-  - `app.py` - Added route, imported new functions
-  - `templates/admin_settings.html` - New template (created)
-  - `templates/admin_users.html` - Added App Settings tab
-  - `templates/admin_page_settings.html` - Added App Settings tab
-- **Verification**:
-  - Admin settings page loads correctly at `/admin/settings`
-  - Timezone dropdown shows all 7 US timezones
-  - Current timezone displays correctly (America/Chicago)
-  - Changing timezone saves to database and persists
-  - Flash message confirms save success
-  - All admin tabs navigate correctly between pages
-  - Syntax check passes on all modified files
-- **Learnings for future iterations**:
-  - App-wide settings use single-row table pattern with `id INTEGER PRIMARY KEY CHECK(id=1)`
-  - Helper functions `get_app_timezone()` returns IANA string, `get_app_timezone_info()` returns ZoneInfo object
-  - Admin panel uses tabbed navigation with consistent styling across pages
-  - Settings forms use upsert pattern with ON CONFLICT for idempotent saves
----
-
-## 2026-01-27 20:00 - US-012
-- **What was implemented**: Integrated timezone setting into all scheduling systems
-- **Changes made**:
-  1. **app.py**: Updated `_format_cst()` and `_parse_cst_datetime()` to use `get_app_timezone_info()` instead of hardcoded `_CST_TZ`. Updated `_summer_timezone()` to fall back to app timezone. Added `app_timezone` to changes_list template context.
-  2. **tools/schedule_worker.py**: Replaced hardcoded `_CST_TZ` with `_get_app_tz()` helper that calls `get_app_timezone_info()`. Updated all datetime operations to use dynamic timezone.
-  3. **tools/db_jobs.py**: Updated `fetch_due_bulk_ssh_schedules()` to use `get_app_timezone_info()` instead of hardcoded `_CST_TZ`.
-  4. **tools/cert_tracker.py**: Replaced hardcoded `_CST_TZ` with `_get_app_tz()` helper for certificate expiry calculations.
-  5. **templates/changes.html**: Updated description to show configured timezone name dynamically.
-- **Files changed**:
-  - `app.py` - Updated timezone functions to use configured timezone
-  - `tools/schedule_worker.py` - Dynamic timezone for bulk SSH scheduling
-  - `tools/db_jobs.py` - Dynamic timezone for due schedule queries
-  - `tools/cert_tracker.py` - Dynamic timezone for cert expiry
-  - `templates/changes.html` - Dynamic timezone display
-- **Verification**:
-  - Syntax check passes on all modified files
-  - App imports and runs successfully
-  - Admin settings page allows changing timezone (tested America/New_York, America/Chicago)
-  - Changes page shows configured timezone name dynamically
-  - All scheduler functions now use `get_app_timezone_info()` for timezone-aware operations
-- **Learnings for future iterations**:
-  - When adding timezone support, replace hardcoded `_CST_TZ` with dynamic `get_app_timezone_info()` calls
-  - Use `_get_app_tz()` helper pattern in modules that need timezone but don't import db_jobs directly
-  - Template timezone display should receive timezone from route context, not hardcode values
-  - The `_format_cst` function name is now a misnomer (it formats in configured timezone) but kept for backwards compatibility
----
-
-## 2026-01-27 21:00 - US-013
-- **What was implemented**: Created Auto-Updating AP Inventory Database Schema
-- **Changes made**:
-  1. Added `ap_inventory` table in `init_db()` with fields: ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state, slots, country, wlc_host, first_seen, last_seen
-  2. Added unique index `idx_ap_inv_mac_wlc` on (ap_mac, wlc_host) to prevent duplicates
-  3. Added index `idx_ap_inv_last_seen` for efficient cleanup queries
-  4. Added additional indexes for common queries: ap_name, wlc_host, ap_model
-  5. Created `ap_inventory_settings` table with enabled, cleanup_days, updated_at fields
-  6. Added CRUD functions:
-     - `load_ap_inventory_settings()` / `save_ap_inventory_settings()` - settings management
-     - `upsert_ap_inventory()` - insert/update single AP
-     - `upsert_ap_inventory_bulk()` - bulk insert/update APs (for polling)
-     - `list_ap_inventory()` - list with optional filters
-     - `get_ap_inventory()` - get single AP by MAC + WLC host
-     - `delete_ap_inventory()` - delete single AP
-     - `cleanup_stale_ap_inventory()` - remove APs not seen for N days
-     - `get_ap_inventory_stats()` - summary statistics
-     - `clear_ap_inventory()` - clear all APs
-- **Files changed**:
-  - `tools/db_jobs.py` - Added table schema and CRUD functions
-- **Verification**:
-  - Syntax check passes on all Python files
-  - Schema follows existing patterns (single-row settings with CHECK(id=1), upsert with ON CONFLICT)
-  - Functions use `_DB_LOCK` for thread safety
-  - Cleanup function protects newly-added APs from clock issues
-- **Learnings for future iterations**:
-  - AP inventory uses (ap_mac, wlc_host) as unique key to allow same AP MAC on different controllers
-  - Bulk upsert uses `executemany()` for efficiency
-  - Cleanup protection: only removes APs where both last_seen AND first_seen are older than cutoff, preventing deletion of newly-added APs due to clock sync issues
-  - Settings follow single-row pattern with `id INTEGER PRIMARY KEY CHECK(id=1)`
----
-
-## 2026-01-27 22:30 - US-014
-- **What was implemented**: Implemented AP Inventory Polling During Dashboard Updates
-- **Changes made**:
-  1. **app.py**: Modified `_collect_wlc_snapshot()` to include `ap_details` in result, added `_parse_cisco_ap_summary()` to parse AP details from `show ap summary` output
-  2. **app.py**: Modified `_dashboard_poll_once()` to collect `ap_details` from snapshots and store using `upsert_ap_inventory_bulk()`
-  3. **app.py**: Added import for `upsert_ap_inventory_bulk` from `tools/db_jobs.py`
-  4. **tools/aruba_controller.py**: Modified `get_aruba_snapshot()` to include `ap_details`, added `_parse_aruba_ap_database()` parser
-- **Files changed**:
-  - `app.py` - Added AP detail collection and storage in dashboard polling
-  - `tools/aruba_controller.py` - Added AP detail parsing for Aruba controllers
-- **Verification**:
-  - Python syntax check passes on all modified files
-  - App imports successfully
-  - Data flow: snapshot → ap_details → upsert_ap_inventory_bulk
-  - Cisco AP fields mapped: ap_name, ap_ip, ap_model, ap_mac (Ethernet MAC), ap_location, ap_state, slots, country
-  - Aruba AP fields mapped: ap_name, ap_ip, ap_model, ap_mac (or pseudo-MAC from name hash), ap_state
-- **Learnings for future iterations**:
-  - Cisco 9800 `show ap summary` includes Ethernet MAC which is used for deduplication
-  - Aruba `show ap database long` may not include MAC in standard columns, so a pseudo-MAC is generated from AP name hash for deduplication
-  - AP inventory updates happen automatically during each WLC dashboard poll cycle
-  - The parsing functions reuse the same output that's already fetched for AP count, avoiding extra SSH commands
----
-
-## 2026-01-27 23:30 - US-015
-- **What was implemented**: Implemented AP Inventory Cleanup (5-Day Stale Removal)
-- **Changes made**:
-  1. **tools/db_jobs.py**: Modified `cleanup_stale_ap_inventory()` to return `Tuple[int, List[Dict]]` instead of just `int`. Now retrieves AP details (ap_name, ap_mac, ap_model, wlc_host, last_seen) before deletion for audit logging. Added `Tuple` to typing imports.
-  2. **app.py**: Added `cleanup_stale_ap_inventory` to imports from db_jobs. Added cleanup call after AP inventory updates in `_dashboard_poll_once()`. Each removed AP is logged via `log_audit()` with action `ap_inventory_cleanup`.
-- **Files changed**:
-  - `tools/db_jobs.py` - Modified cleanup function to return removed AP details
-  - `app.py` - Added cleanup call with audit logging
-- **Verification**:
-  - Python syntax check passes on all modified files
-  - App imports successfully
-  - Cleanup runs after each AP inventory update during dashboard polling
-  - Removed APs are logged with: action "ap_inventory_cleanup", user "system", resource "{ap_name} ({ap_mac})", details "WLC: {wlc_host} | Model: {ap_model} | Last seen: {last_seen}"
-- **Learnings for future iterations**:
-  - Cleanup function already had clock protection (requires first_seen < today_start) from US-013
-  - Audit logging uses `log_audit()` from `tools/security.py` which writes to SQLite `audit_log` table
-  - System-triggered actions use "system" as the username for audit purposes
----
-
-## 2026-01-27 - US-016
-- **What was implemented**: Created AP Inventory Dashboard Page
-- **Changes made**:
-  1. Added imports for `list_ap_inventory` and `get_ap_inventory_stats` from db_jobs
-  2. Created `/tools/wlc/ap-inventory` route in app.py with filter parameters (wlc, name, model, location)
-  3. Created `/tools/wlc/ap-inventory/export` route for CSV export with filtered results
-  4. Created `templates/ap_inventory.html` with:
-     - Navigation pills (Dashboard, AP Inventory, Settings)
-     - Stats cards showing total APs and counts per WLC controller
-     - Filter bar with search, WLC dropdown, model and location filters
-     - Table displaying all AP fields: name, IP, model, MAC, location, state, WLC host, first_seen, last_seen
-     - Model distribution summary section
-     - Empty state with helpful message and link to WLC Dashboard Settings
-  5. Added "AP Inventory" button to WLC dashboard header linking to new page
-- **Files changed**:
-  - `app.py` - Added route and CSV export
-  - `templates/ap_inventory.html` - New template
-  - `templates/wlc_dashboard.html` - Added AP Inventory button
-- **Verification**:
-  - Python syntax check passes
-  - Flask app imports successfully with routes registered
-  - Page renders correctly in browser with all elements
-  - Navigation from WLC Dashboard to AP Inventory works
-  - Filter form and empty state display correctly
-- **Learnings for future iterations**:
-  - AP Inventory page shares `wlc_dashboard` page permission (uses `@require_page_enabled("wlc_dashboard")`)
-  - Navigation pills provide consistent nav between Dashboard/AP Inventory/Settings
-  - CSV export applies current filters to exported data
-  - Stats cards link directly to filtered views (click WLC name to filter by that WLC)
----
-
-## 2026-01-27 - US-017
-- **What was implemented**: Verified AP Inventory CSV Export functionality (already implemented in US-016)
-- **Verification completed**:
-  - CSV export button visible in AP Inventory page header
-  - Clicking "Export CSV" downloads file with correct filename format: `ap_inventory_2026-01-27.csv`
-  - CSV headers include all required fields: AP Name, IP Address, Model, MAC Address, Location, State, Slots, Country, WLC Host, First Seen, Last Seen
-  - Export URL passes `**request.args` to include current filters
-  - Typecheck passes
-  - Browser verification complete
-- **Files changed**: None (functionality was already implemented in US-016)
-- **Code review findings**:
-  - Export route at `/tools/wlc/ap-inventory/export` (app.py:5142-5195)
-  - Uses `list_ap_inventory()` with filter parameters from query string
-  - Filename generated with `datetime.now().strftime('%Y-%m-%d')` for YYYY-MM-DD format
-  - Response returns CSV with proper mimetype and Content-Disposition header
-- **Learnings for future iterations**:
-  - When implementing a feature page, include CSV export in the same story to avoid creating separate stories for tightly-coupled functionality
-  - CSV export was properly designed to accept the same filter parameters as the display route
----
-
-## 2026-01-27 - US-018
-- **What was implemented**: Created SolarWinds Hardware/Software Inventory Schema for CVE analysis
-- **Changes made**:
-  1. Extended `solarwinds_nodes` table with `hardware_version` column via migration
-  2. Added indexes for efficient CVE/inventory searches: `idx_solarwinds_vendor`, `idx_solarwinds_model`, `idx_solarwinds_version`, `idx_solarwinds_hw_version`
-  3. Updated `replace_solarwinds_nodes()` to insert hardware_version
-  4. Updated `fetch_solarwinds_nodes()` to return hardware_version
-  5. Added `SysDescription` to SolarWinds API query for hardware version extraction
-  6. Created `_extract_hardware_version()` helper function to parse hardware revisions from SysDescription
-- **Files changed**:
-  - `tools/db_jobs.py` - Added column migration and indexes, updated insert/select functions
-  - `tools/solarwinds.py` - Added SysDescription to query, added hardware version extraction
-  - `app.py` - Added hardware_version to poll shaping
-- **Verification**:
-  - Python syntax check passes on all modified files
-  - Module imports work correctly
-  - App imports and initializes successfully
-- **Learnings for future iterations**:
-  - SolarWinds Orion API provides `SysDescription` which may contain hardware revision info
-  - For network devices, hardware version is often encoded in SysDescription (e.g., "REV A", "Hardware: 2.0")
-  - The hardware_version field can be populated automatically from SysDescription patterns or manually via UI enrichment
-  - Extended existing table instead of creating new one to avoid data duplication and maintain foreign key relationships
----
-
-## 2026-01-27 - US-019
-- **What was implemented**: Created SolarWinds Inventory Dashboard Page for CVE assessment
-- **Changes made**:
-  1. Created `/tools/solarwinds/inventory` route in app.py with multi-select filter support (vendor, model, version)
-  2. Created `/tools/solarwinds/inventory/export` route for CSV export with filtered results
-  3. Created `templates/solarwinds_inventory.html` with:
-     - Summary charts: "Devices by Vendor" and "Top Software Versions" bar charts
-     - Multi-select filter dropdowns for vendor, model, software version
-     - Search box for hostname, IP, model, version
-     - Hardware version text filter
-     - Data table with all fields: hostname, IP, organization, vendor, model, software version, hardware version
-     - Pagination (100 rows per page)
-     - CSV export button
-  4. Added navigation pills to `solarwinds_nodes.html` (Nodes, Inventory, Settings)
-- **Files changed**:
-  - `app.py` - Added solarwinds_inventory and solarwinds_inventory_export routes
-  - `templates/solarwinds_inventory.html` - New template (created)
-  - `templates/solarwinds_nodes.html` - Added navigation pills
-- **Verification**:
-  - Python syntax check passes on all modified files
-  - App imports and runs successfully
-  - Page renders correctly at `/tools/solarwinds/inventory` showing 17028 devices
-  - Summary charts display correctly with vendor counts and version distribution
-  - Multi-select filters work (Ctrl/Cmd+click for multiple selections)
-  - Data table renders with all fields including hardware_version column
-  - Navigation pills link correctly between Nodes, Inventory, and Settings pages
-  - CSV export downloads filtered results
-- **Learnings for future iterations**:
-  - Multi-select filters use `request.args.getlist()` to get multiple values
-  - Bar charts use percentages for width based on filtered count, not total count
-  - Safe DOM manipulation should be used instead of innerHTML for security (textContent, createElement)
-  - Navigation pills provide consistent nav between related SolarWinds pages
----
-
-## 2026-01-27 - US-020
-- **What was implemented**: Implemented SolarWinds Inventory Search and Aggregation for CVE assessment
-- **Changes made**:
-  1. Added `_match_version_pattern()` helper function in app.py supporting:
-     - Plain text substring matching (case-insensitive)
-     - Wildcard matching with `*` (e.g., `15.*` matches `15.2.3`, `15.10.1`)
-     - Regex matching with `re:` prefix (e.g., `re:^15\\.([2-5])` for version ranges)
-  2. Added `version_search` parameter to `/tools/solarwinds/inventory` route
-  3. Built vendor → model → version hierarchy data structure for aggregated display
-  4. Updated export route to include `version_search` filter
-  5. Created Version Search box in template with placeholder examples and help text
-  6. Created collapsible hierarchy view with Expand All/Collapse All buttons
-  7. Added click-to-filter functionality on version counts in hierarchy
-  8. Added JavaScript functions: toggleVendor(), toggleModel(), expandAllHierarchy(), collapseAllHierarchy(), filterByVersion()
-- **Files changed**:
-  - `app.py` - Added _match_version_pattern(), hierarchy building, version_search filter
-  - `templates/solarwinds_inventory.html` - Added version search box, hierarchy view, CSS, JavaScript
-- **Verification**:
-  - Wildcard search `15.*` correctly filtered to 2298 Cisco devices with 15.x versions
-  - Hierarchy shows vendor (Cisco 9105), model (Catalyst 29xxStack 955), version counts
-  - Clicking version in hierarchy filters to exact vendor+model+version combination (761 devices)
-  - Filter tags display correctly for all active filters
-  - Export includes version_search filter parameter
-  - Typecheck passes
-- **Learnings for future iterations**:
-  - Wildcard patterns are converted to regex by escaping special chars and replacing `*` with `.*`
-  - Regex mode uses `re:` prefix to differentiate from wildcard mode
-  - Hierarchy data is sorted by count descending at each level (vendor, model, version)
-  - Use `style.maxHeight` for CSS transitions on collapsible content instead of display:none
-  - Click handlers on hierarchy items trigger form submissions with pre-filled filter values
----
-
-## 2026-01-27 - US-021
-- **What was implemented**: Implemented SolarWinds Inventory Export with aggregation summary
-- **Changes made**:
-  1. Added `/tools/solarwinds/inventory/export-summary` route in app.py for aggregation CSV export
-  2. New route exports vendor → model → version hierarchy with device counts per combination
-  3. Added "Export Summary" button to solarwinds_inventory.html header
-  4. Both export routes support all existing filters (vendor, model, version, search, hw_version, version_search)
-- **Files changed**:
-  - `app.py` - Added solarwinds_inventory_export_summary route (~90 lines)
-  - `templates/solarwinds_inventory.html` - Added Export Summary button
-- **Verification**:
-  - Full inventory export (`/export`): 17,028 devices with all required fields (caption, ip_address, organization, vendor, model, version, hardware_version)
-  - Summary export (`/export-summary`): Hierarchical aggregation with Vendor, Vendor_Count, Model, Model_Count, Software_Version, Version_Count columns
-  - Filtered exports work correctly (tested with vendor=Cisco filter)
-  - Filename format verified: `solarwinds_inventory_summary_2026-01-27.csv`
-  - Typecheck passes
-  - Browser verification complete - both buttons visible and functional
-- **Learnings for future iterations**:
-  - Export routes should reuse the same filtering logic as display routes for consistency
-  - Aggregation exports are valuable for CVE impact analysis - showing device counts per version helps prioritize patching
-  - CSV DictWriter with explicit fieldnames ensures consistent column ordering
----
-
-## 2026-01-27 - US-022
-- **What was implemented**: Created Production Readiness Documentation
-- **Changes made**:
-  1. Created `docs/audit-findings.md` with comprehensive audit results:
-     - Executive summary of 10 systems audited, 9 issues fixed
-     - Detailed documentation of each issue found and the fix applied
-     - Categorized by user story (US-001 through US-010)
-     - Summary table of files changed
-     - Recommendations section for future development
-  2. Created `docs/production-runbook.md` with:
-     - System overview and architecture diagram
-     - Installation and startup instructions
-     - Database configuration (dual database architecture explained)
-     - Timezone configuration guide with all 7 supported US timezones
-     - Documentation of all 5 scheduled job systems:
-       - WLC Dashboard Poller
-       - Bulk SSH Schedule Worker
-       - Change Management Scheduler
-       - WLC Summer Guest Scheduler
-       - Certificate Sync Worker
-     - New features documentation (AP Inventory, SolarWinds Inventory)
-     - Comprehensive troubleshooting guide with 7 common issues
-     - Security considerations
-     - Backup and recovery procedures
-- **Files changed**:
-  - `docs/audit-findings.md` - New file (created)
-  - `docs/production-runbook.md` - New file (created)
-- **Verification**:
-  - Typecheck passes (Python syntax check)
-  - All documentation follows markdown best practices
-  - All acceptance criteria met
-- **Learnings for future iterations**:
-  - Production documentation should be created as a final step after all features are complete
-  - Runbooks should include architecture diagrams and troubleshooting guides
-  - Audit findings should document not just the fix but also the impact and verification steps
+## 2026-01-27 19:04 CST - US-006
+- What was implemented:
+  - Created src/core/database.py with database connection management utilities
+  - Created src/core/security.py with authentication, encryption, and access control decorators
+  - Created src/core/helpers.py with common utility functions (page settings, timezone, formatting)
+  - Updated src/core/__init__.py to export all utilities for easy importing
+  - All modules use relative imports within the package
+- Files changed:
+  - src/core/database.py (new)
+  - src/core/security.py (new)
+  - src/core/helpers.py (new)
+  - src/core/__init__.py (modified)
+- **Learnings for future iterations:**
+  - Import core utilities via: `from src.core import get_connection, require_login, is_page_enabled`
+  - database.py: DB_PATH, get_connection(), get_db_lock(), execute_with_lock(), fetch_one(), fetch_all()
+  - security.py: encrypt/decrypt_password(), require_login/superadmin/kb_create/page_enabled decorators
+  - helpers.py: is_page_enabled(), get_app_timezone(), now_iso(), format_datetime()
+  - Encryption key loaded from NOC_ENCRYPTION_KEY env var or .encryption_key file
+  - Thread-safe database operations via _DB_LOCK context manager
 ---
