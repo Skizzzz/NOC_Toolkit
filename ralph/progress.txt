@@ -221,3 +221,27 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Templates use `render_template("wlc/wlc_dashboard.html")` - the blueprint prefix is required
   - The WLC module has many more routes in app.py (inventory/run, RF run, jobs, settings) - only extracted the core view routes per PRD
 ---
+
+## 2026-01-27 21:45 CST - US-010
+- What was implemented:
+  - Created src/blueprints/solarwinds/routes.py with routes: /tools/solarwinds/nodes, /tools/solarwinds/inventory, /tools/solarwinds/inventory/export, /tools/solarwinds/inventory/export-summary, /api/solarwinds/nodes, /tools/solarwinds/nodes/settings
+  - Created src/blueprints/solarwinds/templates/solarwinds/ directory structure
+  - Copied and updated templates: solarwinds_nodes.html, solarwinds_inventory.html, solarwinds_nodes_settings.html
+  - Updated url_for() calls in templates to use blueprint prefix (solarwinds.route_name)
+  - Updated src/blueprints/solarwinds/__init__.py to export solarwinds_bp
+  - Registered solarwinds blueprint in src/app.py _register_blueprints()
+  - Included helper functions: _match_version_pattern(), _apply_inventory_filters(), _get_solar_settings(), _set_solar_settings(), _run_solarwinds_poll()
+- Files changed:
+  - src/blueprints/solarwinds/routes.py (new)
+  - src/blueprints/solarwinds/templates/solarwinds/solarwinds_nodes.html (new)
+  - src/blueprints/solarwinds/templates/solarwinds/solarwinds_inventory.html (new)
+  - src/blueprints/solarwinds/templates/solarwinds/solarwinds_nodes_settings.html (new)
+  - src/blueprints/solarwinds/__init__.py (modified)
+  - src/app.py (modified)
+- **Learnings for future iterations:**
+  - SolarWinds blueprint uses url_prefix="" for root-level routes (e.g., /tools/solarwinds/nodes)
+  - The solarwinds routes include both view routes AND export routes for CSV downloads
+  - Settings route includes _run_solarwinds_poll() helper which calls tools.solarwinds.fetch_nodes
+  - Templates reference external routes like 'changes_list' which remain in app.py
+  - Use _apply_inventory_filters() helper to avoid duplicating filter logic across routes
+---
