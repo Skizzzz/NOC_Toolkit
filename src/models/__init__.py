@@ -17,6 +17,15 @@ from .user import User, Session
 from .settings import AppSettings, PageSettings
 from .job import Job, JobEvent
 from .audit import AuditLog
+from .wlc import (
+    WLCDashboardSettings,
+    WLCSample,
+    WLCSummerSettings,
+    WLCSummerSample,
+    APInventory,
+    APInventorySettings,
+)
+from .solarwinds import SolarWindsSettings, SolarWindsNode
 
 __all__ = [
     "db",
@@ -27,4 +36,12 @@ __all__ = [
     "Job",
     "JobEvent",
     "AuditLog",
+    "WLCDashboardSettings",
+    "WLCSample",
+    "WLCSummerSettings",
+    "WLCSummerSample",
+    "APInventory",
+    "APInventorySettings",
+    "SolarWindsSettings",
+    "SolarWindsNode",
 ]
