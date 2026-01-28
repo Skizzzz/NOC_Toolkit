@@ -516,3 +516,45 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - KBArticle uses back_populates="kb_articles" relationship with User model
   - Use db.or_() for combining filter conditions in SQLAlchemy queries
 ---
+
+## 2026-01-27 - US-022
+- What was implemented:
+  - Added Flask-Migrate>=4.0.5 to requirements/base.txt
+  - Created migrations/ directory with Alembic configuration:
+    - migrations/alembic.ini: Alembic configuration file
+    - migrations/env.py: Flask-Migrate environment configuration
+    - migrations/script.py.mako: Template for generating migrations
+    - migrations/README: Documentation for migration usage
+  - Created migrations/versions/001_initial_schema.py with all models:
+    - users, sessions tables for authentication
+    - app_settings, page_settings tables for configuration
+    - jobs, job_events tables for job tracking
+    - audit_log table for audit trail
+    - wlc_dashboard_settings, wlc_dashboard_samples, wlc_summer_settings, wlc_summer_samples, ap_inventory, ap_inventory_settings tables for WLC
+    - solarwinds_settings, solarwinds_nodes tables for SolarWinds integration
+    - bulk_ssh_jobs, bulk_ssh_results, bulk_ssh_templates, bulk_ssh_schedules tables for bulk SSH
+    - change_windows, change_events tables for config management
+    - certificates, ise_nodes, cert_sync_settings tables for certificate tracking
+    - kb_articles table for knowledge base
+  - Updated src/app.py to initialize Flask-SQLAlchemy (db) and Flask-Migrate (migrate) extensions
+  - Created scripts/init_db.py for first-time database setup with:
+    - Database migration execution
+    - Seed data for page settings and app settings
+    - Reset functionality for development
+- Files changed:
+  - requirements/base.txt (modified)
+  - src/app.py (modified)
+  - migrations/alembic.ini (new)
+  - migrations/env.py (new)
+  - migrations/script.py.mako (new)
+  - migrations/README (new)
+  - migrations/versions/001_initial_schema.py (new)
+  - scripts/init_db.py (new)
+- **Learnings for future iterations:**
+  - Flask-Migrate CLI commands: `flask db migrate -m "desc"`, `flask db upgrade`, `flask db downgrade`
+  - migrations/env.py handles Flask-SQLAlchemy>=3 compatibility automatically
+  - Initial migration uses op.create_table() with sa.Column() definitions
+  - Singleton tables use CheckConstraint("id = 1", name="singleton_tablename")
+  - scripts/init_db.py can be run with `python scripts/init_db.py` or `python scripts/init_db.py --reset`
+  - db.init_app(app) and migrate.init_app(app, db) are called in _init_extensions()
+---
