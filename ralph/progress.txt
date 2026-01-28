@@ -825,3 +825,24 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - KB access control: regular users (can_create_kb=0) cannot see "New Article" button
   - Use `pytest tests/e2e/test_kb.py -v --timeout=120` to run Knowledge Base tests
 ---
+
+## 2026-01-27 - US-034
+- What was implemented:
+  - Created tests/e2e/test_setup.py with 24 comprehensive E2E tests for the first-run setup wizard
+  - TestFreshDatabaseRedirectsToSetup: 5 tests covering root redirect, login redirect, protected page redirect, setup page load, setup notice display
+  - TestSetupWizardPasswordValidation: 8 tests covering empty username, short username, empty password, short password, password mismatch, and password strength indicator (weak/medium/strong)
+  - TestSetupWizardCreatesAdmin: 3 tests covering admin creation/redirect, superadmin role verification, 404 after completion
+  - TestSetupWizardFormElements: 7 tests covering username field, password fields, submit button, strength indicator, theme toggle
+  - TestSetupWizardHealthEndpoint: 1 test covering health endpoint during first-run state
+  - Created custom fixtures for isolated fresh database testing: fresh_db_app, fresh_app_port, fresh_base_url, fresh_live_server, fresh_page
+- Files changed:
+  - tests/e2e/test_setup.py (new - 612 lines)
+- **Learnings for future iterations:**
+  - Setup wizard tests need isolated database fixtures - cannot reuse seeded_db fixture which adds users
+  - The codebase has dual-database architecture: SQLAlchemy (User model) and SQLite (security.py verify_user)
+  - Setup wizard saves to SQLAlchemy only, so login after setup requires both databases to be synced
+  - For testing user creation, verify with SQLAlchemy query rather than trying to login
+  - Login template uses `.flash-message.flash-{{ category }}` class, not just `.flash`
+  - Remove required attribute with page.evaluate() to test server-side validation
+  - Use `pytest tests/e2e/test_setup.py -v --timeout=180` to run Setup Wizard tests
+---
