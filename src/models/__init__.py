@@ -26,6 +26,8 @@ from .wlc import (
     APInventorySettings,
 )
 from .solarwinds import SolarWindsSettings, SolarWindsNode
+from .bulk_ssh import BulkSSHJob, BulkSSHResult, BulkSSHTemplate, BulkSSHSchedule
+from .config import ChangeWindow, ChangeEvent
 
 __all__ = [
     "db",
@@ -44,4 +46,10 @@ __all__ = [
     "APInventorySettings",
     "SolarWindsSettings",
     "SolarWindsNode",
+    "BulkSSHJob",
+    "BulkSSHResult",
+    "BulkSSHTemplate",
+    "BulkSSHSchedule",
+    "ChangeWindow",
+    "ChangeEvent",
 ]
