@@ -585,3 +585,23 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Admin user created with set_password() method from User model
   - Middleware returns None to continue request processing, redirect() to intercept
 ---
+
+## 2026-01-27 - US-024
+- What was implemented:
+  - Removed print() statement at tools/security.py:146 that logged default admin password
+  - Replaced all print() statements with proper Python logging in tools/security.py
+  - Replaced all print() statements with proper Python logging in tools/cert_tracker.py
+  - Updated src/config.py to remove default SECRET_KEY value (now requires explicit setting)
+  - Application already had validation to refuse startup in production without FLASK_SECRET_KEY
+- Files changed:
+  - tools/security.py (modified - added logging import and replaced print() with logger calls)
+  - tools/cert_tracker.py (modified - added logging import and replaced print() with logger calls)
+  - src/config.py (modified - removed default empty string from SECRET_KEY)
+- **Learnings for future iterations:**
+  - Use `logger = logging.getLogger(__name__)` at module level for consistent logging
+  - Use logger.debug() for verbose operational details, logger.info() for normal operations
+  - Use logger.warning() for recoverable issues, logger.error() for errors
+  - NEVER log passwords, secrets, or credentials - log only that an action occurred
+  - For exception traces, use logger.debug("Traceback: %s", traceback.format_exc())
+  - Production SECRET_KEY validation is in src/app.py create_app() function
+---
