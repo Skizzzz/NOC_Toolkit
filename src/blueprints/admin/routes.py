@@ -17,6 +17,7 @@ from flask import (
     flash,
 )
 
+from src.core.database import get_db_path
 from src.core.security import (
     require_superadmin,
     log_audit,
@@ -56,7 +57,7 @@ def admin_users():
                 flash("Password must be at least 8 characters", "error")
             elif create_user(username, password, role):
                 # Update KB permissions for the new user
-                conn = sqlite3.connect("noc_toolkit.db")
+                conn = sqlite3.connect(get_db_path())
                 cursor = conn.cursor()
                 cursor.execute(
                     "UPDATE users SET kb_access_level = ?, can_create_kb = ? WHERE username = ?",
@@ -79,7 +80,7 @@ def admin_users():
             kb_access_level = request.form.get("kb_access_level", "FSR")
             can_create_kb = 1 if request.form.get("can_create_kb") else 0
 
-            conn = sqlite3.connect("noc_toolkit.db")
+            conn = sqlite3.connect(get_db_path())
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE users SET kb_access_level = ?, can_create_kb = ? WHERE id = ?",
@@ -90,7 +91,7 @@ def admin_users():
             flash("User KB permissions updated", "success")
 
     # Fetch all users including KB permissions
-    conn = sqlite3.connect("noc_toolkit.db")
+    conn = sqlite3.connect(get_db_path())
     cursor = conn.cursor()
     cursor.execute(
         "SELECT id, username, role, created_at, last_login, kb_access_level, can_create_kb "

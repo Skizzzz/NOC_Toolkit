@@ -146,7 +146,8 @@ def seeded_db(app, live_server):
             page_key TEXT PRIMARY KEY,
             page_name TEXT NOT NULL,
             enabled INTEGER NOT NULL DEFAULT 1,
-            category TEXT
+            category TEXT,
+            updated_at TEXT
         )
     """)
 
