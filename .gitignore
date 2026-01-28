@@ -53,3 +53,11 @@ Thumbs.db
 
 # Job results (optional - these can get large)
 # results/
+
+# Testing
+.pytest_cache/
+test-results/
+.coverage
+htmlcov/
+*.cover
+coverage.xml
