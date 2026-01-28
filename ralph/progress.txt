@@ -800,3 +800,28 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - The empty state section in cert_tracker.html contains duplicate buttons ("Upload Certificate", "Configure ISE Nodes")
   - Use `pytest tests/e2e/test_certs.py -v --timeout=120` to run Certificate Tracker tests
 ---
+
+## 2026-01-27 - US-033
+- What was implemented:
+  - Created tests/e2e/test_kb.py with 28 comprehensive E2E tests for Knowledge Base functionality
+  - TestKnowledgeBasePage: 3 tests covering page load, description, breadcrumbs
+  - TestNewArticleButton: 3 tests covering visibility for admin users, link destination, hidden for regular users
+  - TestSearchInput: 4 tests covering search input, subject filter, filter button, form structure
+  - TestEmptyState: 2 tests covering empty state display and message
+  - TestAccessInfo: 3 tests covering access info display, user level, visibility levels explanation
+  - TestKnowledgeBaseAccessControl: 4 tests covering unauthenticated redirects and user access
+  - TestCreateArticlePage: 7 tests covering form fields (title, subject, content, visibility, submit, back link)
+  - TestKnowledgeBaseNavigation: 2 tests covering navigation between KB list and create page
+  - Fixed KB routes to use get_db_path() instead of hardcoded "noc_toolkit.db"
+  - Updated seeded_db fixture to create kb_articles table for tests
+- Files changed:
+  - tests/e2e/test_kb.py (new - 369 lines)
+  - src/blueprints/kb/routes.py (modified - import get_db_path, replaced hardcoded db path)
+  - tests/e2e/conftest.py (modified - added kb_articles table creation and cleanup)
+- **Learnings for future iterations:**
+  - KB routes were using hardcoded `sqlite3.connect("noc_toolkit.db")` - always use `get_db_path()` from src.core.database
+  - The visibility field in KB form uses radio buttons (`.visibility-options` container), not a select dropdown
+  - Use `to_be_attached()` for checking hidden inputs (like radio buttons with `display: none`) are present
+  - KB access control: regular users (can_create_kb=0) cannot see "New Article" button
+  - Use `pytest tests/e2e/test_kb.py -v --timeout=120` to run Knowledge Base tests
+---
