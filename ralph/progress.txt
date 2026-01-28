@@ -744,3 +744,25 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - When adding API endpoints to blueprints, ensure templates reference them with blueprint prefix
   - Use `pytest tests/e2e/test_wlc.py -v --timeout=120` to run WLC tests
 ---
+
+## 2026-01-27 - US-030
+- What was implemented:
+  - Created tests/e2e/test_solarwinds.py with 19 comprehensive E2E tests for SolarWinds inventory functionality
+  - TestSolarWindsInventory: test_inventory_page_loads, test_inventory_page_has_header, test_inventory_page_has_navigation_pills
+  - TestSolarWindsSearchFilter: test_search_filter_input_is_present, test_vendor_filter_is_present, test_model_filter_is_present, test_version_filter_is_present, test_version_search_input_is_present, test_filter_apply_button_is_present
+  - TestSolarWindsExport: test_export_csv_button_is_present, test_export_summary_button_is_present, test_export_csv_triggers_download, test_export_summary_triggers_download
+  - TestSolarWindsNodes: test_nodes_page_loads
+  - TestSolarWindsAccessControl: test_unauthenticated_user_redirected_to_login, test_unauthenticated_user_redirected_from_nodes, test_regular_user_can_access_inventory, test_regular_user_can_access_nodes
+  - TestSolarWindsEmptyState: test_inventory_shows_empty_state_message
+  - Fixed url_for() calls in solarwinds_inventory.html (2 places) and solarwinds_nodes.html (1 place) to use blueprint prefixes
+- Files changed:
+  - tests/e2e/test_solarwinds.py (new - 302 lines)
+  - src/blueprints/solarwinds/templates/solarwinds/solarwinds_inventory.html (modified - fixed url_for calls)
+  - src/blueprints/solarwinds/templates/solarwinds/solarwinds_nodes.html (modified - fixed url_for call)
+- **Learnings for future iterations:**
+  - SolarWinds templates had missed url_for prefixes: 'solarwinds_inventory' -> 'solarwinds.solarwinds_inventory', 'changes_list' -> 'config.changes_list'
+  - Export tests use expect_download() context manager to verify file downloads
+  - Multi-select filters can verify the "multiple" attribute is present on the select element
+  - Empty state tests should verify page loads without server error (500), not necessarily specific empty message
+  - Use `pytest tests/e2e/test_solarwinds.py -v --timeout=120` to run SolarWinds tests
+---
