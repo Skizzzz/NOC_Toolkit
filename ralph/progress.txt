@@ -14,6 +14,9 @@ Started: Tue Jan 27 18:46:20 CST 2026
 - Application factory: src/app.py create_app(config_name) - configs in src/config.py
 - Production entry point: wsgi.py calls create_app("production")
 - Core utilities in src/core/: database.py, security.py, helpers.py - import via `from src.core import ...`
+- Blueprint templates: place in src/blueprints/{name}/templates/{name}/ (nested for Jinja2 namespacing)
+- Blueprint registration: update src/app.py _register_blueprints() function
+- Security decorators (url_for): use "auth.login" for blueprint-aware redirects
 
 ---
 
@@ -139,4 +142,28 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - helpers.py: is_page_enabled(), get_app_timezone(), now_iso(), format_datetime()
   - Encryption key loaded from NOC_ENCRYPTION_KEY env var or .encryption_key file
   - Thread-safe database operations via _DB_LOCK context manager
+---
+
+## 2026-01-27 20:30 CST - US-007
+- What was implemented:
+  - Created src/blueprints/auth/routes.py with /login, /logout, /profile routes
+  - Created src/blueprints/auth/templates/auth/ directory structure
+  - Copied login.html to src/blueprints/auth/templates/auth/login.html
+  - Copied profile.html to src/blueprints/auth/templates/auth/profile.html
+  - Updated src/blueprints/auth/__init__.py to export auth_bp
+  - Registered auth blueprint in src/app.py _register_blueprints()
+  - Updated src/core/security.py decorators to use "auth.login" for redirects
+- Files changed:
+  - src/blueprints/auth/routes.py (new)
+  - src/blueprints/auth/templates/auth/login.html (new)
+  - src/blueprints/auth/templates/auth/profile.html (new)
+  - src/blueprints/auth/__init__.py (modified)
+  - src/app.py (modified)
+  - src/core/security.py (modified)
+- **Learnings for future iterations:**
+  - Blueprint templates must be nested: templates/{blueprint_name}/ for proper Jinja2 namespacing
+  - Templates use `render_template("auth/login.html")` - the blueprint prefix is required
+  - url_for() in security decorators must use blueprint prefix: "auth.login" not "login"
+  - Blueprint routes: use `url_prefix=""` for root-level routes or a prefix like `/auth`
+  - login.html is standalone (no base.html), profile.html extends base.html
 ---
