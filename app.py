@@ -1843,6 +1843,19 @@ def internal_server_error(e):
                           error_title="Server Error",
                           error_message="Something went wrong on our end. Please try again later."), 500
 
+# ====================== HEALTH CHECK ======================
+@app.route("/health")
+def health():
+    """Health check endpoint for container orchestration and load balancers.
+
+    Returns 200 OK when the application is ready to serve requests.
+    """
+    return jsonify({
+        "status": "healthy",
+        "service": "noc-toolkit"
+    }), 200
+
+
 # ====================== AUTHENTICATION ======================
 @app.route("/login", methods=["GET", "POST"])
 def login():
