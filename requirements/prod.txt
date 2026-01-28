@@ -1,0 +1,10 @@
+# NOC Toolkit - Production Dependencies
+# Extends base requirements with production-specific packages
+
+-r base.txt
+
+# Production WSGI server
+gunicorn>=21.2.0
+
+# PostgreSQL adapter
+psycopg2-binary>=2.9.9

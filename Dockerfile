@@ -20,11 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY requirements/ requirements/
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir gunicorn psycopg2-binary
+# Install Python dependencies (production requirements include gunicorn and psycopg2-binary)
+RUN pip install --no-cache-dir -r requirements/prod.txt
 
 # Copy application code
 COPY . .

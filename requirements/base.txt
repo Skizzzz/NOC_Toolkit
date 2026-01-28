@@ -1,0 +1,14 @@
+# NOC Toolkit - Core Dependencies
+# These are the base requirements needed for the application to run
+
+# Web Framework
+Flask==3.0.0
+
+# Network automation
+netmiko>=4.4.0
+
+# Cryptography for encryption/decryption
+cryptography>=41.0.7
+
+# HTTP client
+requests>=2.31.0
