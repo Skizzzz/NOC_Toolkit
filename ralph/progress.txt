@@ -418,3 +418,24 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - User model has helper methods: set_password(), check_password(), is_superadmin property
   - PageSettings has class methods: is_page_enabled(), get_all_pages(), set_page_enabled()
 ---
+
+## 2026-01-27 - US-018
+- What was implemented:
+  - Created src/models/job.py with Job and JobEvent models
+  - Created src/models/audit.py with AuditLog model
+  - Updated src/models/__init__.py to export new models (Job, JobEvent, AuditLog)
+  - Job model includes: job_id (PK), created, tool (indexed), params_json, done, cancelled
+  - JobEvent model includes: id (PK), job_id (FK indexed), ts (indexed), type (indexed), payload_json
+  - AuditLog model includes: id (PK), user_id (FK indexed), username (indexed), action, resource, ip_address, timestamp (indexed), details
+  - Foreign key relationships defined correctly with cascade delete behaviors
+- Files changed:
+  - src/models/job.py (new)
+  - src/models/audit.py (new)
+  - src/models/__init__.py (modified)
+- **Learnings for future iterations:**
+  - Job model has helper methods: is_complete property, mark_done(), mark_cancelled(), add_event()
+  - AuditLog model has class method: log() for creating audit entries with all fields
+  - JobEvent types are: created, sample, error, done, cancelled, note
+  - Use ondelete="CASCADE" for FK to cascade deletes, ondelete="SET NULL" for audit logs to preserve history
+  - Job.events relationship uses order_by="JobEvent.ts" for chronological ordering
+---
