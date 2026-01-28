@@ -151,9 +151,25 @@ def seeded_db(app, live_server):
         )
     """)
 
+    # Create kb_articles table for Knowledge Base tests
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS kb_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            content TEXT NOT NULL,
+            visibility TEXT NOT NULL DEFAULT 'FSR',
+            created_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (created_by) REFERENCES users(id)
+        )
+    """)
+
     # Clear existing data
     cursor.execute("DELETE FROM users")
     cursor.execute("DELETE FROM page_settings")
+    cursor.execute("DELETE FROM kb_articles")
 
     # Create admin user
     admin_hash = generate_password_hash("TestPassword123!", method="pbkdf2:sha256")
@@ -251,6 +267,7 @@ def seeded_db(app, live_server):
     cursor = conn.cursor()
     cursor.execute("DELETE FROM users")
     cursor.execute("DELETE FROM page_settings")
+    cursor.execute("DELETE FROM kb_articles")
     conn.commit()
     conn.close()
 

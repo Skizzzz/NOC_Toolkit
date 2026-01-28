@@ -24,6 +24,7 @@ from src.core import (
     can_view_kb_article,
     log_audit,
 )
+from src.core.database import get_db_path
 
 # Create the blueprint
 kb_bp = Blueprint(
@@ -40,7 +41,7 @@ def _get_kb_articles_for_user(user_id: int):
     """Get all KB articles visible to a user based on their access level."""
     access_level = get_kb_access_level(user_id) if user_id else "FSR"
 
-    conn = sqlite3.connect("noc_toolkit.db")
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -68,7 +69,7 @@ def _get_kb_articles_for_user(user_id: int):
 
 def _get_kb_article(article_id: int):
     """Get a single KB article by ID."""
-    conn = sqlite3.connect("noc_toolkit.db")
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute(
@@ -89,7 +90,7 @@ def _create_kb_article(
     title: str, subject: str, content: str, visibility: str, created_by: int
 ) -> int:
     """Create a new KB article and return its ID."""
-    conn = sqlite3.connect("noc_toolkit.db")
+    conn = sqlite3.connect(get_db_path())
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -108,7 +109,7 @@ def _update_kb_article(
     article_id: int, title: str, subject: str, content: str, visibility: str
 ):
     """Update an existing KB article."""
-    conn = sqlite3.connect("noc_toolkit.db")
+    conn = sqlite3.connect(get_db_path())
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -124,7 +125,7 @@ def _update_kb_article(
 
 def _delete_kb_article(article_id: int):
     """Delete a KB article."""
-    conn = sqlite3.connect("noc_toolkit.db")
+    conn = sqlite3.connect(get_db_path())
     cursor = conn.cursor()
     cursor.execute("DELETE FROM kb_articles WHERE id = ?", (article_id,))
     conn.commit()
@@ -133,7 +134,7 @@ def _delete_kb_article(article_id: int):
 
 def _get_kb_subjects():
     """Get all unique subjects from KB articles."""
-    conn = sqlite3.connect("noc_toolkit.db")
+    conn = sqlite3.connect(get_db_path())
     cursor = conn.cursor()
     cursor.execute("SELECT DISTINCT subject FROM kb_articles ORDER BY subject")
     subjects = [row[0] for row in cursor.fetchall()]
@@ -145,7 +146,7 @@ def _can_user_create_kb(user_id: int) -> bool:
     """Check if a user can create KB articles based on their role."""
     if not user_id:
         return False
-    conn = sqlite3.connect("noc_toolkit.db")
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
