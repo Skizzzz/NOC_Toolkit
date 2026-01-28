@@ -350,3 +350,28 @@ Started: Tue Jan 27 18:46:20 CST 2026
   - Templates use safe DOM methods (textContent, createElement) instead of innerHTML where possible for XSS prevention
   - Job progress API supports both generic jobs and bulk SSH jobs with different data structures
 ---
+
+## 2026-01-27 - US-015
+- What was implemented:
+  - Created src/blueprints/kb/routes.py with routes: /knowledge-base, /knowledge-base/create, /knowledge-base/<int:article_id>, /knowledge-base/<int:article_id>/edit, /knowledge-base/<int:article_id>/delete
+  - Created src/blueprints/kb/templates/kb/ directory structure
+  - Created templates: knowledge_base.html (list view), knowledge_base_article.html (detail view), knowledge_base_form.html (create/edit form)
+  - Updated url_for() calls in all templates to use blueprint prefix (kb.route_name)
+  - Updated src/blueprints/kb/__init__.py to export kb_bp
+  - Registered kb blueprint in src/app.py _register_blueprints()
+  - Included helper functions: _get_kb_articles_for_user(), _get_kb_article(), _create_kb_article(), _update_kb_article(), _delete_kb_article(), _get_kb_subjects(), _can_user_create_kb()
+- Files changed:
+  - src/blueprints/kb/routes.py (new)
+  - src/blueprints/kb/templates/kb/knowledge_base.html (new)
+  - src/blueprints/kb/templates/kb/knowledge_base_article.html (new)
+  - src/blueprints/kb/templates/kb/knowledge_base_form.html (new)
+  - src/blueprints/kb/__init__.py (modified)
+  - src/app.py (modified)
+- **Learnings for future iterations:**
+  - KB blueprint uses url_prefix="" for root-level routes (e.g., /knowledge-base)
+  - KB helper functions already exist in src/core/security.py: get_kb_access_level(), can_view_kb_article(), log_audit()
+  - require_kb_create decorator from src.core is used for article creation/editing permissions
+  - knowledge_base_form.html uses JavaScript for subject autocomplete/suggestions
+  - Templates use visibility-badge classes with FSR/NOC/Admin visibility levels for access control display
+  - Article listing supports filtering by subject and searching by title/content
+---
