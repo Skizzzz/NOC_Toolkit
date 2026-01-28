@@ -15,6 +15,8 @@ db = SQLAlchemy()
 # These imports make the models available when importing from src.models
 from .user import User, Session
 from .settings import AppSettings, PageSettings
+from .job import Job, JobEvent
+from .audit import AuditLog
 
 __all__ = [
     "db",
@@ -22,4 +24,7 @@ __all__ = [
     "Session",
     "AppSettings",
     "PageSettings",
+    "Job",
+    "JobEvent",
+    "AuditLog",
 ]
