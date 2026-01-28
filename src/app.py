@@ -34,8 +34,8 @@ def create_app(config_name: Optional[str] = None) -> Flask:
     """
     app = Flask(
         __name__,
-        template_folder="../templates",
-        static_folder="../static",
+        template_folder="templates",
+        static_folder="static",
     )
 
     # Load configuration
