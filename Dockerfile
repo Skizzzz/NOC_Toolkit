@@ -29,7 +29,7 @@ RUN pip install --no-cache-dir -r requirements/prod.txt
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p logs tmp/wlc_csv tmp/wlc_rf_csv
+RUN mkdir -p logs tmp/wlc_csv tmp/wlc_rf_csv data
 
 # Copy and set up entrypoint
 COPY docker-entrypoint.sh /docker-entrypoint.sh

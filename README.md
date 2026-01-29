@@ -70,6 +70,36 @@ A comprehensive web-based Network Operations Center toolkit for managing network
 
 6. Access the application at `http://localhost:5000`
 
+### Troubleshooting Docker Deployment
+
+**Permission denied errors on startup**
+
+If you see errors like `/app/data/wlc_dashboard.key: Permission denied` in the container logs, the Docker volumes have incorrect ownership. Fix this by removing the volumes and rebuilding:
+
+```bash
+# Stop containers and remove volumes
+sudo docker-compose down -v
+
+# Rebuild the image
+sudo docker-compose build --no-cache
+
+# Start fresh
+sudo docker-compose up -d
+```
+
+Alternatively, if you need to preserve existing data in the volumes:
+
+```bash
+# Stop containers
+sudo docker-compose down
+
+# Fix permissions on the data volume
+sudo docker run --rm -v noc-toolkit-data:/app/data alpine chown -R 1000:1000 /app/data
+
+# Start containers
+sudo docker-compose up -d
+```
+
 ### Manual Installation
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development setup instructions.
