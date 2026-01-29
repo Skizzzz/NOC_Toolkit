@@ -61,3 +61,14 @@ test-results/
 htmlcov/
 *.cover
 coverage.xml
+.playwright-mcp/
+
+# Sample/export data
+wlc_ap_inventory.csv
+
+# IDE and tool config
+.claude/
+
+# Automation/task tracking
+ralph/
+tasks/
