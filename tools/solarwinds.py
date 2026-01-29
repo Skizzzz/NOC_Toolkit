@@ -15,14 +15,9 @@ class SolarWindsError(RuntimeError):
 
 def _extract_hardware_version(sys_desc: str, machine_type: str) -> str:
     """
-    Extract hardware version from SysDescription or MachineType.
+    Extract hardware version from MachineType field.
 
-    SysDescription often contains platform/hardware info like:
-    - "Cisco IOS Software, C2960 Software (C2960-LANBASEK9-M), Version 15.0(2)SE11"
-    - "Dell Networking OS10-Enterprise, Version 10.5.1.0"
-    - "Aruba JL253A 2930F-24G-4SFP Switch"
-
-    For now, extract any version-like patterns from hardware descriptions.
+    Looks for hardware revision patterns like "REV A", "Rev. 01", "Hardware: 2.0".
     This field is primarily for manual enrichment via the UI.
     """
     if not sys_desc and not machine_type:
@@ -48,7 +43,7 @@ def _extract_hardware_version(sys_desc: str, machine_type: str) -> str:
 def _build_query_payload() -> Dict[str, str]:
     query = (
         "SELECT n.NodeID, n.Caption, n.Vendor, n.MachineType, n.IOSVersion, n.IPAddress, n.StatusDescription, n.LastSync, "
-        "n.SysDescription, n.CustomProperties.Organization AS Organization "
+        "n.CustomProperties.Organization AS Organization "
         "FROM Orion.Nodes n"
     )
     return {"query": query}
@@ -139,10 +134,8 @@ def fetch_nodes(
     items = data.get("results") or data.get("Results") or []
     nodes: List[Dict] = []
     for item in items:
-        # Extract hardware_version from SysDescription if available
-        # SysDescription often contains platform/hardware info (e.g., "Cisco IOS Software, C2960 Software...")
-        sys_desc = (item.get("SysDescription") or "").strip()
-        hardware_version = _extract_hardware_version(sys_desc, item.get("MachineType") or "")
+        # Extract hardware_version from MachineType if available
+        hardware_version = _extract_hardware_version("", item.get("MachineType") or "")
         nodes.append(
             {
                 "node_id": item.get("NodeID"),

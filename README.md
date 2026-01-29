@@ -100,7 +100,35 @@ sudo docker run --rm -v noc-toolkit-data:/app/data alpine chown -R 1000:1000 /ap
 sudo docker-compose up -d
 ```
 
-### Manual Installation
+### Native Installation (Recommended for Internal Networks)
+
+If your network infrastructure (SolarWinds, WLCs, etc.) is on an internal network that Docker cannot reach:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Skizzzz/NOC_Toolkit.git
+   cd NOC_Toolkit
+   ```
+
+2. Create and activate a virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements/base.txt
+   ```
+
+4. Start the application:
+   ```bash
+   FLASK_APP=app.py flask run --host=0.0.0.0 --port=8080
+   ```
+
+5. Access the application at `http://localhost:8080`
+
+### Manual Installation (Development)
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development setup instructions.
 
@@ -119,9 +147,11 @@ On first launch, the application will redirect to a setup wizard where you can:
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.9+
 - PostgreSQL 15+ (production) or SQLite (development)
-- Docker and Docker Compose (recommended for deployment)
+- Docker and Docker Compose (optional - see note below)
+
+> **Note:** Docker on macOS runs containers in a VM that cannot access internal/private networks (e.g., 172.x.x.x). If your SolarWinds or network devices are on an internal network, use native installation instead.
 
 ## Environment Variables
 
