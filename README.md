@@ -31,79 +31,6 @@ A comprehensive web-based Network Operations Center toolkit for managing network
 
 ## Quick Start
 
-### Using Docker (Recommended)
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Skizzzz/NOC_Toolkit.git
-   cd NOC_Toolkit
-   ```
-
-2. Create environment configuration:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your settings
-   ```
-
-3. Generate secure secrets:
-   ```bash
-   # Generate Flask secret key
-   python3 -c "import secrets; print('FLASK_SECRET_KEY=' + secrets.token_hex(32))"
-
-   # Generate PostgreSQL password
-   python3 -c "import secrets; print('POSTGRES_PASSWORD=' + secrets.token_urlsafe(24))"
-
-   # Generate encryption key for stored credentials
-   python3 -c "from cryptography.fernet import Fernet; print('NOC_ENCRYPTION_KEY=' + Fernet.generate_key().decode())"
-   ```
-
-4. Start the application:
-   ```bash
-   docker-compose up -d
-   ```
-
-5. Verify deployment:
-   ```bash
-   # Check health endpoint
-   curl http://localhost:5000/health
-   ```
-
-6. Access the application at `http://localhost:5000`
-
-### Troubleshooting Docker Deployment
-
-**Permission denied errors on startup**
-
-If you see errors like `/app/data/wlc_dashboard.key: Permission denied` in the container logs, the Docker volumes have incorrect ownership. Fix this by removing the volumes and rebuilding:
-
-```bash
-# Stop containers and remove volumes
-sudo docker-compose down -v
-
-# Rebuild the image
-sudo docker-compose build --no-cache
-
-# Start fresh
-sudo docker-compose up -d
-```
-
-Alternatively, if you need to preserve existing data in the volumes:
-
-```bash
-# Stop containers
-sudo docker-compose down
-
-# Fix permissions on the data volume
-sudo docker run --rm -v noc-toolkit-data:/app/data alpine chown -R 1000:1000 /app/data
-
-# Start containers
-sudo docker-compose up -d
-```
-
-### Native Installation (Recommended for Internal Networks)
-
-If your network infrastructure (SolarWinds, WLCs, etc.) is on an internal network that Docker cannot reach:
-
 1. Clone the repository:
    ```bash
    git clone https://github.com/Skizzzz/NOC_Toolkit.git
@@ -128,7 +55,7 @@ If your network infrastructure (SolarWinds, WLCs, etc.) is on an internal networ
 
 5. Access the application at `http://localhost:8080`
 
-### Manual Installation (Development)
+### Development Setup
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development setup instructions.
 
@@ -149,21 +76,16 @@ On first launch, the application will redirect to a setup wizard where you can:
 
 - Python 3.9+
 - PostgreSQL 15+ (production) or SQLite (development)
-- Docker and Docker Compose (optional - see note below)
-
-> **Note:** Docker on macOS runs containers in a VM that cannot access internal/private networks (e.g., 172.x.x.x). If your SolarWinds or network devices are on an internal network, use native installation instead.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `FLASK_SECRET_KEY` | Yes | Secret key for session management |
-| `POSTGRES_PASSWORD` | Yes* | PostgreSQL password (*required for Docker) |
 | `NOC_ENCRYPTION_KEY` | No | Key for encrypting stored credentials |
 | `NOC_ADMIN_PASSWORD` | No | Initial admin password (first run only) |
 | `WLC_DASHBOARD_KEY` | No | Encryption key for WLC dashboard credentials |
 | `FLASK_ENV` | No | Environment mode (development/production) |
-| `APP_PORT` | No | Application port (default: 5000) |
 
 See `.env.example` for a complete list of configuration options.
 
@@ -201,8 +123,6 @@ noc-toolkit/
 │   ├── prod.txt         # Production (adds gunicorn)
 │   └── dev.txt          # Development (adds testing tools)
 ├── docs/                 # Documentation
-├── Dockerfile           # Container image definition
-├── docker-compose.yml   # Multi-container orchestration
 └── wsgi.py              # WSGI entry point for production
 ```
 
