@@ -14,8 +14,8 @@ This guide covers deploying NOC Toolkit in a production environment using Docker
 ### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/your-org/noc-toolkit.git
-cd noc-toolkit
+git clone https://github.com/Skizzzz/NOC_Toolkit.git
+cd NOC_Toolkit
 
 # Create environment file
 cp .env.example .env

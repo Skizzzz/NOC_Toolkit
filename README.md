@@ -35,8 +35,8 @@ A comprehensive web-based Network Operations Center toolkit for managing network
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/noc-toolkit.git
-   cd noc-toolkit
+   git clone https://github.com/Skizzzz/NOC_Toolkit.git
+   cd NOC_Toolkit
    ```
 
 2. Create environment configuration:
@@ -48,10 +48,13 @@ A comprehensive web-based Network Operations Center toolkit for managing network
 3. Generate secure secrets:
    ```bash
    # Generate Flask secret key
-   python -c "import secrets; print(secrets.token_hex(32))"
+   python3 -c "import secrets; print('FLASK_SECRET_KEY=' + secrets.token_hex(32))"
 
    # Generate PostgreSQL password
-   python -c "import secrets; print(secrets.token_urlsafe(24))"
+   python3 -c "import secrets; print('POSTGRES_PASSWORD=' + secrets.token_urlsafe(24))"
+
+   # Generate encryption key for stored credentials
+   python3 -c "from cryptography.fernet import Fernet; print('NOC_ENCRYPTION_KEY=' + Fernet.generate_key().decode())"
    ```
 
 4. Start the application:
@@ -59,11 +62,24 @@ A comprehensive web-based Network Operations Center toolkit for managing network
    docker-compose up -d
    ```
 
-5. Access the application at `http://localhost:5000`
+5. Verify deployment:
+   ```bash
+   # Check health endpoint
+   curl http://localhost:5000/health
+   ```
+
+6. Access the application at `http://localhost:5000`
 
 ### Manual Installation
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development setup instructions.
+
+### First-Time Setup
+
+On first launch, the application will redirect to a setup wizard where you can:
+- Create the initial admin account
+- Configure database connections
+- Set up SolarWinds and WLC integrations
 
 ## Documentation
 
@@ -95,23 +111,39 @@ See `.env.example` for a complete list of configuration options.
 
 ```
 noc-toolkit/
-├── app.py                 # Main Flask application
-├── tools/                 # Backend modules
-│   ├── bulk_ssh.py       # Bulk SSH job execution
+├── src/                   # Application source code
+│   ├── app.py            # Flask application factory
+│   ├── config.py         # Configuration management
+│   ├── blueprints/       # Feature modules (routes + templates)
+│   │   ├── admin/        # User & settings management
+│   │   ├── auth/         # Authentication & authorization
+│   │   ├── bulk_ssh/     # Bulk SSH job execution
+│   │   ├── certs/        # Certificate tracking & conversion
+│   │   ├── config/       # Network configuration management
+│   │   ├── jobs/         # Background job monitoring
+│   │   ├── kb/           # Knowledge base
+│   │   ├── setup/        # Initial setup wizard
+│   │   ├── solarwinds/   # SolarWinds integration
+│   │   └── wlc/          # Wireless LAN controller tools
+│   ├── models/           # SQLAlchemy database models
+│   └── core/             # Shared utilities & security
+├── tools/                # Legacy backend modules
+│   ├── bulk_ssh.py       # Bulk SSH execution engine
 │   ├── cert_tracker.py   # Certificate parsing utilities
-│   ├── db_jobs.py        # Database operations
-│   ├── security.py       # Authentication and authorization
-│   ├── solarwinds.py     # SolarWinds API integration
-│   └── ...
-├── templates/            # Jinja2 HTML templates
-├── static/               # CSS, JavaScript, images
+│   ├── security.py       # Encryption helpers
+│   └── solarwinds.py     # SolarWinds API integration
+├── migrations/           # Alembic database migrations
+├── tests/                # Test suites
+│   ├── e2e/             # End-to-end Playwright tests
+│   └── conftest.py      # Pytest fixtures
 ├── requirements/         # Python dependencies
 │   ├── base.txt         # Core dependencies
 │   ├── prod.txt         # Production (adds gunicorn)
 │   └── dev.txt          # Development (adds testing tools)
 ├── docs/                 # Documentation
 ├── Dockerfile           # Container image definition
-└── docker-compose.yml   # Multi-container orchestration
+├── docker-compose.yml   # Multi-container orchestration
+└── wsgi.py              # WSGI entry point for production
 ```
 
 ## Security
@@ -128,4 +160,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-For issues and feature requests, please use the [GitHub Issues](https://github.com/your-org/noc-toolkit/issues) page.
+For issues and feature requests, please use the [GitHub Issues](https://github.com/Skizzzz/NOC_Toolkit/issues) page.
