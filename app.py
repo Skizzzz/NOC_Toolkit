@@ -231,7 +231,7 @@ def _collect_wlc_snapshot(host, username, password, secret):
             auto_enable=bool(secret),
         ) as conn:
             try:
-                summary_out = conn.send_command("show wireless summary", read_timeout=180)
+                summary_out = conn.send_command("show wireless summary", read_timeout=240)
                 client_match = re.search(r"(?i)total\s+(?:number\s+of\s+)?clients\s*:\s*(\d+)", summary_out or "")
                 if client_match:
                     result["total_clients"] = int(client_match.group(1))
@@ -241,7 +241,7 @@ def _collect_wlc_snapshot(host, username, password, secret):
                 errors.append(f"{host}: wireless summary failed ({exc})")
 
             try:
-                ap_out = conn.send_command("show ap summary", read_timeout=180)
+                ap_out = conn.send_command("show ap summary", read_timeout=240)
                 ap_match = re.search(r"Number of APs:\s*(\d+)", ap_out or "", re.I)
                 if ap_match:
                     result["ap_count"] = int(ap_match.group(1))

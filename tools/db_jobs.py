@@ -701,8 +701,8 @@ def init_db():
             )
             """
         )
-        # Unique constraint on (ap_mac, wlc_host) to prevent duplicates
-        cx.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ap_inv_mac_wlc ON ap_inventory(ap_mac, wlc_host)")
+        # Unique constraint on (ap_name, wlc_host) to prevent duplicates
+        cx.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ap_inv_name_wlc ON ap_inventory(ap_name, wlc_host)")
         # Index on last_seen for efficient cleanup queries
         cx.execute("CREATE INDEX IF NOT EXISTS idx_ap_inv_last_seen ON ap_inventory(last_seen)")
         # Additional indexes for common queries
@@ -3099,8 +3099,8 @@ def upsert_ap_inventory(
                     ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state,
                     slots, country, wlc_host, first_seen, last_seen
                 ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(ap_mac, wlc_host) DO UPDATE SET
-                    ap_name=excluded.ap_name,
+                ON CONFLICT(ap_name, wlc_host) DO UPDATE SET
+                    ap_mac=excluded.ap_mac,
                     ap_ip=excluded.ap_ip,
                     ap_model=excluded.ap_model,
                     ap_location=excluded.ap_location,
@@ -3130,7 +3130,7 @@ def upsert_ap_inventory_bulk(aps: List[Dict], wlc_host: str) -> int:
         now = datetime.now().isoformat(timespec="seconds")
         rows = []
         for ap in aps:
-            if not ap.get("ap_mac"):
+            if not ap.get("ap_name"):
                 continue
             rows.append((
                 ap.get("ap_name", ""),
@@ -3154,8 +3154,8 @@ def upsert_ap_inventory_bulk(aps: List[Dict], wlc_host: str) -> int:
                     ap_name, ap_ip, ap_model, ap_mac, ap_location, ap_state,
                     slots, country, wlc_host, first_seen, last_seen
                 ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(ap_mac, wlc_host) DO UPDATE SET
-                    ap_name=excluded.ap_name,
+                ON CONFLICT(ap_name, wlc_host) DO UPDATE SET
+                    ap_mac=excluded.ap_mac,
                     ap_ip=excluded.ap_ip,
                     ap_model=excluded.ap_model,
                     ap_location=excluded.ap_location,
