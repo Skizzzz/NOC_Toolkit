@@ -127,6 +127,7 @@
     </div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
       <button class="btn primary" onclick="toggleAddForm()">Add ISE Node</button>
+      <button class="btn" onclick="toggleBulkImport()">Bulk Import</button>
       <form method="post" action="{{ url_for('ise_sync_now') }}" style="display:inline;">
         <button type="submit" class="btn">Sync All</button>
       </form>
@@ -206,6 +207,32 @@
       <div style="margin-top:16px; display:flex; gap:12px;">
         <button type="submit" class="btn primary">Add Node</button>
         <button type="button" class="btn" onclick="toggleAddForm()">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Bulk Import Form -->
+  <div class="card add-node-form" id="bulkImportForm" style="margin-bottom:24px;">
+    <h3 style="margin:0 0 16px;">Bulk Import ISE Nodes</h3>
+    <form method="post" action="{{ url_for('ise_node_bulk_import') }}" enctype="multipart/form-data">
+      <div style="margin-bottom:16px;">
+        <label>Upload CSV File</label>
+        <input type="file" name="csv_file" accept=".csv" class="form-control">
+      </div>
+      <div style="margin-bottom:12px; font-size:13px; color:var(--muted);">— or paste CSV below —</div>
+      <div style="margin-bottom:16px;">
+        <label>Paste CSV</label>
+        <textarea name="csv_text" rows="6" placeholder="hostname,ip_address,username,password
+aaa01-campus,10.0.0.1,admin,secret123
+aaa02-campus,10.0.0.2,admin,secret456" style="width:100%; font-family:monospace; font-size:13px;"></textarea>
+      </div>
+      <div style="margin-bottom:16px; padding:12px; background:color-mix(in oklab, var(--info) 10%, transparent); border-radius:8px; font-size:13px;">
+        <strong>Expected columns:</strong> <code>hostname</code>, <code>ip_address</code> (or <code>ip</code>), <code>username</code>, <code>password</code><br>
+        Rows missing required fields or with duplicate hostname/IP will be skipped.
+      </div>
+      <div style="display:flex; gap:12px;">
+        <button type="submit" class="btn primary">Import</button>
+        <button type="button" class="btn" onclick="toggleBulkImport()">Cancel</button>
       </div>
     </form>
   </div>
@@ -327,6 +354,14 @@ function toggleAddForm() {
   if (form.classList.contains('active')) {
     form.scrollIntoView({behavior: 'smooth', block: 'start'});
     form.querySelector('input[name="hostname"]').focus();
+  }
+}
+
+function toggleBulkImport() {
+  const form = document.getElementById('bulkImportForm');
+  form.classList.toggle('active');
+  if (form.classList.contains('active')) {
+    form.scrollIntoView({behavior: 'smooth', block: 'start'});
   }
 }
 

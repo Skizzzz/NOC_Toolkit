@@ -6402,6 +6402,60 @@ def ise_node_add():
     return redirect(url_for('ise_nodes'))
 
 
+@app.route("/ise-nodes/bulk-import", methods=["POST"])
+@require_login
+def ise_node_bulk_import():
+    """Bulk-import ISE nodes from CSV file or pasted text."""
+    csv_text = ""
+    uploaded = request.files.get("csv_file")
+    if uploaded and uploaded.filename:
+        csv_text = uploaded.read().decode("utf-8-sig", errors="replace")
+    if not csv_text.strip():
+        csv_text = request.form.get("csv_text", "")
+    if not csv_text.strip():
+        flash("No CSV data provided.", "error")
+        return redirect(url_for("ise_nodes"))
+
+    existing = list_ise_nodes()
+    known_hostnames = {n["hostname"].lower() for n in existing}
+    known_ips = {n["ip"] for n in existing}
+
+    reader = csv.DictReader(StringIO(csv_text))
+    imported = 0
+    skipped_dup = 0
+    skipped_incomplete = 0
+
+    for row in reader:
+        # Normalise keys to lowercase/stripped
+        row = {k.strip().lower(): v.strip() for k, v in row.items() if k}
+        hostname = row.get("hostname", "")
+        ip = row.get("ip_address") or row.get("ip", "")
+        username = row.get("username", "")
+        password = row.get("password", "")
+
+        if not all([hostname, ip, username, password]):
+            skipped_incomplete += 1
+            continue
+        if hostname.lower() in known_hostnames or ip in known_ips:
+            skipped_dup += 1
+            continue
+
+        result = insert_ise_node(hostname=hostname, ip=ip, username=username, password=password, enabled=True)
+        if result:
+            imported += 1
+            known_hostnames.add(hostname.lower())
+            known_ips.add(ip)
+        else:
+            skipped_dup += 1
+
+    skipped_total = skipped_dup + skipped_incomplete
+    flash(
+        f"Imported {imported} node(s). Skipped {skipped_total} ({skipped_dup} duplicates, {skipped_incomplete} incomplete).",
+        "success" if imported else "warning",
+    )
+    return redirect(url_for("ise_nodes"))
+
+
 @app.route("/ise-nodes/<int:node_id>/edit", methods=["GET", "POST"])
 @require_login
 def ise_node_edit(node_id):
