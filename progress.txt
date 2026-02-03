@@ -29,3 +29,16 @@
   - Cannot log into app without database credentials, so browser verification of authenticated pages requires valid credentials
 
 ---
+
+## 2026-02-03 - US-003
+- Updated login page `:root` CSS variables from dark theme values to light theme values (--bg: #f8f7ff, --card: #ffffff, --text: #05013f, --text-muted: #5a5680, etc.)
+- Removed `data-theme="dark"` attribute from `<html>` element
+- Removed `[data-theme="light"]` CSS block (values now in :root)
+- Removed theme toggle button HTML (sun/moon SVGs), theme toggle CSS, and theme-switching JavaScript (localStorage, data-theme manipulation)
+- Mypy typecheck passes (60 pre-existing errors only, none related to changes)
+- Files changed: src/blueprints/auth/templates/auth/login.html, prd.json
+- **Learnings for future iterations:**
+  - Login page is now fully light-only with no theme switching capability
+  - Login page CSS variables now match the base.html light theme values for consistency
+
+---
