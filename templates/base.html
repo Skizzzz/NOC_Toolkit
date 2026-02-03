@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -17,15 +17,15 @@
       --pink-light: #ff3b6e;
       --pink-dark: #c9003d;
 
-      /* Dark Theme (Default) */
-      --bg: #030128;
-      --bg-subtle: #05013f;
-      --card: #08044a;
-      --card-hover: #0c0760;
-      --text: #f0f0ff;
-      --text-muted: #d4d0f0;
-      --border: rgba(245, 4, 80, 0.15);
-      --border-subtle: rgba(148, 148, 204, 0.12);
+      /* Theme Colors */
+      --bg: #f8f7ff;
+      --bg-subtle: #efeeff;
+      --card: #ffffff;
+      --card-hover: #f8f7ff;
+      --text: #05013f;
+      --text-muted: #5a5680;
+      --border: rgba(5, 1, 63, 0.1);
+      --border-subtle: rgba(5, 1, 63, 0.06);
       --accent: var(--pink);
       --accent-soft: rgba(245, 4, 80, 0.15);
 
@@ -47,20 +47,6 @@
       --radius-sm: 8px;
 
       /* Shadows */
-      --shadow: 0 8px 32px rgba(3, 1, 40, 0.4);
-      --shadow-lg: 0 16px 48px rgba(3, 1, 40, 0.5);
-      --glow-pink: 0 0 40px rgba(245, 4, 80, 0.3);
-    }
-
-    [data-theme="light"] {
-      --bg: #f8f7ff;
-      --bg-subtle: #efeeff;
-      --card: #ffffff;
-      --card-hover: #f8f7ff;
-      --text: #05013f;
-      --text-muted: #5a5680;
-      --border: rgba(5, 1, 63, 0.1);
-      --border-subtle: rgba(5, 1, 63, 0.06);
       --shadow: 0 8px 32px rgba(5, 1, 63, 0.08);
       --shadow-lg: 0 16px 48px rgba(5, 1, 63, 0.12);
       --glow-pink: 0 0 40px rgba(245, 4, 80, 0.15);
@@ -177,30 +163,6 @@
       align-items: center;
       gap: 12px;
     }
-
-    /* Theme Toggle */
-    .theme-toggle {
-      width: 40px;
-      height: 40px;
-      border-radius: var(--radius-sm);
-      background: var(--bg-subtle);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-      transition: all 0.2s ease;
-    }
-
-    .theme-toggle:hover {
-      color: var(--pink);
-      border-color: var(--pink);
-    }
-
-    .theme-toggle .sun { display: none; }
-    .theme-toggle .moon { display: block; }
-    [data-theme="light"] .theme-toggle .sun { display: block; }
-    [data-theme="light"] .theme-toggle .moon { display: none; }
 
     /* Mobile Menu Toggle */
     .menu-toggle {
