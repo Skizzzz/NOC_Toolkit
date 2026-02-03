@@ -1,0 +1,21 @@
+# Ralph Progress Log
+Started: Mon Feb  2 19:28:35 CST 2026
+---
+
+## Codebase Patterns
+- Two copies of base.html exist: `src/templates/base.html` (primary, used by Flask app) and `templates/base.html` (legacy root copy) — both must be kept in sync
+- CSS variables are defined in `:root` in base.html's inline `<style>` block — no external CSS files
+- Theme toggle CSS and JS are co-located in base.html (not separate files)
+---
+
+## 2026-02-03 - US-001
+- Replaced `:root` dark theme CSS variable values with light theme values in both base.html files
+- Removed `[data-theme="light"]` CSS override block (values now in `:root`)
+- Removed `.theme-toggle` CSS styles and `[data-theme="light"] .theme-toggle` rules
+- Removed `data-theme="dark"` attribute from `<html>` element
+- Files changed: `src/templates/base.html`, `templates/base.html`
+- **Learnings for future iterations:**
+  - Both `src/templates/base.html` and `templates/base.html` must be edited in sync — the root copy is a legacy duplicate
+  - mypy has 60 pre-existing errors in `tools/` and `src/` Python files — these are not introduced by template changes
+  - Template (HTML/Jinja2) files are not checked by mypy, only Python source
+---

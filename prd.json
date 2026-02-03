@@ -1,0 +1,88 @@
+{
+  "project": "NOC Toolkit",
+  "branchName": "ralph/light-theme-and-version",
+  "description": "Remove dark theme, make light theme the only theme, and add version display in footer",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Remove dark theme CSS and make light theme the root default",
+      "description": "As a developer, I want the dark theme CSS removed and the light theme values set as the :root defaults so there is no theme-switching logic.",
+      "acceptanceCriteria": [
+        ":root CSS variables in base.html use the current light theme values (--bg: #f8f7ff, --bg-subtle: #efeeff, --card: #ffffff, --text: #05013f, --text-muted: #5a5680, etc.)",
+        "[data-theme=\"light\"] CSS block is removed (values are now in :root)",
+        "No [data-theme=\"dark\"] or dark-theme-specific CSS blocks remain in base.html",
+        "data-theme attribute is removed from the <html> element in base.html",
+        "All components render correctly with light theme colors",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Remove theme toggle button and JavaScript from base.html",
+      "description": "As a user, I want a clean header without a theme toggle button, and as a developer I want the theme-switching JavaScript removed.",
+      "acceptanceCriteria": [
+        "Theme toggle button (.theme-toggle) with sun/moon SVG icons is removed from the header in base.html",
+        "Header layout remains visually balanced without the toggle (no empty space or misalignment)",
+        "Theme toggle event listener JavaScript is removed from base.html",
+        "localStorage.getItem('theme') and localStorage.setItem('theme', ...) calls are removed",
+        "document.documentElement.setAttribute('data-theme', ...) calls are removed",
+        "No JavaScript errors in the browser console after removal",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Update login page to light-only theme",
+      "description": "As a user, I want the login page to use only the light theme since it has its own standalone styles.",
+      "acceptanceCriteria": [
+        "Login page (src/blueprints/auth/templates/auth/login.html) uses light theme colors",
+        "Any dark theme styles or data-theme references in login.html are removed",
+        "Login page renders correctly with light theme",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add APP_VERSION environment variable to config",
+      "description": "As a developer, I want an APP_VERSION environment variable so the version string can be configured per deployment.",
+      "acceptanceCriteria": [
+        "APP_VERSION read via os.environ.get('APP_VERSION', 'v2.0') in src/config.py on the base Config class",
+        "Defaults to 'v2.0' if the environment variable is not set",
+        "Version value available in all Jinja2 templates via a context processor in src/app.py (e.g., inject app_version into template context)",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Display version right-aligned in footer",
+      "description": "As a user, I want to see the current application version in the footer so I know which version is deployed.",
+      "acceptanceCriteria": [
+        "Version string (e.g., 'v2.0') is displayed right-aligned in the footer via a new <span> element",
+        "Version uses the app_version value injected by the context processor",
+        "Footer still shows copyright text on the left",
+        "Footer layout is responsive (stacks on mobile per existing @media rules)",
+        "Version text uses --text-muted color and 12px font size (consistent with existing footer styling)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
