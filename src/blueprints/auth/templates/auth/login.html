@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,30 +14,20 @@
       --pink: #f50450;
       --pink-light: #ff3b6e;
 
-      --bg: #030128;
-      --card: #08044a;
-      --text: #f0f0ff;
-      --text-muted: #d4d0f0;
-      --border: rgba(245, 4, 80, 0.15);
-      --border-subtle: rgba(148, 148, 204, 0.12);
-
-      --success: #00d67f;
-      --error: #ff4466;
-      --info: #3b8bff;
-
-      --radius: 12px;
-      --shadow: 0 16px 48px rgba(3, 1, 40, 0.5);
-      --glow-pink: 0 0 60px rgba(245, 4, 80, 0.25);
-    }
-
-    [data-theme="light"] {
       --bg: #f8f7ff;
       --card: #ffffff;
       --text: #05013f;
       --text-muted: #5a5680;
       --border: rgba(5, 1, 63, 0.1);
       --border-subtle: rgba(5, 1, 63, 0.06);
+
+      --success: #00d67f;
+      --error: #ff4466;
+      --info: #3b8bff;
+
+      --radius: 12px;
       --shadow: 0 16px 48px rgba(5, 1, 63, 0.12);
+      --glow-pink: 0 0 60px rgba(245, 4, 80, 0.25);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -267,45 +257,9 @@
       text-decoration: underline;
     }
 
-    /* Theme toggle */
-    .theme-toggle {
-      position: fixed;
-      top: 24px;
-      right: 24px;
-      width: 44px;
-      height: 44px;
-      border-radius: 10px;
-      background: var(--card);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-      transition: all 0.2s ease;
-      z-index: 10;
-    }
-
-    .theme-toggle:hover {
-      color: var(--pink);
-      border-color: var(--pink);
-    }
-
-    .theme-toggle .sun { display: none; }
-    .theme-toggle .moon { display: block; }
-    [data-theme="light"] .theme-toggle .sun { display: block; }
-    [data-theme="light"] .theme-toggle .moon { display: none; }
   </style>
 </head>
 <body>
-  <button class="theme-toggle" id="themeToggle" aria-label="Toggle Theme">
-    <svg class="sun" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-      <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"/>
-    </svg>
-    <svg class="moon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-      <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
-    </svg>
-  </button>
-
   <div class="login-container">
     <div class="login-header">
       <div class="logo-mark">
@@ -360,18 +314,5 @@
     </div>
   </div>
 
-  <script>
-    const html = document.documentElement;
-    const themeToggle = document.getElementById('themeToggle');
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    html.setAttribute('data-theme', savedTheme);
-
-    themeToggle.addEventListener('click', function() {
-      const current = html.getAttribute('data-theme');
-      const next = current === 'dark' ? 'light' : 'dark';
-      html.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
-    });
-  </script>
 </body>
 </html>
