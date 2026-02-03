@@ -1,0 +1,31 @@
+## Codebase Patterns
+- Two copies of base.html exist: `src/templates/base.html` (primary, uses blueprint routes) and `templates/base.html` (legacy, uses direct routes). Both must be updated for UI changes.
+- Login page (`src/blueprints/auth/templates/auth/login.html`) has its own standalone styles and is NOT based on base.html.
+- The app runs on port 8080 by default.
+- All authentication is required; login redirects happen via `before_request` hook.
+- Mypy has ~60 pre-existing errors in `tools/security.py`, `src/core/security.py`, and various blueprint route files. These are not related to template changes.
+
+---
+
+## 2026-02-03 - US-001
+- Dark theme CSS removed and light theme values set as :root defaults (completed in prior iteration)
+- Files changed: src/templates/base.html, templates/base.html
+- **Learnings for future iterations:**
+  - Light theme values are now in :root, no data-theme selectors needed
+  - No dark theme CSS blocks remain
+
+---
+
+## 2026-02-03 - US-002
+- Removed theme toggle button (.theme-toggle) with sun/moon SVG icons from header in both base.html files
+- Removed theme-switching JavaScript (localStorage theme get/set, data-theme attribute manipulation) from both base.html files
+- Header layout verified: notification bell remains as the only header action, visually balanced
+- No JavaScript errors in browser console after removal
+- Mypy typecheck passes (pre-existing errors only, none related to changes)
+- Files changed: src/templates/base.html, templates/base.html, prd.json
+- **Learnings for future iterations:**
+  - The header-actions div now only contains the notification bell button
+  - The login page theme toggle is separate (in login.html) and scoped to US-003
+  - Cannot log into app without database credentials, so browser verification of authenticated pages requires valid credentials
+
+---
