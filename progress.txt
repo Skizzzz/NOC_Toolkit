@@ -53,3 +53,17 @@
   - The context processor reads from `app.config` which inherits from the Config class
 
 ---
+
+## 2026-02-03 - US-005
+- Added `<span>{{ app_version }}</span>` to the footer in both base.html files
+- Version is right-aligned via existing `justify-content: space-between` flexbox layout
+- Copyright text remains on the left, version on the right
+- Responsive behavior preserved: footer stacks vertically on mobile via existing `@media (max-width: 768px)` rule
+- Version inherits `--text-muted` color and `12px` font size from `.footer` CSS
+- Mypy typecheck passes (60 pre-existing errors only, none related to changes)
+- Files changed: src/templates/base.html, templates/base.html, prd.json
+- **Learnings for future iterations:**
+  - The footer flexbox with `space-between` makes adding right-aligned elements trivial
+  - Both base.html copies must be updated for any footer changes
+
+---
