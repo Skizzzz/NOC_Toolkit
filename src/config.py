@@ -31,6 +31,9 @@ class Config:
     NOC_TOOLKIT_DATA_DIR: str = os.environ.get("NOC_TOOLKIT_DATA_DIR", "data")
     WLC_DASHBOARD_KEY: Optional[str] = os.environ.get("WLC_DASHBOARD_KEY")
 
+    # Version
+    APP_VERSION: str = os.environ.get("APP_VERSION", "v2.0")
+
     # Timezone settings
     DEFAULT_TIMEZONE: str = "America/Chicago"
 

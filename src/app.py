@@ -73,6 +73,11 @@ def create_app(config_name: Optional[str] = None) -> Flask:
         """Health check endpoint for container orchestration."""
         return {"status": "healthy", "service": "noc-toolkit"}
 
+    # Inject app_version into all templates
+    @app.context_processor
+    def inject_app_version() -> dict:
+        return {"app_version": app.config.get("APP_VERSION", "v2.0")}
+
     # Add index route (redirects to WLC dashboard for now)
     @app.route("/")
     def index():
