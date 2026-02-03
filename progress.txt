@@ -42,3 +42,14 @@
   - Login page CSS variables now match the base.html light theme values for consistency
 
 ---
+
+## 2026-02-03 - US-004
+- Added `APP_VERSION` config variable to base `Config` class, read via `os.environ.get("APP_VERSION", "v2.0")`
+- Added `@app.context_processor` in `create_app()` to inject `app_version` into all Jinja2 templates
+- Mypy typecheck passes (60 pre-existing errors only, none related to changes)
+- Files changed: src/config.py, src/app.py, prd.json
+- **Learnings for future iterations:**
+  - `app_version` is now available in all templates via the context processor
+  - The context processor reads from `app.config` which inherits from the Config class
+
+---
