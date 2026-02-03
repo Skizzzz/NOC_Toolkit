@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}WLC AP Inventory – Summary{% endblock %}
+{% block head_extra %}
+<style>
+  .results-header {
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .results-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--pink);
+  }
+  .results-header h2 {
+    margin: 0 0 8px 0;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .alert {
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin: 16px 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .alert-info {
+    background: rgba(245,4,80,0.06);
+    border: 1px solid rgba(245,4,80,0.15);
+    color: var(--text);
+  }
+  .alert-info strong {
+    color: var(--pink);
+  }
+  .alert-warn {
+    background: rgba(255,168,38,0.08);
+    border: 1px solid rgba(255,168,38,0.2);
+    color: var(--text);
+  }
+  .alert-warn strong {
+    color: var(--warning);
+  }
+  .alert-warn ul {
+    margin: 10px 0 0 20px;
+    padding: 0;
+  }
+  .alert-warn li {
+    margin-bottom: 4px;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+
+  .results-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+  }
+  .results-table thead th {
+    background: var(--card);
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .results-table thead th:first-child {
+    border-left: 1px solid var(--border-subtle);
+    border-radius: 10px 0 0 0;
+  }
+  .results-table thead th:last-child {
+    border-right: 1px solid var(--border-subtle);
+    border-radius: 0 10px 0 0;
+  }
+  .results-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .results-table tbody tr:hover {
+    background: rgba(245,4,80,0.04);
+  }
+  .results-table tbody tr:last-child td:first-child {
+    border-radius: 0 0 0 10px;
+    border-left: 1px solid var(--border-subtle);
+  }
+  .results-table tbody tr:last-child td:last-child {
+    border-radius: 0 0 10px 0;
+    border-right: 1px solid var(--border-subtle);
+  }
+  .results-table tbody tr.total-row {
+    background: rgba(245,4,80,0.06);
+    font-weight: 600;
+  }
+  .results-table tbody tr.total-row td {
+    color: var(--pink);
+  }
+
+  .table-wrap {
+    margin-top: 20px;
+    max-height: 60vh;
+    overflow: auto;
+    border-radius: 12px;
+  }
+
+  .empty-alert {
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    background: rgba(245,4,80,0.04);
+    border-radius: 12px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="{{ url_for('index') }}">Dashboard</a>
+  <span class="breadcrumbs-separator">/</span>
+  <a href="{{ url_for('wlc_tools') }}">WLC Tools</a>
+  <span class="breadcrumbs-separator">/</span>
+  <a href="{{ url_for('wlc_inventory') }}">AP Inventory</a>
+  <span class="breadcrumbs-separator">/</span>
+  <span class="breadcrumbs-current">Results</span>
+</nav>
+
+<div class="results-header">
+  <h2>AP Inventory Summary</h2>
+
+  {% if meta %}
+  <div class="alert alert-info">
+    <strong>Summary:</strong>
+    Queried {{ meta.hosts_count }} WLC(s) with {{ meta.workers }} worker(s).
+    Found <strong>{{ meta.aps }}</strong> AP(s).
+  </div>
+  {% endif %}
+
+  {% if errors and errors|length %}
+  <div class="alert alert-warn">
+    <strong>Some controllers failed:</strong>
+    <ul>
+      {% for e in errors %}
+        <li>{{ e }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('wlc_inventory_download') }}" class="action-buttons">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" class="btn btn-primary">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+      </svg>
+      Download Full CSV
+    </button>
+    <a class="btn" href="{{ url_for('wlc_inventory') }}">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
+      </svg>
+      Back to Inventory
+    </a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>WLC IP</th>
+          <th>WLC Hostname</th>
+          <th style="text-align:right;">AP Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if per_wlc and per_wlc|length %}
+          {% for item in per_wlc %}
+            <tr>
+              <td><code>{{ item.wlc }}</code></td>
+              <td>{{ item.wlc_hostname or '—' }}</td>
+              <td style="text-align:right; font-weight:600;">{{ item.count }}</td>
+            </tr>
+          {% endfor %}
+          <tr class="total-row">
+            <td colspan="2">Total</td>
+            <td style="text-align:right;">{{ meta.aps if meta else 0 }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="3">
+              <div class="empty-alert">
+                No APs found matching the given criteria.
+              </div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

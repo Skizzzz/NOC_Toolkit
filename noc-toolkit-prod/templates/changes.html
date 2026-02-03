@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Change Windows{% endblock %}
+{% block head_extra %}
+<style>
+  .page-header{
+    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:24px;
+  }
+  .page-header h2{margin:0 0 8px 0; font-size:28px;}
+  .page-header p{margin:0; font-size:15px; line-height:1.5; color:var(--muted);}
+
+  .table-container{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  .changes-table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  .changes-table th{
+    text-align:left;
+    padding:14px 16px;
+    background: color-mix(in oklab, var(--card) 94%, transparent);
+    border-bottom:2px solid var(--border);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .changes-table td{
+    padding:14px 16px;
+    border-bottom:1px solid var(--border);
+    font-size:14px;
+  }
+  .changes-table tbody tr{
+    transition: background 0.15s ease;
+  }
+  .changes-table tbody tr:hover{
+    background: color-mix(in oklab, var(--accent) 4%, transparent);
+  }
+  .changes-table tbody tr:last-child td{
+    border-bottom:none;
+  }
+  .change-id{
+    font-weight:600;
+    color:var(--accent);
+    text-decoration:none;
+    transition: color 0.15s ease;
+  }
+  .change-id:hover{
+    color:var(--accent-2);
+    text-decoration:underline;
+  }
+  .status-badge{
+    display:inline-flex;
+    align-items:center;
+    padding:4px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:600;
+    text-transform:capitalize;
+  }
+  .status-pending{
+    background: color-mix(in oklab, var(--warning) 15%, transparent);
+    color:var(--warning);
+  }
+  .status-completed{
+    background: color-mix(in oklab, var(--success) 15%, transparent);
+    color:var(--success);
+  }
+  .status-failed{
+    background: color-mix(in oklab, var(--error) 15%, transparent);
+    color:var(--error);
+  }
+  .status-cancelled{
+    background: color-mix(in oklab, var(--muted) 15%, transparent);
+    color:var(--muted);
+  }
+  .status-scheduled{
+    background: color-mix(in oklab, var(--accent) 15%, transparent);
+    color:var(--accent);
+  }
+  .status-running{
+    background: color-mix(in oklab, var(--info) 15%, transparent);
+    color:var(--info);
+  }
+  .status-rollback-running{
+    background: color-mix(in oklab, var(--warning) 15%, transparent);
+    color:var(--warning);
+  }
+  .status-rolled-back{
+    background: color-mix(in oklab, var(--success) 15%, transparent);
+    color:var(--success);
+  }
+  .status-rollback-failed{
+    background: color-mix(in oklab, var(--error) 15%, transparent);
+    color:var(--error);
+  }
+
+  .empty-state{
+    padding:60px 20px;
+    text-align:center;
+  }
+  .empty-state svg{
+    width:64px;
+    height:64px;
+    margin:0 auto 20px;
+    color:var(--muted);
+    opacity:0.4;
+  }
+  .empty-state h3{
+    margin:0 0 8px 0;
+    font-size:18px;
+    color:var(--muted);
+  }
+  .empty-state p{
+    margin:0;
+    font-size:14px;
+    color:var(--muted);
+    opacity:0.8;
+  }
+</style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Change Windows</span>
+  </nav>
+
+  <div class="page-header">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h2>Scheduled Change Windows</h2>
+        <p>All scheduled configuration changes and automated rollbacks. Times displayed in configured timezone ({{ app_timezone }}). Click any change ID to view details, logs, or manually execute/rollback changes.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    {% if changes %}
+      <table class="changes-table">
+        <thead>
+          <tr>
+            <th>Change ID</th>
+            <th>Change Number</th>
+            <th>Tool</th>
+            <th>Scheduled Time</th>
+            <th>Status</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in changes %}
+            <tr>
+              <td>
+                <a href="{{ url_for('change_detail', change_id=c.change_id) }}" class="change-id">
+                  {{ c.change_id }}
+                </a>
+              </td>
+              <td>{{ c.change_number or '—' }}</td>
+              <td>
+                <span style="font-weight:500;">{{ c.tool }}</span>
+              </td>
+              <td>{{ c.scheduled_cst or '—' }}</td>
+              <td>
+                {% set status_lower = (c.status or 'pending')|lower %}
+                <span class="status-badge status-{{ status_lower }}">
+                  {{ c.status }}
+                </span>
+              </td>
+              <td style="color:var(--muted);">{{ c.message or '' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"/>
+        </svg>
+        <h3>No Scheduled Changes</h3>
+        <p>There are no change windows scheduled at this time. Changes will appear here when created from the various tool interfaces.</p>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

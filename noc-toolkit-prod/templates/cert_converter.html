@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Certificate Converter{% endblock %}
+{% block head_extra %}
+<style>
+  .converter-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));
+    gap:20px;
+  }
+  .conversion-card{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    transition:all 0.2s ease;
+  }
+  .conversion-card:hover{
+    border-color:var(--accent);
+    transform:translateY(-2px);
+    box-shadow:var(--shadow);
+  }
+  .conversion-card h3{
+    margin:0 0 8px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .conversion-card p{
+    margin:0 0 16px;
+    color:var(--muted);
+    font-size:14px;
+  }
+  .conversion-icon{
+    width:40px;
+    height:40px;
+    border-radius:10px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+    flex-shrink:0;
+  }
+  .file-inputs{margin-bottom:16px;}
+  .file-input-group{margin-bottom:12px;}
+  .file-input-group label{display:block; margin-bottom:4px; font-size:13px; font-weight:600;}
+  .password-field{margin-bottom:16px;}
+</style>
+{% endblock %}
+{% block content %}
+<div style="max-width:1200px; margin:0 auto;">
+  <div style="margin-bottom:24px;">
+    <a href="{{ url_for('cert_tracker') }}" class="muted" style="text-decoration:none;">&larr; Back to Certificate Tracker</a>
+  </div>
+
+  <div style="margin-bottom:24px;">
+    <h2 style="margin:0;">Certificate Converter</h2>
+    <p class="muted" style="margin:4px 0 0;">Convert certificates between different formats</p>
+  </div>
+
+  {% if error %}
+  <div class="card" style="background:color-mix(in oklab, var(--error) 10%, transparent); border-color:var(--error); margin-bottom:16px;">
+    <p style="margin:0; color:var(--error);">{{ error }}</p>
+  </div>
+  {% endif %}
+
+  {% if success %}
+  <div class="card" style="background:color-mix(in oklab, var(--success) 10%, transparent); border-color:var(--success); margin-bottom:16px;">
+    <p style="margin:0; color:var(--success);">{{ success }}</p>
+  </div>
+  {% endif %}
+
+  <div class="converter-grid">
+    <!-- PFX to CRT + KEY -->
+    <div class="conversion-card">
+      <h3>
+        <div class="conversion-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <path d="M14 2v6h6"/>
+          </svg>
+        </div>
+        PFX to CRT + KEY
+      </h3>
+      <p>Extract certificate and private key from a PFX/PKCS12 file</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="conversion_type" value="pfx_to_crt">
+        <div class="file-inputs">
+          <div class="file-input-group">
+            <label>PFX File</label>
+            <input type="file" name="file1" accept=".pfx,.p12" required>
+          </div>
+        </div>
+        <div class="password-field">
+          <label style="display:block; margin-bottom:4px; font-size:13px; font-weight:600;">PFX Password</label>
+          <input type="password" name="passphrase" placeholder="Enter PFX password">
+        </div>
+        <button type="submit" class="btn primary" style="width:100%;">Convert</button>
+      </form>
+    </div>
+
+    <!-- CRT + KEY to PFX -->
+    <div class="conversion-card">
+      <h3>
+        <div class="conversion-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+        </div>
+        CRT + KEY to PFX
+      </h3>
+      <p>Combine certificate and private key into a PFX/PKCS12 file</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="conversion_type" value="crt_key_to_pfx">
+        <div class="file-inputs">
+          <div class="file-input-group">
+            <label>Certificate File (.crt, .pem)</label>
+            <input type="file" name="file1" accept=".crt,.pem,.cer" required>
+          </div>
+          <div class="file-input-group">
+            <label>Private Key File (.key)</label>
+            <input type="file" name="file2" accept=".key,.pem" required>
+          </div>
+        </div>
+        <div class="password-field">
+          <label style="display:block; margin-bottom:4px; font-size:13px; font-weight:600;">PFX Password (required)</label>
+          <input type="password" name="passphrase" placeholder="Set PFX password" required>
+        </div>
+        <button type="submit" class="btn primary" style="width:100%;">Convert</button>
+      </form>
+    </div>
+
+    <!-- PEM to CRT + KEY -->
+    <div class="conversion-card">
+      <h3>
+        <div class="conversion-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+          </svg>
+        </div>
+        PEM to CRT + KEY
+      </h3>
+      <p>Split a combined PEM file into separate certificate and key files</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="conversion_type" value="pem_to_crt_key">
+        <div class="file-inputs">
+          <div class="file-input-group">
+            <label>Combined PEM File</label>
+            <input type="file" name="file1" accept=".pem" required>
+          </div>
+        </div>
+        <button type="submit" class="btn primary" style="width:100%;">Convert</button>
+      </form>
+    </div>
+
+    <!-- CRT + KEY to PEM -->
+    <div class="conversion-card">
+      <h3>
+        <div class="conversion-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+        </div>
+        CRT + KEY to PEM
+      </h3>
+      <p>Combine certificate and key into a single PEM file</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="conversion_type" value="crt_key_to_pem">
+        <div class="file-inputs">
+          <div class="file-input-group">
+            <label>Certificate File (.crt, .pem)</label>
+            <input type="file" name="file1" accept=".crt,.pem,.cer" required>
+          </div>
+          <div class="file-input-group">
+            <label>Private Key File (.key)</label>
+            <input type="file" name="file2" accept=".key,.pem" required>
+          </div>
+        </div>
+        <button type="submit" class="btn primary" style="width:100%;">Convert</button>
+      </form>
+    </div>
+
+    <!-- DER to PEM -->
+    <div class="conversion-card">
+      <h3>
+        <div class="conversion-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+          </svg>
+        </div>
+        DER to PEM
+      </h3>
+      <p>Convert binary DER format certificate to text PEM format</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="conversion_type" value="der_to_pem">
+        <div class="file-inputs">
+          <div class="file-input-group">
+            <label>DER Certificate File</label>
+            <input type="file" name="file1" accept=".der,.cer" required>
+          </div>
+        </div>
+        <button type="submit" class="btn primary" style="width:100%;">Convert</button>
+      </form>
+    </div>
+
+    <!-- PEM to DER -->
+    <div class="conversion-card">
+      <h3>
+        <div class="conversion-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+          </svg>
+        </div>
+        PEM to DER
+      </h3>
+      <p>Convert text PEM format certificate to binary DER format</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="conversion_type" value="pem_to_der">
+        <div class="file-inputs">
+          <div class="file-input-group">
+            <label>PEM Certificate File</label>
+            <input type="file" name="file1" accept=".pem,.crt" required>
+          </div>
+        </div>
+        <button type="submit" class="btn primary" style="width:100%;">Convert</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

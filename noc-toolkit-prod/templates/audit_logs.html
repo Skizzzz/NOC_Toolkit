@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+{% block title %}Audit Log Viewer{% endblock %}
+{% block head_extra %}
+<style>
+  .page-header{
+    background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:24px;
+  }
+  .page-header h2{margin:0 0 8px 0; font-size:28px;}
+  .page-header p{margin:0; font-size:15px; line-height:1.5; color:var(--muted);}
+
+  .search-panel{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:20px;
+  }
+  .search-header{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .search-header svg{
+    color:var(--accent);
+  }
+  .search-row{
+    display:grid;
+    grid-template-columns:2fr 1fr auto;
+    gap:16px;
+    align-items:end;
+  }
+
+  .filter-panel{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:20px;
+  }
+  .filter-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:16px;
+    margin-bottom:16px;
+  }
+  .filter-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    grid-column: 1 / -1;
+  }
+
+  .table-wrap{
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:auto;
+    max-height:65vh;
+    margin-bottom:20px;
+  }
+  table.audit{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+  }
+  table.audit thead th{
+    position:sticky;
+    top:0;
+    z-index:1;
+    background: color-mix(in oklab, var(--card) 94%, transparent);
+    border-bottom:2px solid var(--border);
+    padding:12px 12px;
+    text-align:left;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--muted);
+    font-weight:600;
+    white-space:nowrap;
+  }
+  table.audit tbody tr{
+    transition: background 0.15s ease;
+  }
+  table.audit tbody tr:hover{
+    background: color-mix(in oklab, var(--accent) 4%, transparent);
+  }
+  table.audit tbody tr:nth-child(odd){
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+  }
+  table.audit tbody tr:nth-child(odd):hover{
+    background: color-mix(in oklab, var(--accent) 6%, transparent);
+  }
+  table.audit td{
+    padding:12px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+    font-size:13px;
+  }
+  table.audit code{
+    font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size:12px;
+    background: color-mix(in oklab, var(--muted) 10%, transparent);
+    padding:2px 6px;
+    border-radius:4px;
+  }
+  .nowrap{white-space:nowrap;}
+  mark{
+    background:#fde68a;
+    color:inherit;
+    border-radius:4px;
+    padding:0 3px;
+    font-weight:600;
+  }
+
+  .pagination{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:16px;
+    background: color-mix(in oklab, var(--card) 98%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+  }
+  .pagination-info{
+    font-size:13px;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .pagination-controls{
+    display:flex;
+    gap:8px;
+  }
+
+  .stat-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:4px 10px;
+    background: color-mix(in oklab, var(--info) 15%, transparent);
+    border-radius:6px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--info);
+  }
+</style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Audit Logs</span>
+  </nav>
+
+  <div class="page-header">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h2>Audit Log Viewer</h2>
+        <p>Complete audit trail of all configuration changes. Every modification is appended to <code>logs/changes.csv</code> with timestamp, user, device, and full change details. Use instant client-side search or server-side filters to analyze activity.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick client-side search -->
+  <div class="search-panel">
+    <div class="search-header">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
+      </svg>
+      <h3 style="margin:0; font-size:16px; font-weight:600;">Quick Search</h3>
+      <span class="stat-badge">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z"/>
+        </svg>
+        <span id="visibleCount">{{ rows|length }}</span> of {{ total }}
+      </span>
+    </div>
+    <div class="search-row">
+      <div class="field">
+        <label>Instant Filter (Current Page)</label>
+        <input id="instantSearch" type="text" placeholder="Type to filter visible rows... (press / to focus)" autocomplete="off" style="padding:10px 12px;" />
+        <div class="muted">Searches all columns on this page in real-time. For full dataset, use server filters below.</div>
+      </div>
+      <div class="field">
+        <label>Showing</label>
+        <div style="font-size:15px; font-weight:600; margin-top:10px;"><span id="visibleCountFooter">{{ rows|length }}</span> rows</div>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <form method="get" action="{{ url_for('audit_logs_download') }}">
+          <!-- Preserve server-side filters -->
+          <input type="hidden" name="username" value="{{ filters.username }}">
+          <input type="hidden" name="tool" value="{{ filters.tool }}">
+          <input type="hidden" name="result" value="{{ filters.result }}">
+          <input type="hidden" name="ip" value="{{ filters.ip }}">
+          <input type="hidden" name="q" value="{{ filters.q }}">
+          <input type="hidden" name="date_from" value="{{ filters.date_from }}">
+          <input type="hidden" name="date_to" value="{{ filters.date_to }}">
+          <button class="btn" type="submit">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"/>
+            </svg>
+            Download CSV
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Server-side filters -->
+  <div class="filter-panel">
+    <div class="search-header">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z"/>
+      </svg>
+      <h3 style="margin:0; font-size:16px; font-weight:600;">Server-Side Filters</h3>
+    </div>
+
+    <form method="get" action="{{ url_for('audit_logs') }}">
+      <div class="filter-grid">
+        <div class="field">
+          <label>Username</label>
+          <input type="text" name="username" value="{{ filters.username }}" placeholder="e.g., jtaylor" />
+        </div>
+        <div class="field">
+          <label>Tool</label>
+          <select name="tool">
+            <option value="">Any Tool</option>
+            {% for t in tools %}
+              <option value="{{ t }}" {% if filters.tool == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Result</label>
+          <select name="result">
+            <option value="">Any Result</option>
+            <option value="success" {% if filters.result == 'success' %}selected{% endif %}>Success</option>
+            <option value="error" {% if filters.result == 'error' %}selected{% endif %}>Error</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Switch IP</label>
+          <input type="text" name="ip" value="{{ filters.ip }}" placeholder="e.g., 10.205.180.55" />
+        </div>
+        <div class="field">
+          <label>Contains Text</label>
+          <input type="text" name="q" value="{{ filters.q }}" placeholder="Job ID, message, config lines..." />
+        </div>
+        <div class="field">
+          <label>Date From (ISO)</label>
+          <input type="text" name="date_from" value="{{ filters.date_from }}" placeholder="YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS" />
+        </div>
+        <div class="field">
+          <label>Date To (ISO)</label>
+          <input type="text" name="date_to" value="{{ filters.date_to }}" placeholder="YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS" />
+        </div>
+        <div class="field">
+          <label>Per Page</label>
+          <select name="per_page">
+            {% for n in [25,50,100,200] %}
+              <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-actions">
+          <a class="btn" href="{{ url_for('audit_logs') }}">Clear Filters</a>
+          <button class="btn primary" type="submit">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+              <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z"/>
+            </svg>
+            Apply Filters
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {% if rows and rows|length %}
+    <div class="table-wrap">
+      <table id="auditTable" class="audit">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Tool</th>
+            <th>Job ID</th>
+            <th>Switch IP</th>
+            <th>Result</th>
+            <th>Message</th>
+            <th>Config Lines</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            <tr>
+              <td data-col="time" data-raw="{{ r.timestamp|e }}" class="nowrap">{{ r.timestamp }}</td>
+              <td data-col="user" data-raw="{{ r.username|e }}" class="nowrap">{{ r.username }}</td>
+              <td data-col="tool" data-raw="{{ r.tool|e }}" class="nowrap">{{ r.tool }}</td>
+              <td data-col="job" data-raw="{{ r.job_id|e }}" class="nowrap">{{ r.job_id }}</td>
+              <td data-col="ip" data-raw="{{ r.switch_ip|e }}" class="nowrap">{{ r.switch_ip }}</td>
+              <td data-col="result" data-raw="{{ r.result|e }}" class="nowrap">
+                {% if r.result == 'success' %}
+                  <span class="badge success">{{ r.result }}</span>
+                {% elif r.result == 'error' %}
+                  <span class="badge error">{{ r.result }}</span>
+                {% else %}
+                  {{ r.result }}
+                {% endif %}
+              </td>
+              <td data-col="message" data-raw="{{ r.message|e }}">{{ r.message }}</td>
+              <td data-col="config" data-raw="{{ r.config_lines|e }}"><code>{{ r.config_lines }}</code></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% set prev_page = page - 1 %}
+    {% set next_page = page + 1 %}
+    <div class="pagination">
+      <div class="pagination-info">
+        Page {{ page }} • Showing <span id="pageSummary">{{ rows|length }}</span> of {{ total }} total
+      </div>
+      <div class="pagination-controls">
+        {% if prev_page >= 1 %}
+          <a class="btn" href="{{ url_for('audit_logs',
+            username=filters.username, tool=filters.tool, result=filters.result, ip=filters.ip, q=filters.q,
+            date_from=filters.date_from, date_to=filters.date_to, per_page=per_page, page=prev_page) }}">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+              <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
+            </svg>
+            Previous
+          </a>
+        {% endif %}
+        {% if page * per_page < total %}
+          <a class="btn" href="{{ url_for('audit_logs',
+            username=filters.username, tool=filters.tool, result=filters.result, ip=filters.ip, q=filters.q,
+            date_from=filters.date_from, date_to=filters.date_to, per_page=per_page, page=next_page) }}">
+            Next
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-left:4px;">
+              <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
+            </svg>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    <div style="padding:60px 20px; text-align:center; background: color-mix(in oklab, var(--card) 98%, transparent); border:1px solid var(--border); border-radius:12px;">
+      <svg width="64" height="64" viewBox="0 0 20 20" fill="currentColor" style="margin:0 auto 20px; color:var(--muted); opacity:0.4;">
+        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+        <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"/>
+      </svg>
+      <h3 style="margin:0 0 8px 0; font-size:18px; color:var(--muted);">No Audit Logs Found</h3>
+      <p class="muted">No rows match your current filters. Try adjusting your search criteria.</p>
+    </div>
+  {% endif %}
+
+  <script>
+    // Instant client-side filtering with highlighting
+    const q = document.getElementById('instantSearch');
+    const table = document.getElementById('auditTable');
+    const visibleCount = document.getElementById('visibleCount');
+    const visibleCountFooter = document.getElementById('visibleCountFooter');
+    const pageSummary = document.getElementById('pageSummary');
+
+    function escapeHtml(s){return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+    function highlight(text, needle){
+      if (!needle) return escapeHtml(text);
+      const idx = text.toLowerCase().indexOf(needle.toLowerCase());
+      if (idx === -1) return escapeHtml(text);
+      const before = escapeHtml(text.slice(0, idx));
+      const match  = escapeHtml(text.slice(idx, idx + needle.length));
+      const after  = escapeHtml(text.slice(idx + needle.length));
+      return `${before}<mark>${match}</mark>${after}`;
+    }
+
+    function filterTable(){
+      if (!table) return;
+      const term = (q.value || '').trim().toLowerCase();
+      let vis = 0;
+
+      table.querySelectorAll('tbody tr').forEach(tr => {
+        // aggregate raw text from data-raw attributes for stable highlighting
+        const cells = tr.querySelectorAll('td');
+        const blob = Array.from(cells).map(td => (td.getAttribute('data-raw') || td.textContent || '')).join(' ').toLowerCase();
+        const show = term === '' || blob.includes(term);
+        tr.style.display = show ? '' : 'none';
+        if (show){
+          vis++;
+          // repaint with highlight
+          cells.forEach(td => {
+            const raw = td.getAttribute('data-raw');
+            if (raw != null){
+              let html = highlight(raw, term);
+              // Keep badges for result column
+              if (td.dataset.col === 'result'){
+                if (raw === 'success') {
+                  html = `<span class="badge success">${html}</span>`;
+                } else if (raw === 'error') {
+                  html = `<span class="badge error">${html}</span>`;
+                }
+              }
+              // Wrap config in code tag
+              if (td.dataset.col === 'config') {
+                html = `<code>${html}</code>`;
+              }
+              td.innerHTML = html;
+            }
+          });
+        }
+      });
+
+      if (visibleCount) visibleCount.textContent = vis;
+      if (visibleCountFooter) visibleCountFooter.textContent = vis;
+      if (pageSummary) pageSummary.textContent = vis;
+    }
+
+    // Debounce input
+    let tId;
+    q && q.addEventListener('input', () => { clearTimeout(tId); tId = setTimeout(filterTable, 120); });
+    // Press "/" to focus search
+    window.addEventListener('keydown', (e) => { if (e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); } });
+    // Initial pass
+    filterTable();
+  </script>
+{% endblock %}

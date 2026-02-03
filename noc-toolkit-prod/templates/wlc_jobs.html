@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}WLC Jobs{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content: space-between; align-items: center;">
+    <div>
+      <h2 class="section-title" style="margin:0;">WLC Jobs</h2>
+      <p class="muted" style="margin:6px 0 0 0;">Recent jobs initiated by WLC tools. Cancelled or completed jobs remain for 30 days.</p>
+    </div>
+    <div class="row" style="gap:10px;">
+      <a class="btn" href="{{ url_for('wlc_tools') }}">Back to WLC Tools</a>
+    </div>
+  </div>
+
+  {% if not jobs %}
+    <p class="muted" style="margin-top:12px;">No WLC jobs have been recorded yet.</p>
+  {% else %}
+    <div class="table-responsive" style="margin-top:16px;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Job ID</th>
+            <th>Type</th>
+            <th>Created</th>
+            <th>User</th>
+            <th>Status</th>
+            <th>Hosts / Details</th>
+            <th>Samples</th>
+            <th>Last Event</th>
+            <th style="width:1%"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in jobs %}
+            {% set params = job.params or {} %}
+            {% set hosts = params.get('hosts') or params.get('hosts_list') or [] %}
+            <tr>
+              <td style="white-space:nowrap;">{{ job.job_id }}</td>
+              <td>{{ job.tool }}</td>
+              <td style="white-space:nowrap;">{{ job.created or '—' }}</td>
+              <td>{{ job.username or '—' }}</td>
+              {% set status = job.status or ('cancelled' if job.cancelled else ('done' if job.done else 'running')) %}
+              <td>
+                {% if status == 'cancelled' %}
+                  <span class="badge badge-danger">Cancelled</span>
+                {% elif status in ('done', 'completed') %}
+                  <span class="badge badge-success">Completed</span>
+                {% else %}
+                  <span class="badge badge-warning">Running</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if hosts %}
+                  <strong>Hosts:</strong> {{ hosts | join(', ') }}<br>
+                {% endif %}
+                {% if params.band %}
+                  <strong>Band:</strong> {{ params.band }}<br>
+                {% endif %}
+                {% if params.polls %}
+                  <strong>Polls:</strong> {{ params.polls }}
+                {% endif %}
+              </td>
+              <td>{{ job.samples_count or 0 }}</td>
+              <td style="white-space:nowrap;">{{ job.last_ts or '—' }}</td>
+              <td style="white-space:nowrap;">
+                {% if job.tool == 'wlc-rf-troubleshoot' %}
+                  <a class="btn" href="{{ url_for('wlc_rf_troubleshoot_job', job_id=job.job_id) }}">Open</a>
+                {% elif job.tool == 'wlc-clients' %}
+                  <a class="btn" href="{{ url_for('wlc_clients_troubleshoot_job', job_id=job.job_id) }}">Open</a>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

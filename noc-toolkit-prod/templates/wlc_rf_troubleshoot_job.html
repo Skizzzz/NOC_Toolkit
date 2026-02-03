@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}RF Troubleshooter – Live{% endblock %}
+{% block head_extra %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="section-title">RF Troubleshooter – Live Run</h2>
+  <p class="muted">
+    Polling every <strong>{{ (params.interval_sec // 60) if params.interval_sec else 5 }}</strong> minute(s)
+    for <strong>{{ params.polls }}</strong> round(s).
+    Band: <strong>{{ params.band }}</strong>.
+  </p>
+
+  <div class="row" style="align-items:center; justify-content:space-between;">
+    <div class="muted">Host: {{ params.hosts[0] if params.hosts and params.hosts|length else '' }}</div>
+    <div>
+      <form method="post" action="{{ url_for('wlc_rf_troubleshoot_cancel', job_id=job_id) }}" style="display:inline; margin-right:8px;">
+        <button class="btn" style="background:#dc2626; color:white; border:none;">Cancel Job</button>
+      </form>
+      <a class="btn" href="{{ url_for('wlc_jobs_overview') }}">Back to Jobs</a>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <canvas id="rfChart" height="120"></canvas>
+  </div>
+
+  <div id="progress" class="muted" style="margin-top:8px;">Waiting for first sample…</div>
+  <div id="nextPoll" class="muted" style="margin-top:4px; font-size:13px;">Next poll in —</div>
+
+  <details class="card" style="margin-top:12px;">
+    <summary><strong>Errors (if any)</strong></summary>
+    <pre id="errBox" style="white-space:pre-wrap; margin:0;"></pre>
+  </details>
+</section>
+
+<script>
+const jobId = "{{ job_id }}";
+const statusUrl = "{{ url_for('wlc_rf_troubleshoot_status', job_id=job_id) }}";
+let nextPollAt = null;
+const intervalFallback = ({{ params.interval_sec or 300 }}) * 1000;
+
+let labels = [];
+const seriesIndex = {};
+const ctx = document.getElementById('rfChart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: { labels, datasets: [] },
+  options: {
+    responsive: true,
+    interaction: { mode: 'nearest', intersect: false },
+    scales: { y: { min: 0, max: 100, title: { display: true, text: 'Utilization %' } } },
+    plugins: {
+      legend: { position: 'bottom' },
+      tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%` } }
+    },
+    elements: { line: { tension: 0.25 } }
+  }
+});
+
+function ensureSeries(label) {
+  if (seriesIndex[label] !== undefined) return;
+  const color = `hsl(${(Object.keys(seriesIndex).length*67)%360} 70% 55%)`;
+  const idxAvg = chart.data.datasets.length;
+  chart.data.datasets.push({
+    label: `${label} Avg`,
+    data: [],
+    borderColor: color,
+    backgroundColor: color,
+    fill: false,
+    borderWidth: 2,
+    pointRadius: 2
+  });
+  const idxPeak = chart.data.datasets.length;
+  chart.data.datasets.push({
+    label: `${label} Peak`,
+    data: [],
+    borderColor: color,
+    backgroundColor: color,
+    fill: false,
+    borderDash: [6,4],
+    borderWidth: 1.5,
+    pointRadius: 2
+  });
+  seriesIndex[label] = { avg: idxAvg, peak: idxPeak };
+}
+
+function pushRound(ts, roundSeries) {
+  labels.push(ts);
+  chart.data.datasets.forEach(ds => ds.data.push(null));
+  roundSeries.forEach(s => {
+    ensureSeries(s.label);
+    const idxs = seriesIndex[s.label];
+    chart.data.datasets[idxs.avg].data[labels.length-1] = s.avg;
+    chart.data.datasets[idxs.peak].data[labels.length-1] = s.peak;
+  });
+  chart.update('none');
+}
+
+async function tick() {
+  try {
+    const res = await fetch(statusUrl);
+    if (!res.ok) return;
+    const body = await res.json();
+
+    const prog = document.getElementById('progress');
+    const nextEl = document.getElementById('nextPoll');
+    const done = body.done;
+    const samples = body.samples || [];
+    const params = body.params || {};
+    const intervalMs = (params.interval_sec ? params.interval_sec * 1000 : intervalFallback);
+    if (samples.length) {
+      const last = samples[samples.length-1];
+      prog.textContent = `Round ${last.round} / ${last.total_rounds} @ ${last.ts}${done? ' — done.' : ' — running…'}`;
+      if (!done && last.ts) {
+        const base = Date.parse(last.ts);
+        nextPollAt = Number.isNaN(base) ? null : base + intervalMs;
+      }
+    } else {
+      prog.textContent = done ? 'No samples collected.' : 'Waiting for first sample…';
+      if (!done && body.created) {
+        const base = Date.parse(body.created);
+        nextPollAt = Number.isNaN(base) ? null : base + intervalMs;
+      }
+    }
+
+    if (done || body.cancelled) {
+      nextPollAt = null;
+      if (nextEl) nextEl.textContent = 'Next poll in —';
+    }
+
+    while (labels.length < samples.length) {
+      const sample = samples[labels.length];
+      pushRound(sample.ts, sample.series || []);
+      const eb = document.getElementById('errBox');
+      if (sample.errors && sample.errors.length) {
+        eb.textContent += sample.errors.join('\\n') + '\\n';
+      }
+    }
+
+    if (!done) setTimeout(tick, 5000);
+    updateCountdown();
+  } catch (e) {
+    setTimeout(tick, 7000);
+  }
+}
+tick();
+
+function updateCountdown() {
+  const el = document.getElementById('nextPoll');
+  if (!el) return;
+  if (!nextPollAt) {
+    el.textContent = 'Next poll in —';
+    return;
+  }
+  const diffMs = nextPollAt - Date.now();
+  if (diffMs <= 0) {
+    el.textContent = 'Next poll in <1s';
+    return;
+  }
+  const diff = Math.round(diffMs / 1000);
+  const hh = Math.floor(diff / 3600);
+  const mm = Math.floor((diff % 3600) / 60);
+  const ss = diff % 60;
+  const parts = [];
+  if (hh) parts.push(`${hh}h`);
+  if (mm || hh) parts.push(`${mm}m`);
+  parts.push(`${ss}s`);
+  el.textContent = `Next poll in ${parts.join(' ')}`;
+}
+setInterval(updateCountdown, 1000);
+</script>
+{% endblock %}

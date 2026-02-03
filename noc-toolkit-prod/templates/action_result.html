@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Apply Results{% endblock %}
+{% block content %}
+  <section class="card">
+    <h2 class="section-title">Apply Results</h2>
+
+    {% if successes and successes|length %}
+      <h3>Successes</h3>
+      <ul>
+        {% for s in successes %}<li>{{ s }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if errors and errors|length %}
+      <h3>Errors</h3>
+      <ul>
+        {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if diffs %}
+      <h3>Captured Diffs</h3>
+      {% for host, host_diffs in diffs.items() %}
+        {% if host_diffs is string %}
+          <details style="margin:8px 0">
+            <summary><strong>{{ host }}</strong></summary>
+            <pre style="white-space:pre-wrap; margin-top:6px">{{ host_diffs }}</pre>
+          </details>
+        {% else %}
+          <details style="margin:8px 0">
+            <summary><strong>{{ host }}</strong> ({{ host_diffs|length }} interface(s))</summary>
+            {% for item in host_diffs %}
+              <pre style="white-space:pre-wrap; margin-top:6px">--- {{ host }}:{{ item.interface }} (before)
++++ {{ host }}:{{ item.interface }} (after)
+{{ item.diff }}</pre>
+            {% endfor %}
+          </details>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    <div class="row" style="justify-content:flex-end; margin-top:12px">
+      <a class="btn" href="{{ url_for('tool_phrase_search') }}">Back to Search</a>
+      <a class="btn primary" href="{{ url_for('index') }}">Home</a>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Change {{ change.change_id }}{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="section-title">Change {{ change.change_id }}</h2>
+  <div class="muted">Tool: {{ change.tool }}{% if change.change_number %} · Change #: {{ change.change_number }}{% endif %}</div>
+
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top:12px; gap:12px;">
+    <div class="card">
+      <div class="muted">Status</div>
+      <strong>{{ change.status }}</strong>
+      <div class="muted" style="margin-top:6px;">{{ change.message or '' }}</div>
+      <div class="muted" style="margin-top:6px;">Targets: {{ change.target_count }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">Scheduled</div>
+      <strong>{{ change.scheduled_cst or '—' }}</strong>
+      <div class="muted" style="margin-top:6px;">Created {{ change.created_cst or '—' }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">Execution</div>
+      <div>Start: {{ change.started_cst or '—' }}</div>
+      <div>Completed: {{ change.completed_cst or '—' }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">Rollback</div>
+      <div>Start: {{ change.rollback_started_cst or '—' }}</div>
+      <div>Completed: {{ change.rollback_completed_cst or '—' }}</div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+    <form method="post" action="{{ url_for('change_start_now', change_id=change.change_id) }}">
+      <button class="btn" type="submit" {% if change.status != 'scheduled' %}disabled{% endif %}>Start Now</button>
+    </form>
+    <form method="post" action="{{ url_for('change_trigger_rollback', change_id=change.change_id) }}">
+      <button class="btn" type="submit" {% if not rollback_available %}disabled{% endif %}>Run Rollback</button>
+    </form>
+    {% if change.apply_job_id %}
+      <a class="btn" href="{{ url_for('actions_status', job_id=change.apply_job_id) }}">Apply Job Status</a>
+    {% endif %}
+    {% if change.rollback_job_id %}
+      <a class="btn" href="{{ url_for('actions_status', job_id=change.rollback_job_id) }}">Rollback Job Status</a>
+    {% endif %}
+    <a class="btn" href="{{ url_for('changes_list') }}">Back to Changes</a>
+    <a class="btn" href="{{ url_for('audit_logs', q=change.change_number or change.change_id) }}">Open Audit Log</a>
+  </div>
+</section>
+
+{% if apply_state %}
+<section class="card" style="margin-top:18px;">
+  <h3 class="section-title">Apply Job Logs</h3>
+  <pre style="white-space:pre-wrap; margin:0;">{{ (apply_state.logs or [])|join('\n') }}</pre>
+</section>
+{% endif %}
+
+{% if rollback_state %}
+<section class="card" style="margin-top:18px;">
+  <h3 class="section-title">Rollback Job Logs</h3>
+  <pre style="white-space:pre-wrap; margin:0;">{{ (rollback_state.logs or [])|join('\n') }}</pre>
+</section>
+{% endif %}
+
+<section class="card" style="margin-top:18px;">
+  <h3 class="section-title">Timeline</h3>
+  {% if events %}
+    <ul>
+      {% for ev in events %}
+        <li><span class="muted">{{ ev.ts_cst or ev.ts }}</span> — {{ ev.type }} — {{ ev.message }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No events recorded yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

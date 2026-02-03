@@ -1,0 +1,33 @@
+[Unit]
+Description=NOC Toolkit Web Application
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=hed
+Group=hed
+WorkingDirectory=/opt/noc-toolkit
+EnvironmentFile=/opt/noc-toolkit/.env
+ExecStart=/opt/noc-toolkit/venv/bin/gunicorn --config gunicorn.conf.py app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+KillMode=mixed
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/noc-toolkit/data /opt/noc-toolkit/logs /opt/noc-toolkit/tmp
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=noc-prod
+
+[Install]
+WantedBy=multi-user.target

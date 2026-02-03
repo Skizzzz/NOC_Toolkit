@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Preview Global Config{% endblock %}
+{% block content %}
+  <section class="card">
+    <h2 class="section-title">Preview & Confirm – Global Config</h2>
+    <p class="muted">Review the per-device CLI. Apply now (optional diffs) or run in background.</p>
+
+    {% if cli_map %}
+      {% for host, lines in cli_map.items() %}
+        <details style="margin:8px 0" open>
+          <summary><strong>{{ host }}</strong> — {{ lines|length }} line(s)</summary>
+          <pre style="white-space:pre-wrap; margin-top:6px">{{ lines|join('\n') }}</pre>
+        </details>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" action="{{ url_for('global_config_actions_apply') }}" id="applyForm">
+      <input type="hidden" name="payload_json" value='{{ payload|tojson|safe }}' />
+      <label style="display:flex; align-items:center; gap:8px; margin:8px 0">
+        <input type="checkbox" name="capture_diffs" value="1"> Capture diffs (pre/post)
+      </label>
+
+      <div class="card" style="margin:12px 0;">
+        <h3 class="section-title" style="margin:0 0 6px 0;">Schedule Change Window</h3>
+        <div class="row">
+          <div class="field">
+            <label>Change Number (optional)</label>
+            <input type="text" name="change_number" placeholder="CHG000123" />
+          </div>
+          <div class="field">
+            <label>Start Time (CST)</label>
+            <input type="datetime-local" name="schedule_start" />
+            <div class="muted">Executes automatically at the selected Central time.</div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Rollback CLI (optional)</label>
+          <textarea name="rollback_custom" placeholder="no ip access-list ..."></textarea>
+          <div class="muted">These commands will run on every device if you trigger a rollback.</div>
+        </div>
+        <div class="row" style="justify-content:flex-end;">
+          <button class="btn" type="button" onclick="scheduleChange()">Schedule Change</button>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" type="button" onclick="applyBackground()">Run in Background</button>
+        <button class="btn primary" type="submit">Apply Now</button>
+      </div>
+    </form>
+
+    <div id="bgPanel" class="card" style="margin-top:12px; display:none">
+      <h3 class="section-title">Background Job</h3>
+      <div class="muted" id="bgStatus">Starting…</div>
+      <pre id="bgLogs" style="white-space:pre-wrap; margin-top:8px"></pre>
+    </div>
+  </section>
+
+  <div id="schedulePanel" class="card" style="margin-top:12px; display:none">
+    <h3 class="section-title">Scheduled Change</h3>
+    <div class="muted" id="scheduleStatus">Queued…</div>
+  </div>
+
+  <script>
+    async function applyBackground(){
+      if (!confirm('Are you sure you want to apply these changes in the background? This will execute the configuration on all selected devices.')) {
+        return;
+      }
+      const payload = document.querySelector('input[name="payload_json"]').value;
+      const res = await fetch("{{ url_for('global_config_actions_apply_start') }}", {
+        method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
+        body: new URLSearchParams({payload_json: payload})
+      });
+      const data = await res.json();
+      if (data.job_id) {
+        // Redirect to the live progress page
+        window.location.href = `/jobs/${data.job_id}/progress`;
+      } else {
+        alert('Failed to start job: ' + (data.error || 'Unknown error'));
+      }
+    }
+
+    async function scheduleChange(){
+      const payload = document.querySelector('input[name="payload_json"]').value;
+      const changeNumber = document.querySelector('input[name="change_number"]').value || '';
+      const startValue = document.querySelector('input[name="schedule_start"]').value || '';
+      const rollback = document.querySelector('textarea[name="rollback_custom"]').value || '';
+      const params = new URLSearchParams({
+        payload_json: payload,
+        change_number: changeNumber,
+        schedule_start: startValue,
+        rollback_custom: rollback,
+      });
+      const res = await fetch("{{ url_for('actions_schedule') }}", {
+        method:"POST",
+        headers:{"Content-Type":"application/x-www-form-urlencoded"},
+        body: params
+      });
+      const panel = document.getElementById('schedulePanel');
+      panel.style.display = 'block';
+      if (!res.ok){
+        const data = await res.json().catch(()=>({error:'Failed to schedule'}));
+        document.getElementById('scheduleStatus').textContent = data.error || 'Failed to schedule change.';
+        return;
+      }
+      const data = await res.json();
+      document.getElementById('scheduleStatus').textContent = `Scheduled for ${data.scheduled_local} (Change ID ${data.change_id})`;
+      const detailUrl = `{{ url_for('change_detail', change_id='__ID__') }}`.replace('__ID__', data.change_id);
+      window.location.href = detailUrl;
+    }
+  </script>
+{% endblock %}

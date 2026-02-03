@@ -1,0 +1,645 @@
+{% extends "base.html" %}
+{% block title %}WLC Dashboard{% endblock %}
+{% block head_extra %}
+  <style>
+    .dashboard-header{
+      background: linear-gradient(135deg, rgba(79,70,229,0.1) 0%, rgba(6,182,212,0.1) 100%);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:24px;
+      margin-bottom:24px;
+    }
+    .dashboard-header h2{margin:0 0 8px 0; font-size:28px;}
+    .dashboard-header p{margin:0; font-size:15px; line-height:1.5; color:var(--muted);}
+
+    .stat-grid{
+      display:grid;
+      gap:16px;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      margin-bottom:24px;
+    }
+    .stat-card{
+      padding:20px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background: color-mix(in oklab, var(--card) 98%, transparent);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      transition: all 0.2s ease;
+    }
+    .stat-card:hover{
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      transform: translateY(-2px);
+    }
+    .stat-card .stat-icon{
+      width:40px;
+      height:40px;
+      border-radius:10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      margin-bottom:12px;
+    }
+    .stat-card .stat-label{
+      color:var(--muted);
+      font-size:13px;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+      font-weight:600;
+      margin-bottom:8px;
+    }
+    .stat-card h3{
+      margin:0;
+      font-size:32px;
+      font-weight:700;
+      line-height:1;
+    }
+    .stat-card .stat-subtitle{
+      margin-top:8px;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .status-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 12px;
+      border-radius:999px;
+      font-size:13px;
+      font-weight:600;
+      background: color-mix(in oklab, var(--success) 15%, transparent);
+      color:var(--success);
+    }
+    .status-pill.paused{
+      background: color-mix(in oklab, var(--error) 15%, transparent);
+      color:var(--error);
+    }
+    .status-pill svg{
+      width:14px;
+      height:14px;
+    }
+
+    .range-buttons{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      padding:16px;
+      background: color-mix(in oklab, var(--card) 96%, transparent);
+      border:1px solid var(--border);
+      border-radius:12px;
+      margin-bottom:20px;
+    }
+    .range-buttons .btn{
+      padding:8px 16px;
+      font-size:13px;
+      border-radius:8px;
+      transition: all 0.2s ease;
+    }
+    .range-buttons .btn.active{
+      background:linear-gradient(135deg,var(--accent),var(--accent-2));
+      border-color:transparent;
+      color:#fff;
+      box-shadow:0 4px 12px rgba(79,70,229,0.3);
+      transform: translateY(-1px);
+    }
+
+    .chart-container{
+      background: color-mix(in oklab, var(--card) 98%, transparent);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:20px;
+      margin-bottom:20px;
+    }
+    #totalsChart{
+      max-height:420px;
+      height:360px;
+    }
+
+    .info-panel{
+      background: color-mix(in oklab, var(--card) 98%, transparent);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:20px;
+      margin-bottom:20px;
+    }
+    .info-panel summary{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      cursor:pointer;
+      list-style:none;
+      font-weight:600;
+      font-size:16px;
+      user-select:none;
+    }
+    .info-panel summary::-webkit-details-marker{display:none;}
+    .info-panel summary:hover{color:var(--accent);}
+    .info-panel summary .badge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:24px;
+      height:24px;
+      padding:0 8px;
+      border-radius:999px;
+      background: color-mix(in oklab, var(--error) 15%, transparent);
+      color:var(--error);
+      font-size:12px;
+      font-weight:700;
+    }
+    .info-panel summary .badge.zero{
+      background: color-mix(in oklab, var(--success) 15%, transparent);
+      color:var(--success);
+    }
+    .info-panel[open] summary{
+      margin-bottom:16px;
+      padding-bottom:16px;
+      border-bottom:1px solid var(--border);
+    }
+
+    .controllers-table{
+      width:100%;
+      border-collapse:collapse;
+    }
+    .controllers-table th{
+      text-align:left;
+      padding:10px 12px;
+      background: color-mix(in oklab, var(--card) 94%, transparent);
+      border-bottom:2px solid var(--border);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+      color:var(--muted);
+      font-weight:600;
+    }
+    .controllers-table td{
+      padding:12px;
+      border-bottom:1px solid var(--border);
+    }
+    .controllers-table tbody tr:hover{
+      background: color-mix(in oklab, var(--accent) 3%, transparent);
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <a href="{{ url_for('wlc_tools') }}">WLC Tools</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">WLC Dashboard</span>
+  </nav>
+
+  <div class="dashboard-header">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h2>Wireless LAN Controller Dashboard</h2>
+        <p>Automated {{ interval_minutes }} minute{{ 's' if interval_minutes != 1 else '' }} snapshots tracking total wireless clients and joined access points across all configured Cisco 9800 controllers.</p>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a class="btn" href="{{ url_for('wlc_ap_inventory') }}">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+            <path d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h10v10H5V5zm2 2a1 1 0 000 2h6a1 1 0 100-2H7zm0 4a1 1 0 100 2h6a1 1 0 100-2H7z"/>
+          </svg>
+          AP Inventory
+        </a>
+        <a class="btn" href="{{ url_for('wlc_dashboard_settings') }}">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"/>
+          </svg>
+          Settings
+        </a>
+        <a class="btn" href="{{ url_for('wlc_tools') }}">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+          </svg>
+          WLC Tools
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+        </svg>
+      </div>
+      <div class="stat-label">Total Clients</div>
+      <h3 id="totalClients">{{ latest.clients or 0 }}</h3>
+      <div class="stat-subtitle" id="clientsTimestamp">Last sample: {{ latest.ts or '—' }}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+        </svg>
+      </div>
+      <div class="stat-label">Access Points</div>
+      <h3 id="totalAps">{{ latest.aps or 0 }}</h3>
+      <div class="stat-subtitle">Updated every {{ interval_minutes }} minute{{ 's' if interval_minutes != 1 else '' }}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/>
+        </svg>
+      </div>
+      <div class="stat-label">Polling Status</div>
+      {% set running = settings.enabled %}
+      <div style="margin-top:8px;">
+        <span id="pollStatus" class="status-pill {{ 'paused' if not running else '' }}">
+          {% if running %}
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+            </svg>
+            Enabled
+          {% else %}
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z"/>
+            </svg>
+            Paused
+          {% endif %}
+        </span>
+      </div>
+      <div class="stat-subtitle" id="pollMessage" style="margin-top:12px;">{{ settings.last_poll_message or 'No poll has run yet.' }}</div>
+      <div class="stat-subtitle" id="pollSuccess" style="margin-top:4px;">Controllers: —</div>
+    </div>
+  </div>
+
+  <div class="range-buttons">
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" style="color:var(--muted);">
+      <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"/>
+    </svg>
+    <span style="color:var(--muted); font-size:13px; font-weight:600;">Time Range:</span>
+    {% for value, label in range_options %}
+      <button type="button" class="btn{% if value == selected_range %} active{% endif %}" data-range="{{ value }}">{{ label }}</button>
+    {% endfor %}
+  </div>
+
+  <div class="chart-container">
+    <canvas id="totalsChart"></canvas>
+    <p class="muted" id="chartEmpty" style="margin-top:12px; display:none; text-align:center;">No samples in the selected window.</p>
+  </div>
+
+  <details id="pollErrorsPanel" class="info-panel">
+    <summary>
+      <span>
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:8px; color:var(--error);">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"/>
+        </svg>
+        Polling Errors
+      </span>
+      <span class="badge" id="pollErrorsCount">0</span>
+    </summary>
+    <div id="pollErrorsBody" class="muted" style="font-size:13px;">No errors recorded.</div>
+  </details>
+
+  <details class="info-panel">
+    <summary>
+      <span>
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:8px; color:var(--accent);">
+          <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
+        </svg>
+        Configured Controllers
+      </span>
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="transition: transform 0.2s ease;">
+        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+      </svg>
+    </summary>
+    <div id="hostsList">
+      {% set cisco_hosts = settings.hosts or [] %}
+      {% set aruba_hosts = settings.aruba_hosts or [] %}
+      {% set all_hosts = cisco_hosts + aruba_hosts %}
+      {% if all_hosts %}
+        <table class="controllers-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Controller</th>
+              <th style="text-align:right;">Clients</th>
+              <th style="text-align:right;">Access Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for host in cisco_hosts %}
+              {% set info = host_details.get(host, {}) %}
+              <tr>
+                <td><span style="background:#049fd9; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">Cisco</span></td>
+                <td style="font-weight:600;">{{ host }}</td>
+                <td style="text-align:right;">{{ info.total_clients if info.total_clients is not none else '—' }}</td>
+                <td style="text-align:right;">{{ info.ap_count if info.ap_count is not none else '—' }}</td>
+              </tr>
+            {% endfor %}
+            {% for host in aruba_hosts %}
+              {% set info = host_details.get(host, {}) %}
+              <tr>
+                <td><span style="background:#ff8300; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">Aruba</span></td>
+                <td style="font-weight:600;">{{ host }}</td>
+                <td style="text-align:right;">{{ info.total_clients if info.total_clients is not none else '—' }}</td>
+                <td style="text-align:right;">{{ info.ap_count if info.ap_count is not none else '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="muted">No controllers configured yet.</p>
+      {% endif %}
+    </div>
+  </details>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+  const dataUrl = "{{ url_for('wlc_dashboard_data') }}";
+  let currentRange = "{{ selected_range }}";
+  let refreshTimer = null;
+
+  const fmtNumber = new Intl.NumberFormat();
+  const fmtLabel = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[ch]);
+
+  const chartCtx = document.getElementById('totalsChart').getContext('2d');
+  const chart = new Chart(chartCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Clients',
+          data: [],
+          borderColor: 'rgba(79,70,229,0.9)',
+          backgroundColor: 'rgba(79,70,229,0.25)',
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 0,
+          yAxisID: 'yClients',
+          fill: 'origin'
+        },
+        {
+          label: 'Access Points',
+          data: [],
+          borderColor: 'rgba(6,182,212,0.9)',
+          backgroundColor: 'rgba(6,182,212,0.25)',
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 0,
+          yAxisID: 'yAps',
+          fill: false
+        }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false,
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        x: { title: { display: true, text: 'Timestamp' } },
+        yClients: {
+          type: 'linear',
+          position: 'left',
+          beginAtZero: true,
+          title: { display: true, text: 'Clients' }
+        },
+        yAps: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: 'APs' }
+        }
+      }
+    }
+  });
+
+  const rangeButtons = Array.from(document.querySelectorAll('.range-buttons .btn[data-range]'));
+  rangeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const range = btn.getAttribute('data-range');
+      if (!range || range === currentRange) return;
+      currentRange = range;
+      setActiveRange();
+      fetchAndRender();
+    });
+  });
+
+  function setActiveRange(){
+    rangeButtons.forEach(btn => {
+      const active = btn.getAttribute('data-range') === currentRange;
+      btn.classList.toggle('active', active);
+    });
+  }
+
+  function updateChart(points){
+   const labels = [];
+   const clients = [];
+   const aps = [];
+    for (const p of points){
+      const date = new Date(p.ts || '');
+      labels.push(Number.isNaN(date.getTime()) ? p.ts : fmtLabel.format(date));
+      clients.push(p.clients || 0);
+      aps.push(p.aps || 0);
+    }
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = clients;
+    chart.data.datasets[1].data = aps;
+    chart.update('none');
+    document.getElementById('chartEmpty').style.display = points.length ? 'none' : 'block';
+  }
+
+  function renderHostsTable(wrapper, ciscoHosts, arubaHosts, details){
+    if (!wrapper) return;
+    wrapper.innerHTML = '';
+    const allHosts = [...(ciscoHosts || []), ...(arubaHosts || [])];
+    if (!allHosts.length){
+      wrapper.innerHTML = '<p class="muted">No controllers configured yet.</p>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'controllers-table';
+    table.innerHTML = '<thead><tr><th>Type</th><th>Controller</th><th style="text-align:right;">Clients</th><th style="text-align:right;">Access Points</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    // Render Cisco hosts
+    (ciscoHosts || []).forEach(host => {
+      const info = details && details[host] ? details[host] : {};
+      const tr = document.createElement('tr');
+      const clients = (info && typeof info.total_clients === 'number') ? info.total_clients : null;
+      const aps = (info && typeof info.ap_count === 'number') ? info.ap_count : null;
+      const clientsText = clients == null ? '—' : fmtNumber.format(clients);
+      const apsText = aps == null ? '—' : fmtNumber.format(aps);
+      tr.innerHTML = `<td><span style="background:#049fd9; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">Cisco</span></td><td style="font-weight:600;">${escapeHtml(host)}</td><td style="text-align:right;">${clientsText}</td><td style="text-align:right;">${apsText}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    // Render Aruba hosts
+    (arubaHosts || []).forEach(host => {
+      const info = details && details[host] ? details[host] : {};
+      const tr = document.createElement('tr');
+      const clients = (info && typeof info.total_clients === 'number') ? info.total_clients : null;
+      const aps = (info && typeof info.ap_count === 'number') ? info.ap_count : null;
+      const clientsText = clients == null ? '—' : fmtNumber.format(clients);
+      const apsText = aps == null ? '—' : fmtNumber.format(aps);
+      tr.innerHTML = `<td><span style="background:#ff8300; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">Aruba</span></td><td style="font-weight:600;">${escapeHtml(host)}</td><td style="text-align:right;">${clientsText}</td><td style="text-align:right;">${apsText}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+  }
+
+  function updateSummary(body){
+    const latest = body.latest || {};
+    const poll = body.poll || {};
+    const summary = body.summary || {};
+    const details = body.latest_details || {};
+
+    document.getElementById('totalClients').textContent = fmtNumber.format(latest.clients || 0);
+    document.getElementById('totalAps').textContent = fmtNumber.format(latest.aps || 0);
+    document.getElementById('clientsTimestamp').textContent = 'Last sample: ' + (latest.ts || '—');
+
+    const statusEl = document.getElementById('pollStatus');
+    const running = !!poll.enabled;
+    const rawStatus = poll.status || (running ? 'Enabled' : 'Paused');
+    statusEl.innerHTML = running
+      ? '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/></svg>Enabled'
+      : '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>' + rawStatus;
+    statusEl.classList.toggle('paused', !running);
+
+    const hasErrors = (
+      (Array.isArray(poll.errors) && poll.errors.length > 0) ||
+      (Array.isArray(summary.errors) && summary.errors.length > 0)
+    );
+    let messageText = summary.message || poll.message || (running ? 'Polling in progress.' : 'Polling disabled.');
+    if (hasErrors) {
+      messageText = summary.message || 'Partial success; see errors below.';
+    }
+    if (messageText.includes('Common causes')) {
+      const trimmed = messageText.split('Common causes')[0].trim().replace(/[;:,\s]+$/, '');
+      if (trimmed) {
+        messageText = trimmed;
+      }
+    }
+    document.getElementById('pollMessage').textContent = messageText;
+    const totalHosts = (poll.total_hosts != null) ? poll.total_hosts : (summary.total_hosts || (body.hosts ? body.hosts.length : 0));
+    const successHosts = (poll.success_hosts != null) ? poll.success_hosts : (summary.success_hosts != null ? summary.success_hosts : (running ? totalHosts : 0));
+    document.getElementById('pollSuccess').textContent = 'Controllers: ' + (totalHosts ? `${successHosts}/${totalHosts}` : '—');
+
+    const errorsCountEl = document.getElementById('pollErrorsCount');
+    const errorsBodyEl = document.getElementById('pollErrorsBody');
+    if (errorsCountEl && errorsBodyEl){
+      const rawErrors = Array.isArray(poll.errors) && poll.errors.length ? poll.errors : (summary.errors || []);
+      const uniqueErrors = [];
+      const seenErrors = new Set();
+      rawErrors.forEach((err) => {
+        const key = String(err || '');
+        if (!seenErrors.has(key)){
+          seenErrors.add(key);
+          uniqueErrors.push(key);
+        }
+      });
+
+      const hostStatus = Array.isArray(summary.host_status) ? summary.host_status : [];
+      const hostIssues = hostStatus.filter((item) => {
+        if (!item) return false;
+        const clientsOk = !!item.clients;
+        const apsOk = !!item.aps;
+        const rawMsg = (item.message || '').trim();
+        const msgLower = rawMsg.toLowerCase();
+        const hasOkMessage = rawMsg === '' || msgLower === 'clients ok' || msgLower.includes(' ok');
+        return !(clientsOk && apsOk && hasOkMessage);
+      });
+
+      const parts = [];
+      if (uniqueErrors.length){
+        parts.push('<ul>' + uniqueErrors.map((err) => `<li>${escapeHtml(err)}</li>`).join('') + '</ul>');
+      }
+      if (hostIssues.length){
+        let table = '<table class="controllers-table"><thead><tr><th>Controller</th><th>Client Poll</th><th>AP Inventory</th><th>Message</th></tr></thead><tbody>';
+        hostIssues.forEach((item) => {
+          const host = escapeHtml(item.host || '');
+          const clientsOk = item.clients ? 'Yes' : 'No';
+          const apsOk = item.aps ? 'Yes' : 'No';
+          const msg = escapeHtml(item.message || '');
+          table += `<tr><td style="font-weight:600;">${host}</td><td>${clientsOk}</td><td>${apsOk}</td><td>${msg}</td></tr>`;
+        });
+        table += '</tbody></table>';
+        parts.push(table);
+      }
+
+      if (!parts.length){
+        errorsBodyEl.textContent = 'No errors recorded.';
+      } else {
+        errorsBodyEl.innerHTML = parts.join('');
+      }
+
+      const visibleCount = uniqueErrors.length + hostIssues.length;
+      errorsCountEl.textContent = visibleCount;
+      errorsCountEl.classList.toggle('zero', visibleCount === 0);
+    }
+
+    const hostsWrap = document.getElementById('hostsList');
+    if (hostsWrap){
+      renderHostsTable(hostsWrap, body.hosts || [], body.aruba_hosts || [], details);
+    }
+
+  }
+
+  async function fetchAndRender(){
+    if (refreshTimer){
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+    try{
+      const res = await fetch(`${dataUrl}?range=${encodeURIComponent(currentRange)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      updateChart(body.series || []);
+      updateSummary(body);
+    } catch(err){
+      console.error('Failed to load dashboard data', err);
+      document.getElementById('pollMessage').textContent = 'Failed to load latest samples.';
+    } finally{
+      refreshTimer = setTimeout(fetchAndRender, 60000);
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden){
+      if (refreshTimer){
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+    } else {
+      fetchAndRender();
+    }
+  });
+
+  // Animate details chevron
+  document.querySelectorAll('details.info-panel').forEach(details => {
+    details.addEventListener('toggle', () => {
+      const chevron = details.querySelector('summary > svg:last-child');
+      if(chevron){
+        chevron.style.transform = details.open ? 'rotate(180deg)' : 'rotate(0deg)';
+      }
+    });
+  });
+
+  setActiveRange();
+  fetchAndRender();
+})();
+</script>
+{% endblock %}

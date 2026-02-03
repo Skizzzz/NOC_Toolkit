@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Certificate Details{% endblock %}
+{% block head_extra %}
+<style>
+  .cert-detail-card{
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:20px;
+  }
+  .cert-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+  .cert-title h2{margin:0 0 4px;}
+  .cert-title .muted{margin:0;}
+  .cert-status{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 16px;
+    border-radius:8px;
+    font-weight:600;
+  }
+  .cert-status.exp-expired{background:rgba(239,68,68,0.15); color:var(--error);}
+  .cert-status.exp-critical{background:rgba(239,68,68,0.1); color:var(--error);}
+  .cert-status.exp-warning{background:rgba(245,158,11,0.1); color:var(--warning);}
+  .cert-status.exp-caution{background:rgba(234,179,8,0.08); color:#ca8a04;}
+  .cert-status.exp-ok{background:rgba(34,197,94,0.1); color:var(--success);}
+  .cert-status.exp-unknown{background:rgba(148,163,184,0.1); color:var(--muted);}
+
+  .detail-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+    gap:20px;
+  }
+  .detail-section{
+    background: color-mix(in oklab, var(--bg) 50%, transparent);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:16px;
+  }
+  .detail-section h4{
+    margin:0 0 12px;
+    font-size:13px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--muted);
+  }
+  .detail-row{
+    display:flex;
+    justify-content:space-between;
+    padding:8px 0;
+    border-bottom:1px solid var(--border);
+    font-size:14px;
+  }
+  .detail-row:last-child{border-bottom:none;}
+  .detail-label{color:var(--muted);}
+  .detail-value{font-weight:500; text-align:right; word-break:break-all; max-width:60%;}
+
+  .serial-number{
+    font-family:monospace;
+    font-size:12px;
+    background:var(--bg);
+    padding:8px 12px;
+    border-radius:6px;
+    word-break:break-all;
+  }
+
+  .tag-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:8px;
+  }
+  .tag{
+    display:inline-block;
+    padding:4px 10px;
+    background:color-mix(in oklab, var(--accent) 15%, transparent);
+    color:var(--accent);
+    border-radius:4px;
+    font-size:12px;
+    font-weight:500;
+  }
+
+  .notes-section{
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:16px;
+    margin-top:20px;
+  }
+  .notes-section h4{margin:0 0 8px; color:var(--muted);}
+  .notes-content{white-space:pre-wrap; font-size:14px;}
+</style>
+{% endblock %}
+{% block content %}
+<div style="max-width:900px; margin:0 auto;">
+  <div style="margin-bottom:24px;">
+    <a href="{{ url_for('cert_tracker') }}" class="muted" style="text-decoration:none;">&larr; Back to Certificate Tracker</a>
+  </div>
+
+  <div class="cert-detail-card">
+    <div class="cert-header">
+      <div class="cert-title">
+        <h2>{{ cert.cn or 'Unknown Certificate' }}</h2>
+        <p class="muted">Certificate Details</p>
+      </div>
+      <div class="cert-status {{ cert.expiry_class }}">
+        {% if cert.days_left is not none %}
+          {% if cert.days_left < 0 %}
+            Expired {{ (-cert.days_left)|int }} days ago
+          {% elif cert.days_left == 0 %}
+            Expires Today
+          {% else %}
+            {{ cert.days_left }} days remaining
+          {% endif %}
+        {% else %}
+          Unknown Status
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="detail-grid">
+      <!-- Validity Section -->
+      <div class="detail-section">
+        <h4>Validity</h4>
+        <div class="detail-row">
+          <span class="detail-label">Expires</span>
+          <span class="detail-value">{{ cert.expires_formatted or cert.expires or 'Unknown' }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Days Left</span>
+          <span class="detail-value">
+            {% if cert.days_left is not none %}
+              {% if cert.days_left < 0 %}Expired{% else %}{{ cert.days_left }}{% endif %}
+            {% else %}Unknown{% endif %}
+          </span>
+        </div>
+      </div>
+
+      <!-- Identity Section -->
+      <div class="detail-section">
+        <h4>Identity</h4>
+        <div class="detail-row">
+          <span class="detail-label">Issued To</span>
+          <span class="detail-value">{{ cert.issued_to or '-' }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Issued By</span>
+          <span class="detail-value">{{ cert.issued_by or '-' }}</span>
+        </div>
+      </div>
+
+      <!-- Source Section -->
+      <div class="detail-section">
+        <h4>Source</h4>
+        <div class="detail-row">
+          <span class="detail-label">Source Type</span>
+          <span class="detail-value">
+            {% if cert.source_type == 'ise' %}
+              <span class="tag">ISE</span>
+            {% else %}
+              <span class="tag">Upload</span>
+            {% endif %}
+          </span>
+        </div>
+        {% if cert.source_hostname %}
+        <div class="detail-row">
+          <span class="detail-label">Source Host</span>
+          <span class="detail-value">{{ cert.source_hostname }}</span>
+        </div>
+        {% endif %}
+        {% if cert.source_ip %}
+        <div class="detail-row">
+          <span class="detail-label">Source IP</span>
+          <span class="detail-value">{{ cert.source_ip }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Usage Section -->
+      <div class="detail-section">
+        <h4>Usage</h4>
+        <div class="detail-row">
+          <span class="detail-label">Used By</span>
+          <span class="detail-value">{{ cert.used_by or '-' }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Devices</span>
+          <span class="detail-value">{{ cert.devices or '-' }}</span>
+        </div>
+      </div>
+    </div>
+
+    {% if cert.serial %}
+    <div style="margin-top:20px;">
+      <h4 style="margin:0 0 8px; font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">Serial Number</h4>
+      <div class="serial-number">{{ cert.serial }}</div>
+    </div>
+    {% endif %}
+
+    {% if cert.notes %}
+    <div class="notes-section">
+      <h4>Notes</h4>
+      <div class="notes-content">{{ cert.notes }}</div>
+    </div>
+    {% endif %}
+
+    <div style="margin-top:24px; display:flex; gap:12px;">
+      <a href="{{ url_for('cert_edit', cert_id=cert.id) }}" class="btn primary">Edit Certificate</a>
+      {% if session.get('role') == 'superadmin' %}
+      <form method="post" action="{{ url_for('cert_delete', cert_id=cert.id) }}" style="display:inline;" onsubmit="return confirm('Delete this certificate?');">
+        <button type="submit" class="btn" style="color:var(--error);">Delete</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,1444 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}NOC Toolkit{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Brand Colors */
+      --navy: #05013f;
+      --navy-light: #0a0654;
+      --navy-lighter: #120b6b;
+      --pink: #f50450;
+      --pink-light: #ff3b6e;
+      --pink-dark: #c9003d;
+
+      /* Theme Colors */
+      --bg: #f8f7ff;
+      --bg-subtle: #efeeff;
+      --card: #ffffff;
+      --card-hover: #f8f7ff;
+      --text: #05013f;
+      --text-muted: #5a5680;
+      --border: rgba(5, 1, 63, 0.1);
+      --border-subtle: rgba(5, 1, 63, 0.06);
+      --accent: var(--pink);
+      --accent-soft: rgba(245, 4, 80, 0.15);
+
+      /* Semantic Colors */
+      --success: #00d67f;
+      --success-soft: rgba(0, 214, 127, 0.15);
+      --warning: #ffb020;
+      --warning-soft: rgba(255, 176, 32, 0.15);
+      --error: #ff4466;
+      --error-soft: rgba(255, 68, 102, 0.15);
+      --info: #3b8bff;
+      --info-soft: rgba(59, 139, 255, 0.15);
+
+      /* Layout */
+      --sidebar-width: 280px;
+      --header-height: 72px;
+      --radius: 12px;
+      --radius-lg: 16px;
+      --radius-sm: 8px;
+
+      /* Shadows */
+      --shadow: 0 8px 32px rgba(5, 1, 63, 0.08);
+      --shadow-lg: 0 16px 48px rgba(5, 1, 63, 0.12);
+      --glow-pink: 0 0 40px rgba(245, 4, 80, 0.15);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Subtle grid pattern background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border-subtle) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      opacity: 0.5;
+      z-index: -1;
+    }
+
+    /* Typography */
+    h1, h2, h3, h4, h5, h6 {
+      font-family: 'Instrument Sans', sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ═══════════════════════════════════════════
+       LAYOUT STRUCTURE
+    ═══════════════════════════════════════════ */
+
+    .app-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Header */
+    header.header {
+      height: var(--header-height);
+      background: var(--card);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      background: var(--pink);
+      border-radius: var(--radius-sm);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-family: 'Instrument Sans', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.05em;
+      box-shadow: var(--glow-pink);
+      position: relative;
+    }
+
+    .logo::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border: 2px solid var(--pink);
+      border-radius: 10px;
+      opacity: 0.3;
+    }
+
+    .brand-text h1 {
+      font-size: 20px;
+      color: var(--text);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Mobile Menu Toggle */
+    .menu-toggle {
+      display: none;
+      width: 40px;
+      height: 40px;
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ═══════════════════════════════════════════
+       SIDEBAR
+    ═══════════════════════════════════════════ */
+
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--card);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: transform 0.3s ease;
+      overflow: hidden;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 0;
+    }
+
+    .nav-section {
+      margin-bottom: 8px;
+    }
+
+    .nav-section-title {
+      padding: 12px 20px 8px;
+      font-family: 'Instrument Sans', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-subtle);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      color: var(--text-muted);
+      font-weight: 500;
+      transition: all 0.15s ease;
+      position: relative;
+      margin: 2px 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+      background: var(--bg-subtle);
+    }
+
+    .nav-item.active {
+      color: var(--pink);
+      background: var(--accent-soft);
+    }
+
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 20px;
+      background: var(--pink);
+      border-radius: 0 2px 2px 0;
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      opacity: 0.8;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      background: var(--pink);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 7px;
+      border-radius: 999px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    /* User Profile in Sidebar */
+    .sidebar-user {
+      padding: 20px;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--bg-subtle);
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--pink), var(--navy-lighter));
+      display: grid;
+      place-items: center;
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .user-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-role {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: capitalize;
+    }
+
+    .user-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .user-actions .btn {
+      flex: 1;
+      padding: 8px;
+      font-size: 12px;
+      justify-content: center;
+    }
+
+    /* ═══════════════════════════════════════════
+       MAIN CONTENT
+    ═══════════════════════════════════════════ */
+
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .shell {
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 28px;
+      flex: 1;
+    }
+
+    /* ═══════════════════════════════════════════
+       BREADCRUMBS
+    ═══════════════════════════════════════════ */
+
+    .breadcrumbs {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .breadcrumbs a {
+      color: var(--text-muted);
+      transition: color 0.15s ease;
+    }
+
+    .breadcrumbs a:hover { color: var(--pink); }
+
+    .breadcrumbs-separator {
+      color: var(--border);
+      font-weight: 300;
+    }
+
+    .breadcrumbs-current {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* ═══════════════════════════════════════════
+       CARDS
+    ═══════════════════════════════════════════ */
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .card-accent {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-accent::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--pink);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .section-title {
+      font-family: 'Instrument Sans', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 24px;
+      background: var(--pink);
+      border-radius: 2px;
+    }
+
+    /* ═══════════════════════════════════════════
+       BUTTONS
+    ═══════════════════════════════════════════ */
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      border-color: var(--pink);
+      color: var(--pink);
+      transform: translateY(-1px);
+    }
+
+    .btn.primary, .btn-gradient {
+      background: var(--pink);
+      border-color: var(--pink);
+      color: white;
+      box-shadow: 0 4px 16px rgba(245, 4, 80, 0.3);
+    }
+
+    .btn.primary:hover, .btn-gradient:hover {
+      background: var(--pink-light);
+      border-color: var(--pink-light);
+      color: white;
+      box-shadow: 0 6px 24px rgba(245, 4, 80, 0.4);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .btn-ghost:hover {
+      background: var(--accent-soft);
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .btn-lg {
+      padding: 14px 28px;
+      font-size: 16px;
+    }
+
+    /* ═══════════════════════════════════════════
+       FORM ELEMENTS
+    ═══════════════════════════════════════════ */
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],
+    input[type="number"],
+    input[type="search"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 12px 16px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--pink);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    input::placeholder, textarea::placeholder {
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    select {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239994cc' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 40px;
+    }
+
+    .muted {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* ═══════════════════════════════════════════
+       TABLES
+    ═══════════════════════════════════════════ */
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    th {
+      font-family: 'Instrument Sans', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      background: var(--bg-subtle);
+    }
+
+    th:first-child { border-radius: var(--radius-sm) 0 0 0; }
+    th:last-child { border-radius: 0 var(--radius-sm) 0 0; }
+
+    tbody tr {
+      transition: background 0.15s ease;
+    }
+
+    tbody tr:hover {
+      background: var(--accent-soft);
+    }
+
+    /* ═══════════════════════════════════════════
+       BADGES
+    ═══════════════════════════════════════════ */
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      border-radius: 6px;
+    }
+
+    .badge.success { background: var(--success-soft); color: var(--success); }
+    .badge.warning { background: var(--warning-soft); color: var(--warning); }
+    .badge.error { background: var(--error-soft); color: var(--error); }
+    .badge.info { background: var(--info-soft); color: var(--info); }
+    .badge.neutral { background: var(--bg-subtle); color: var(--text-muted); }
+
+    /* ═══════════════════════════════════════════
+       TOAST NOTIFICATIONS
+    ═══════════════════════════════════════════ */
+
+    .toast-container {
+      position: fixed;
+      top: 90px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 400px;
+    }
+
+    .toast {
+      background: var(--card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(120%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    .toast-icon { width: 20px; height: 20px; flex-shrink: 0; }
+    .toast-content { flex: 1; min-width: 0; }
+    .toast-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .toast-message { font-size: 13px; color: var(--text-muted); }
+    .toast-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0;
+      opacity: 0.6;
+      transition: opacity 0.15s;
+    }
+    .toast-close:hover { opacity: 1; }
+    .toast.success .toast-icon { color: var(--success); }
+    .toast.warning .toast-icon { color: var(--warning); }
+    .toast.error .toast-icon { color: var(--error); }
+    .toast.info .toast-icon { color: var(--info); }
+
+    /* ═══════════════════════════════════════════
+       FLASH MESSAGES
+    ═══════════════════════════════════════════ */
+
+    .flash {
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      border-left: 4px solid var(--warning);
+      background: var(--warning-soft);
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* ═══════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════ */
+
+    .footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      background: var(--card);
+    }
+
+    /* ═══════════════════════════════════════════
+       NOTIFICATION BELL
+    ═══════════════════════════════════════════ */
+
+    .notification-bell {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: all 0.15s ease;
+    }
+
+    .notification-bell:hover {
+      border-color: var(--pink);
+      color: var(--pink);
+    }
+
+    .notification-bell-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: var(--pink);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      min-width: 18px;
+      text-align: center;
+    }
+
+    /* ═══════════════════════════════════════════
+       ADMIN LOGIN BUTTON
+    ═══════════════════════════════════════════ */
+
+    .admin-login-btn {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      background: var(--pink);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      box-shadow: var(--glow-pink);
+      transition: all 0.2s ease;
+    }
+
+    .admin-login-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(245, 4, 80, 0.5);
+    }
+
+    .admin-login-btn.superadmin {
+      background: linear-gradient(135deg, var(--pink), var(--navy-lighter));
+    }
+
+    /* ═══════════════════════════════════════════
+       OVERLAY
+    ═══════════════════════════════════════════ */
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 1, 40, 0.8);
+      backdrop-filter: blur(4px);
+      z-index: 199;
+      display: none;
+    }
+
+    .sidebar-overlay.active { display: block; }
+
+    /* ═══════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════ */
+
+    @media (max-width: 768px) {
+      .menu-toggle { display: flex; }
+
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 200;
+        box-shadow: var(--shadow-lg);
+      }
+
+      .sidebar.hidden { transform: translateX(-100%); }
+
+      .shell { padding: 20px; }
+
+      .footer {
+        flex-direction: column;
+        text-align: center;
+        gap: 8px;
+      }
+    }
+
+    /* ═══════════════════════════════════════════
+       UTILITIES
+    ═══════════════════════════════════════════ */
+
+    .grid { display: grid; gap: 16px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .text-center { text-align: center; }
+    .mt-0 { margin-top: 0; }
+    .mb-0 { margin-bottom: 0; }
+    .mb-4 { margin-bottom: 16px; }
+    .mb-6 { margin-bottom: 24px; }
+
+    code {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      padding: 2px 6px;
+      background: var(--bg-subtle);
+      border-radius: 4px;
+      color: var(--pink);
+    }
+
+    /* Simple table variant */
+    .simple-table { width: 100%; border-collapse: collapse; }
+    .simple-table th, .simple-table td {
+      padding: 12px 14px;
+      border: 1px solid var(--border-subtle);
+      text-align: left;
+    }
+    .simple-table th { background: var(--bg-subtle); }
+
+    /* ═══════════════════════════════════════════
+       TOOL HEADER (reusable page headers)
+    ═══════════════════════════════════════════ */
+
+    .tool-header {
+      background: var(--card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .tool-header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--pink);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .tool-header h2 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+      font-family: 'Instrument Sans', sans-serif;
+    }
+
+    .tool-header p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+
+    .tool-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--pink);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(245, 4, 80, 0.25);
+    }
+
+    /* ═══════════════════════════════════════════
+       FORM SECTIONS (reusable form grouping)
+    ═══════════════════════════════════════════ */
+
+    .form-section {
+      background: var(--card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .form-section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .form-section-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-soft);
+      color: var(--pink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .form-section-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .form-section-subtitle {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Field with icon prefix */
+    .field-with-icon {
+      position: relative;
+    }
+
+    .field-with-icon .field-icon {
+      position: absolute;
+      left: 12px;
+      top: 38px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .field-with-icon input {
+      padding-left: 38px;
+    }
+
+    /* ═══════════════════════════════════════════
+       ACTION BUTTONS (form submission areas)
+    ═══════════════════════════════════════════ */
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding-top: 20px;
+      margin-top: 20px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    /* ═══════════════════════════════════════════
+       HOST COUNT BADGE
+    ═══════════════════════════════════════════ */
+
+    .host-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--info-soft);
+      color: var(--info);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ═══════════════════════════════════════════
+       CHECKBOX OPTION (styled checkbox rows)
+    ═══════════════════════════════════════════ */
+
+    .checkbox-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .checkbox-option:hover {
+      background: var(--accent-soft);
+      border-color: var(--pink);
+    }
+
+    .checkbox-option input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--pink);
+    }
+
+    .checkbox-option-content {
+      flex: 1;
+    }
+
+    .checkbox-option-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .checkbox-option-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ═══════════════════════════════════════════
+       INFO BOX (highlighted help sections)
+    ═══════════════════════════════════════════ */
+
+    .info-box {
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      border-left: 4px solid var(--info);
+      background: var(--info-soft);
+      margin-bottom: 16px;
+    }
+
+    .info-box.warning {
+      border-left-color: var(--warning);
+      background: var(--warning-soft);
+    }
+
+    .info-box-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .info-box.warning .info-box-title {
+      color: var(--warning);
+    }
+
+    .info-box-content {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+
+    /* ═══════════════════════════════════════════
+       FIELD SPACING
+    ═══════════════════════════════════════════ */
+
+    .row > .field {
+      flex: 1;
+      min-width: 200px;
+    }
+  </style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <header class="header">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 6h14M3 10h14M3 14h14"/>
+      </svg>
+    </button>
+    <div class="brand">
+      <a href="{{ url_for('index') }}" class="logo" aria-label="Home">NT</a>
+      <div class="brand-text">
+        <h1>NOC Toolkit</h1>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="notification-bell" id="notificationBell" aria-label="Notifications">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM8 16a2 2 0 104 0"/>
+        </svg>
+        <span class="notification-bell-badge" id="notificationCount" style="display:none;">0</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Main</div>
+          <a href="{{ url_for('index') }}" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+            </svg>
+            <span>Dashboard</span>
+          </a>
+          {% if 'knowledge_base' in enabled_pages %}
+          <a href="{{ url_for('knowledge_base') }}" class="nav-item {% if request.endpoint in ['knowledge_base', 'knowledge_base_view', 'knowledge_base_create', 'knowledge_base_edit'] %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+            </svg>
+            <span>Knowledge Base</span>
+          </a>
+          {% endif %}
+          {% if 'jobs_center' in enabled_pages %}
+          <a href="{{ url_for('jobs_center') }}" class="nav-item {% if request.endpoint == 'jobs_center' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+              <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"/>
+            </svg>
+            <span>Jobs Center</span>
+          </a>
+          {% endif %}
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Config Tools</div>
+          {% if 'tool_phrase_search' in enabled_pages %}
+          <a href="{{ url_for('tool_phrase_search') }}" class="nav-item {% if request.endpoint == 'tool_phrase_search' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
+            </svg>
+            <span>Interface Search</span>
+          </a>
+          {% endif %}
+          {% if 'tool_global_config' in enabled_pages %}
+          <a href="{{ url_for('tool_global_config') }}" class="nav-item {% if request.endpoint == 'tool_global_config' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.706 2.142-.766 3.556h3.936c-.06-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.06 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.706-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z"/>
+            </svg>
+            <span>Global Config</span>
+          </a>
+          {% endif %}
+          {% if 'bulk_ssh' in enabled_pages %}
+          <a href="{{ url_for('bulk_ssh') }}" class="nav-item {% if request.endpoint in ['bulk_ssh', 'bulk_ssh_execute', 'bulk_ssh_results', 'bulk_ssh_jobs', 'bulk_ssh_templates', 'bulk_ssh_schedules'] %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"/>
+            </svg>
+            <span>Bulk SSH Terminal</span>
+          </a>
+          {% endif %}
+          {% if session.get('role') == 'superadmin' and 'audit_logs' in enabled_pages %}
+          <a href="{{ url_for('audit_logs') }}" class="nav-item {% if request.endpoint == 'audit_logs' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+            </svg>
+            <span>Audit Logs</span>
+          </a>
+          {% endif %}
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">WLC Tools</div>
+          {% if 'wlc_dashboard' in enabled_pages %}
+          <a href="{{ url_for('wlc_dashboard') }}" class="nav-item {% if request.endpoint == 'wlc_dashboard' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
+            </svg>
+            <span>Dashboard</span>
+          </a>
+          {% endif %}
+          {% if 'wlc_inventory' in enabled_pages %}
+          <a href="{{ url_for('wlc_inventory') }}" class="nav-item {% if request.endpoint == 'wlc_inventory' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z"/>
+            </svg>
+            <span>AP Inventory</span>
+          </a>
+          {% endif %}
+          {% if 'wlc_rf' in enabled_pages %}
+          <a href="{{ url_for('wlc_rf') }}" class="nav-item {% if request.endpoint == 'wlc_rf' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z"/>
+            </svg>
+            <span>RF Summary</span>
+          </a>
+          {% endif %}
+          {% if 'wlc_summer_guest' in enabled_pages %}
+          <a href="{{ url_for('wlc_summer_guest') }}" class="nav-item {% if request.endpoint == 'wlc_summer_guest' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/>
+            </svg>
+            <span>Summer Guest</span>
+          </a>
+          {% endif %}
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Infrastructure</div>
+          {% if 'solarwinds_nodes' in enabled_pages %}
+          <a href="{{ url_for('solarwinds_nodes') }}" class="nav-item {% if request.endpoint == 'solarwinds_nodes' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8z"/>
+            </svg>
+            <span>SolarWinds Nodes</span>
+          </a>
+          {% endif %}
+          {% if 'customer_dashboard' in enabled_pages %}
+          <a href="{{ url_for('customer_dashboard') }}" class="nav-item {% if request.endpoint == 'customer_dashboard' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+            </svg>
+            <span>Customer Dashboard</span>
+          </a>
+          {% endif %}
+          {% if 'topology_tool' in enabled_pages %}
+          <a href="{{ url_for('topology_tool') }}" class="nav-item {% if request.endpoint == 'topology_tool' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M17.778 8.222c-4.296-4.296-11.26-4.296-15.556 0A1 1 0 01.808 6.808c5.076-5.077 13.308-5.077 18.384 0a1 1 0 01-1.414 1.414zM14.95 11.05a7 7 0 00-9.9 0 1 1 0 01-1.414-1.414 9 9 0 0112.728 0 1 1 0 01-1.414 1.414zM12.12 13.88a3 3 0 00-4.242 0 1 1 0 01-1.415-1.415 5 5 0 017.072 0 1 1 0 01-1.415 1.415zM9 16a1 1 0 102 0 1 1 0 00-2 0z"/>
+            </svg>
+            <span>Topology</span>
+          </a>
+          {% endif %}
+          {% if 'changes_list' in enabled_pages %}
+          <a href="{{ url_for('changes_list') }}" class="nav-item {% if request.endpoint == 'changes_list' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"/>
+            </svg>
+            <span>Change Windows</span>
+          </a>
+          {% endif %}
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Certificates</div>
+          {% if 'cert_tracker' in enabled_pages %}
+          <a href="{{ url_for('cert_tracker') }}" class="nav-item {% if request.endpoint in ['cert_tracker', 'cert_upload', 'cert_edit'] %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+            </svg>
+            <span>Certificate Tracker</span>
+          </a>
+          {% endif %}
+          {% if 'cert_converter' in enabled_pages %}
+          <a href="{{ url_for('cert_converter') }}" class="nav-item {% if request.endpoint == 'cert_converter' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/>
+            </svg>
+            <span>Cert Converter</span>
+          </a>
+          {% endif %}
+          {% if 'ise_nodes' in enabled_pages %}
+          <a href="{{ url_for('ise_nodes') }}" class="nav-item {% if request.endpoint in ['ise_nodes', 'ise_node_edit'] %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1a1 1 0 11-2 0 1 1 0 012 0zM2 13a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zm14 1a1 1 0 11-2 0 1 1 0 012 0z"/>
+            </svg>
+            <span>ISE Nodes</span>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if session.get('user_id') %}
+      <div class="sidebar-user">
+        <div class="user-info">
+          <div class="user-avatar">
+            {{ session.get('username', 'U')[0].upper() }}
+          </div>
+          <div class="user-details">
+            <div class="user-name">{{ session.get('username', 'User') }}</div>
+            <div class="user-role">{{ session.get('role', 'user') }}</div>
+          </div>
+        </div>
+        <div class="user-actions">
+          <a href="{{ url_for('profile') }}" class="btn btn-sm">Profile</a>
+          <a href="{{ url_for('logout') }}" class="btn btn-sm">Logout</a>
+        </div>
+        {% if session.get('role') == 'superadmin' %}
+        <a href="{{ url_for('admin_users') }}" class="btn btn-sm primary" style="width:100%; margin-top:8px;">
+          Admin Panel
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </nav>
+
+    <div class="main-content">
+      <main class="shell">
+        {% if breadcrumbs %}
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          {% for crumb in breadcrumbs %}
+            {% if loop.last %}
+              <span class="breadcrumbs-current">{{ crumb.title }}</span>
+            {% else %}
+              <a href="{{ crumb.url }}">{{ crumb.title }}</a>
+              <span class="breadcrumbs-separator">/</span>
+            {% endif %}
+          {% endfor %}
+        </nav>
+        {% endif %}
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for m in messages %}
+              <div class="flash">{{ m }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="footer">
+        <span>© 2025 NOC Toolkit</span>
+        <span>{{ app_version }}</span>
+      </footer>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  {% if not session.get('user_id') %}
+  <a href="{{ url_for('login') }}" class="admin-login-btn">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
+    </svg>
+    <span>Admin Login</span>
+  </a>
+  {% endif %}
+
+  <script>
+    // Sidebar toggle for mobile
+    const sidebar = document.getElementById('sidebar');
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    function toggleSidebar() {
+      sidebar.classList.toggle('hidden');
+      sidebarOverlay.classList.toggle('active');
+    }
+
+    if (menuToggle) {
+      menuToggle.addEventListener('click', toggleSidebar);
+    }
+    if (sidebarOverlay) {
+      sidebarOverlay.addEventListener('click', toggleSidebar);
+    }
+
+    // Toast notification system
+    window.showToast = function(title, message, type, duration) {
+      type = type || 'info';
+      duration = duration || 5000;
+
+      var container = document.getElementById('toastContainer');
+      if (!container) return;
+
+      var toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+
+      // Create toast content using DOM methods (XSS safe)
+      var iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      iconSvg.setAttribute('class', 'toast-icon');
+      iconSvg.setAttribute('viewBox', '0 0 20 20');
+      iconSvg.setAttribute('fill', 'currentColor');
+
+      var iconPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      var iconPaths = {
+        success: 'M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z',
+        error: 'M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z',
+        warning: 'M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z',
+        info: 'M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z'
+      };
+      iconPath.setAttribute('fill-rule', 'evenodd');
+      iconPath.setAttribute('d', iconPaths[type] || iconPaths.info);
+      iconSvg.appendChild(iconPath);
+
+      var contentDiv = document.createElement('div');
+      contentDiv.className = 'toast-content';
+
+      var titleDiv = document.createElement('div');
+      titleDiv.className = 'toast-title';
+      titleDiv.textContent = title;
+      contentDiv.appendChild(titleDiv);
+
+      if (message) {
+        var messageDiv = document.createElement('div');
+        messageDiv.className = 'toast-message';
+        messageDiv.textContent = message;
+        contentDiv.appendChild(messageDiv);
+      }
+
+      var closeBtn = document.createElement('button');
+      closeBtn.className = 'toast-close';
+      closeBtn.onclick = function() { toast.remove(); };
+
+      var closeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      closeSvg.setAttribute('width', '16');
+      closeSvg.setAttribute('height', '16');
+      closeSvg.setAttribute('viewBox', '0 0 20 20');
+      closeSvg.setAttribute('fill', 'currentColor');
+
+      var closePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      closePath.setAttribute('fill-rule', 'evenodd');
+      closePath.setAttribute('d', 'M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z');
+      closeSvg.appendChild(closePath);
+      closeBtn.appendChild(closeSvg);
+
+      toast.appendChild(iconSvg);
+      toast.appendChild(contentDiv);
+      toast.appendChild(closeBtn);
+
+      container.appendChild(toast);
+
+      if (duration > 0) {
+        setTimeout(function() {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateX(120%)';
+          setTimeout(function() { toast.remove(); }, 300);
+        }, duration);
+      }
+    };
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}SolarWinds Settings{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h2 class="section-title" style="margin:0;">SolarWinds Settings</h2>
+      <p class="muted" style="margin:6px 0 0 0;">Provide Orion credentials and Optional SSL validation to pull node inventory.</p>
+    </div>
+    <div class="row" style="gap:10px;">
+      <a class="btn" href="{{ url_for('solarwinds_nodes') }}">View Nodes</a>
+      <a class="btn" href="{{ url_for('changes_list') }}">Changes</a>
+    </div>
+  </div>
+</section>
+
+<form method="post" class="card" style="margin-top:18px; display:grid; gap:18px;">
+  <div class="row" style="gap:16px; flex-wrap:wrap;">
+    <div class="field" style="flex:1 1 320px;">
+      <label for="base_url">SolarWinds Base URL</label>
+      <input id="base_url" type="text" name="base_url" placeholder="https://solarwinds.example.com" value="{{ settings.base_url or '' }}" autocomplete="off" />
+      <span class="muted">Root URL to Orion (no trailing /SolarWinds…).</span>
+    </div>
+    <div class="field" style="flex:1 1 240px;">
+      <label for="username">Username</label>
+      <input id="username" type="text" name="username" value="{{ settings.username or '' }}" autocomplete="off" />
+    </div>
+    <div class="field" style="flex:1 1 240px;">
+      <label for="password">Password / Token</label>
+      <input id="password" type="password" name="password" placeholder="Enter to update" autocomplete="off" />
+    </div>
+  </div>
+
+  <div class="row" style="gap:16px; flex-wrap:wrap;">
+    <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+      <input type="checkbox" name="verify_ssl" value="1" {% if settings.verify_ssl %}checked{% endif %} /> Verify SSL certificates
+    </label>
+    <div class="muted" style="font-size:12px;">Last poll: {{ settings.last_poll_ts or 'never' }} ({{ settings.last_poll_status or 'never' }}) — {{ settings.last_poll_message or 'Idle' }}. Nodes stored: {{ nodes_count }}.</div>
+  </div>
+
+  <div class="row" style="justify-content:flex-end; gap:10px; flex-wrap:wrap;">
+    <button class="btn" name="action" value="save" type="submit">Save Settings</button>
+    <button class="btn" name="action" value="poll" type="submit">Save &amp; Poll</button>
+  </div>
+</form>
+{% endblock %}

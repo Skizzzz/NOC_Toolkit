@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Application Settings{% endblock %}
+{% block head_extra %}
+<style>
+  .settings-card {
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  .settings-card h3 {
+    margin: 0 0 8px 0;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .settings-card p {
+    margin: 0 0 20px 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-group label {
+    display: block;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  .form-group select {
+    width: 100%;
+    max-width: 400px;
+    padding: 12px 16px;
+    font-size: 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .form-group select:hover {
+    border-color: var(--pink);
+  }
+
+  .form-group select:focus {
+    outline: none;
+    border-color: var(--pink);
+    box-shadow: 0 0 0 3px rgba(245, 4, 80, 0.15);
+  }
+
+  .form-group .help-text {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .current-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(245, 4, 80, 0.08);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--pink);
+    margin-bottom: 16px;
+  }
+
+  .current-value svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .info-card {
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 24px;
+  }
+
+  .info-card h4 {
+    margin: 0 0 12px 0;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .info-card ul {
+    margin: 0;
+    padding-left: 20px;
+    line-height: 1.8;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .info-card strong {
+    color: var(--text);
+  }
+
+  .admin-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding: 4px;
+    background: var(--card);
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+  }
+
+  .admin-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+  }
+
+  .admin-tab:hover {
+    color: var(--text);
+    background: rgba(245, 4, 80, 0.05);
+  }
+
+  .admin-tab.active {
+    background: var(--pink);
+    color: white;
+    box-shadow: 0 2px 8px rgba(245, 4, 80, 0.3);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="{{ url_for('index') }}">Dashboard</a>
+  <span class="breadcrumbs-separator">/</span>
+  <span class="breadcrumbs-current">Admin</span>
+</nav>
+
+<div class="admin-tabs">
+  <a href="{{ url_for('admin_users') }}" class="admin-tab">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+    </svg>
+    User Management
+  </a>
+  <a href="{{ url_for('admin_page_settings') }}" class="admin-tab">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+    </svg>
+    Page Settings
+  </a>
+  <a href="{{ url_for('admin_settings') }}" class="admin-tab active">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+    </svg>
+    App Settings
+  </a>
+  <a href="{{ url_for('admin_backup') }}" class="admin-tab">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/>
+      <path fill-rule="evenodd" d="M2 9v5a2 2 0 002 2h12a2 2 0 002-2V9H2zm5 2a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" clip-rule="evenodd"/>
+    </svg>
+    Backup & Restore
+  </a>
+</div>
+
+<div class="card">
+  <h2 class="section-title">Application Settings</h2>
+  <p class="muted" style="margin-bottom: 24px;">
+    Configure global application settings that affect scheduled operations and time displays.
+  </p>
+
+  <form method="post">
+    <div class="settings-card">
+      <h3>Timezone Configuration</h3>
+      <p>Set the timezone used for all scheduled operations, change windows, and time displays across the application.</p>
+
+      <div class="current-value">
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+        </svg>
+        Current: {{ settings.timezone }}
+      </div>
+
+      <div class="form-group">
+        <label for="timezone">Application Timezone</label>
+        <select id="timezone" name="timezone">
+          {% for tz_value, tz_label in timezones %}
+          <option value="{{ tz_value }}" {% if settings.timezone == tz_value %}selected{% endif %}>
+            {{ tz_label }} ({{ tz_value }})
+          </option>
+          {% endfor %}
+        </select>
+        <div class="help-text">
+          This timezone will be used for scheduling change windows, bulk SSH jobs, certificate sync, and WLC polling.
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-gradient">Save Settings</button>
+      <a href="{{ url_for('admin_users') }}" class="btn">Back to Admin</a>
+    </div>
+  </form>
+</div>
+
+<div class="info-card">
+  <h4>How Timezone Affects the Application</h4>
+  <ul>
+    <li><strong>Change Windows</strong> - Scheduled changes execute based on this timezone</li>
+    <li><strong>Bulk SSH Schedules</strong> - One-time, daily, and weekly jobs run at the scheduled time in this timezone</li>
+    <li><strong>Certificate Sync</strong> - Automated ISE certificate synchronization uses this timezone</li>
+    <li><strong>WLC Polling</strong> - Dashboard time displays and Summer Guest scheduling use this timezone</li>
+    <li><strong>Time Displays</strong> - All timestamps in the UI are shown in this timezone</li>
+  </ul>
+  <p style="margin-top: 16px; color: var(--text-muted); font-size: 13px;">
+    <strong style="color: var(--text);">Note:</strong> Changing the timezone affects future scheduled operations. Currently running or already-scheduled jobs will continue with their original timing.
+  </p>
+</div>
+{% endblock %}

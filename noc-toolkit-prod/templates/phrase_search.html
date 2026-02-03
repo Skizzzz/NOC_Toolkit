@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Interface Config Search{% endblock %}
+{% block head_extra %}{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs">
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <span class="breadcrumbs-separator">/</span>
+    <span class="breadcrumbs-current">Interface Config Search</span>
+  </nav>
+
+  <div class="tool-header">
+    <div class="tool-icon">
+      <svg width="28" height="28" viewBox="0 0 20 20" fill="currentColor">
+        <circle cx="9" cy="9" r="6" stroke="currentColor" fill="none" stroke-width="2"/>
+        <path d="M14 14l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h2>Interface Configuration Search</h2>
+    <p>Search for specific configuration patterns across multiple switches and perform bulk actions on matching interfaces. Great for finding interfaces with specific authentication settings, VLANs, or descriptions.</p>
+  </div>
+
+  <form method="post" action="{{ url_for('search') }}">
+    <!-- Target Devices Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+          </svg>
+        </div>
+        <div style="flex:1;">
+          <h3 class="form-section-title">Target Devices</h3>
+          <p class="form-section-subtitle">Specify which switches to search</p>
+        </div>
+        <span class="host-count" id="hostCount">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+          </svg>
+          <span id="hostCountNumber">0</span> hosts
+        </span>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
+            </svg>
+            Switch IPs / FQDNs
+          </label>
+          <textarea id="phrase-hosts" name="hosts" placeholder="Enter IP addresses or hostnames (comma or newline separated)&#10;&#10;Examples:&#10;10.1.1.10, 10.1.1.11&#10;10.1.1.12&#10;switch-building-a.local" rows="6">{{ request.form.get('hosts','') }}</textarea>
+          <div class="muted">You can paste a list of IPs from Excel or use the node search below</div>
+        </div>
+
+        <div class="field host-selector"
+             data-host-selector
+             data-target="phrase-hosts"
+             data-nodes='{{ (node_options or []) | tojson | safe }}'>
+          <label for="phrase-host-search">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+              <circle cx="9" cy="9" r="7"/><path d="M14 14l5 5"/>
+            </svg>
+            Quick Add from SolarWinds
+          </label>
+          <input id="phrase-host-search" type="text" data-host-search placeholder="Type hostname or IP to search inventory…" autocomplete="off" {% if not node_options %}disabled{% endif %} />
+          <div class="muted">
+            {% if node_options %}
+              {{ node_options|length }} nodes available - Press Enter or click to add
+            {% else %}
+              No SolarWinds nodes available. <a href="{{ url_for('solarwinds_nodes') }}">Sync from Nodes page</a> to enable search.
+            {% endif %}
+          </div>
+          <div class="host-selector-results" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Authentication Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="form-section-title">Authentication</h3>
+          <p class="form-section-subtitle">Your network credentials for SSH access</p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field field-with-icon">
+          <label>Username</label>
+          <svg class="field-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
+          </svg>
+          <input name="username" type="text" required placeholder="Enter your network username" />
+        </div>
+        <div class="field field-with-icon">
+          <label>Password</label>
+          <svg class="field-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z"/>
+          </svg>
+          <input name="password" type="password" required placeholder="Enter your network password" />
+        </div>
+        <div class="field">
+          <label>Enable Secret <span class="muted">(optional)</span></label>
+          <input name="secret" type="password" placeholder="Leave blank if not required" />
+          <div class="muted">Only needed if devices require enable mode</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Criteria Section -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="form-section-title">Search Criteria</h3>
+          <p class="form-section-subtitle">Define what configuration pattern to search for</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="vertical-align:middle; margin-right:4px;">
+            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
+          </svg>
+          Search Phrase
+        </label>
+        <input name="phrase" type="text" placeholder="e.g., authentication order dot1x mab" required style="font-family:monospace; font-size:14px;" />
+        <div class="muted">
+          <strong>Examples:</strong>
+          <code style="margin:0 4px;">switchport access vlan</code> •
+          <code style="margin:0 4px;">spanning-tree portfast</code> •
+          <code style="margin:0 4px;">authentication order</code>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <label style="margin-bottom:12px; display:block;">Search Options</label>
+        <div class="checkbox-group">
+          <label class="checkbox-option">
+            <input type="checkbox" name="full_block" value="1" checked />
+            <div class="checkbox-option-content">
+              <div class="checkbox-option-title">Search Full Interface Block</div>
+              <div class="checkbox-option-desc">Recommended: Searches all configuration lines within each interface</div>
+            </div>
+          </label>
+
+          <label class="checkbox-option">
+            <input type="checkbox" name="case_sensitive" value="1" />
+            <div class="checkbox-option-content">
+              <div class="checkbox-option-title">Case Sensitive</div>
+              <div class="checkbox-option-desc">Match exact case (e.g., "VLAN" won't match "vlan")</div>
+            </div>
+          </label>
+
+          <label class="checkbox-option">
+            <input type="checkbox" name="exact" value="1" />
+            <div class="checkbox-option-content">
+              <div class="checkbox-option-title">Exact Match (Description Only)</div>
+              <div class="checkbox-option-desc">Only search in interface descriptions, not full config</div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button class="btn" type="reset">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+          <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/>
+        </svg>
+        Reset Form
+      </button>
+      <button class="btn primary" type="submit">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right:4px;">
+          <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
+        </svg>
+        Start Search
+      </button>
+    </div>
+  </form>
+
+  <script src="{{ url_for('static', filename='host_selector.js') }}"></script>
+  <script>
+    // Update host count dynamically
+    const hostsTextarea = document.getElementById('phrase-hosts');
+    const hostCountNumber = document.getElementById('hostCountNumber');
+
+    function updateHostCount(){
+      const text = hostsTextarea.value.trim();
+      if(!text){
+        hostCountNumber.textContent = '0';
+        return;
+      }
+      // Split by comma or newline and filter empty
+      const hosts = text.split(/[,\n]/).map(h => h.trim()).filter(h => h.length > 0);
+      hostCountNumber.textContent = hosts.length;
+    }
+
+    hostsTextarea.addEventListener('input', updateHostCount);
+    updateHostCount(); // Initial count
+  </script>
+{% endblock %}

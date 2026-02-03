@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    container_name: noc-toolkit
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-5000}:5000"
+    env_file:
+      - .env
+    volumes:
+      # Persist database and data across restarts
+      - noc-data:/opt/noc-toolkit/data
+      # Persist logs
+      - noc-logs:/opt/noc-toolkit/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 256M
+
+volumes:
+  noc-data:
+    driver: local
+  noc-logs:
+    driver: local
